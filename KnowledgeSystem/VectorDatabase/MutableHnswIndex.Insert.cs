@@ -31,29 +31,31 @@ public sealed partial class MutableHnswIndex
     {
         var value = 1.0 - _random.NextDouble();
         var probabilisticIndex = (int)Math.Floor(-Math.Log(value) * _recipLogMl);
-        var adjustedIndex = Math.Clamp(probabilisticIndex, 0, _layers.Count);
+        var adjustedIndex = Math.Clamp(probabilisticIndex, 0, Layers.Count);
 
-        if (adjustedIndex < _layers.Count)
+        if (adjustedIndex < Layers.Count)
         {
             increasedHeight = false;
-            return _layers[adjustedIndex];
+            return Layers[adjustedIndex];
         }
 
         increasedHeight = true;
 
         var layer = new SparseLayer(adjustedIndex, MaxConnectionsLane);
-        _layers.Add(layer);
+        Layers.Add(layer);
         return layer;
     }
     
     /// <summary>
     ///     Trims the <see cref="edges"/> of a node to the specified maximum count <see cref="maximumEdges"/>, with the special heuristic.
+    ///     Also removes reverse edges from evicted neighbors to keep the graph symmetric.
     /// </summary>
     /// <param name="data">Buffer.</param>
-    /// <param name="targetNode">The inserted node.</param>
+    /// <param name="targetNode">The node whose edges are being trimmed.</param>
     /// <param name="edges">The edges of a node that got mutated.</param>
     /// <param name="maximumEdges">The maximum number of edges.</param>
-    private void TrimEdges(TrimEdgesData data, StoredVectorImpl targetNode, List<int> edges, int maximumEdges)
+    /// <param name="layer">The layer the edges belong to, used for reverse edge cleanup.</param>
+    private void TrimEdges(TrimEdgesData data, StoredVectorImpl targetNode, List<int> edges, int maximumEdges, ILayer layer)
     {
         data.Clear();
         var candidateList = data.Candidates;
@@ -68,6 +70,26 @@ public sealed partial class MutableHnswIndex
 
         data.SortCandidates();
         ApplyTrimHeuristic(data, maximumEdges);
+
+        // Remove reverse edges for evicted neighbors to keep the graph symmetric:
+        for (var i = 0; i < edges.Count; i++)
+        {
+            var evictedIndex = edges[i];
+            var wasKept = false;
+            for (var j = 0; j < keptEdges.Count; j++)
+            {
+                if (keptEdges[j].Index == evictedIndex)
+                {
+                    wasKept = true;
+                    break;
+                }
+            }
+
+            if (!wasKept && layer.TryGetEdges(evictedIndex, out var evictedEdges) && evictedEdges != null)
+            {
+                evictedEdges.Remove(targetNode.Index);
+            }
+        }
 
         edges.Clear();
 
@@ -173,14 +195,14 @@ public sealed partial class MutableHnswIndex
         // Finds the closest vector to the inserted one, based on the edges from the layer just above the target layer.
         var currentNode = _entryPointVector!;
         var currentScore = VectorObjective.AdjustedCosineSimilarity(vector, currentNode);
-        var currentStructureHeight = increasedHeight ? targetLayer.Index - 1 : _layers.Count - 1;
+        var currentStructureHeight = increasedHeight ? targetLayer.Index - 1 : Layers.Count - 1;
         for (var layerIndex = currentStructureHeight; layerIndex > targetLayer.Index; layerIndex--)
         {
             // Greedily searches the current level's graph for the best node.
             // The search should not have cycles since the selection by cost will prevent it. 
             while (true)
             {
-                if (!_layers[layerIndex].TryGetEdges(currentNode.Index, out var currentNodeEdges))
+                if (!Layers[layerIndex].TryGetEdges(currentNode.Index, out var currentNodeEdges))
                 {
                     break;
                 }
@@ -212,9 +234,9 @@ public sealed partial class MutableHnswIndex
         var retopologizeStart = Math.Min(targetLayer.Index, currentStructureHeight);
         for (var layerIndex = retopologizeStart; layerIndex >= 0; layerIndex--)
         {
-            var layer = _layers[layerIndex];
+            var layer = Layers[layerIndex];
 
-            SearchLayer(_searchData, vector, currentNode, layer, efConstruction);
+            SearchLayer(_searchData, vector, currentNode, layer, ExplorationFactorConstruction);
 
             // Results are in reverse order. We will pull them into a buffer and read it backward:
             var queue = _searchData.ResultsQueue;
@@ -240,7 +262,7 @@ public sealed partial class MutableHnswIndex
 
                 if (neighborEdges.Count > maxConnections)
                 {
-                    TrimEdges(_trimEdgesData, neighbor, neighborEdges, maxConnections);
+                    TrimEdges(_trimEdgesData, neighbor, neighborEdges, maxConnections, layer);
                 }
             }
 

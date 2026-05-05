@@ -8,6 +8,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="KnowledgeSystem.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="System.Numerics.Tensors" Version="11.0.0-preview.3.26207.106" />
     </ItemGroup>
 

@@ -3,10 +3,38 @@ using KnowledgeSystem.VectorDatabase;
 
 namespace KnowledgeSystem.Tests;
 
-public class HnsIndexTests
+public class MutableHnswIndexTests
 {
     private const int Seed = 3141;
     private const int Dimension = 512;
+
+    #region Random Generator
+
+    private static float[] GetTestVector(Random random, int dimension, bool normalized = true)
+    {
+        var vector = new float[dimension];
+        var normSqr = 0.0f;
+        for (var i = 0; i < dimension; i++)
+        {
+            vector[i] = (float)(random.NextDouble() * 2 - 1);
+            normSqr += vector[i] * vector[i];
+        }
+
+        if (normalized)
+        {
+            var k = 1.0f / MathF.Sqrt(normSqr);
+            for (var i = 0; i < dimension; i++)
+            {
+                vector[i] *= k;
+            }
+        }
+        
+        return vector;
+    }
+
+    #endregion
+    
+    #region Helper
     
     /// <summary>
     ///     Brute-force search for the exact K best vectors.
@@ -17,6 +45,8 @@ public class HnsIndexTests
         .Take(k)
         .Select(x => x.Index)
         .ToArray();
+    
+    #endregion
     
     /// <summary>
     ///     Builds an index with random vectors, then queries it and compares results against a brute-force search.
@@ -215,25 +245,59 @@ public class HnsIndexTests
         }
     }
 
-    private static float[] GetTestVector(Random random, int dimension, bool normalized = true)
+    [Fact]
+    public void Insert_ProducesSymmetricEdges()
     {
-        var vector = new float[dimension];
-        var normSqr = 0.0f;
-        for (var i = 0; i < dimension; i++)
+        const int smallMaxConnections = 2;
+        var random = new Random(Seed);
+        var index = new MutableHnswIndex(
+            dimension: Dimension,
+            maxConnectionsLane: 4,
+            maxConnectionsDense: smallMaxConnections,
+            efConstruction: 20,
+            seed: Seed
+        );
+
+        for (var i = 0; i < 100; i++)
         {
-            vector[i] = (float)(random.NextDouble() * 2 - 1);
-            normSqr += vector[i] * vector[i];
+            index.Insert(GetTestVector(random, Dimension));
         }
 
-        if (normalized)
+        var edgesList = ((MutableHnswIndex.DenseLayer)index.Layers[0])._edges;
+
+        var asymmetricPairs = new List<(int From, int To)>();
+
+        for (var nodeIndex = 0; nodeIndex < edgesList.Count; nodeIndex++)
         {
-            var k = 1.0f / MathF.Sqrt(normSqr);
-            for (var i = 0; i < dimension; i++)
+            var nodeEdges = edgesList[nodeIndex];
+            if (nodeEdges == null) continue;
+
+            foreach (var neighborIndex in nodeEdges)
             {
-                vector[i] *= k;
+                var neighborEdges = neighborIndex < edgesList.Count ? edgesList[neighborIndex] : null;
+                if (neighborEdges == null || !neighborEdges.Contains(nodeIndex))
+                {
+                    asymmetricPairs.Add((From: nodeIndex, To: neighborIndex));
+                }
             }
         }
-        
-        return vector;
+
+        Assert.Empty(asymmetricPairs);
+    }
+
+    [Fact]
+    public void Constructor_MaxConnectionsLaneOne_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new MutableHnswIndex(Dimension, maxConnectionsLane: 1, maxConnectionsDense: 32, seed: Seed)
+        );
+    }
+    
+    [Fact]
+    public void Constructor_MaxConnectionsLaneZero_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new MutableHnswIndex(Dimension, maxConnectionsLane: 0, maxConnectionsDense: 32, seed: Seed)
+        );
     }
 }

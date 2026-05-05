@@ -5,7 +5,7 @@ public sealed partial class MutableHnswIndex
     /// <summary>
     ///     Graph on the vectors in the data structure.
     /// </summary>
-    private interface ILayer
+    internal interface ILayer
     {
         int Index { get; }
 
@@ -24,11 +24,11 @@ public sealed partial class MutableHnswIndex
     ///     Graph for layer 0, which can have edges for all nodes.
     ///     It doesn't make sense to use a dictionary as the backing storage, so we just use a list indexed by the vector's index.
     /// </summary>
-    private sealed class DenseLayer(int index, int perNodeCapacity) : ILayer
+    internal sealed class DenseLayer(int index, int perNodeCapacity) : ILayer
     {
         public int Index { get; } = index;
 
-        private readonly List<List<int>?> _edges = new();
+        internal readonly List<List<int>?> _edges = new();
 
         public bool TryGetEdges(int nodeIndex, out List<int>? edges)
         {
