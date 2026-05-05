@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem", "KnowledgeSystem\KnowledgeSystem.csproj", "{FD709D4D-C523-46FC-A56E-4E8FD6D12CCB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Tests", "KnowledgeSystem.Tests\KnowledgeSystem.Tests.csproj", "{FF7C203C-986F-4920-B34A-DD63D2474CF6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.EmdParser", "KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj", "{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FD709D4D-C523-46FC-A56E-4E8FD6D12CCB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FD709D4D-C523-46FC-A56E-4E8FD6D12CCB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FD709D4D-C523-46FC-A56E-4E8FD6D12CCB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FD709D4D-C523-46FC-A56E-4E8FD6D12CCB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FF7C203C-986F-4920-B34A-DD63D2474CF6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF7C203C-986F-4920-B34A-DD63D2474CF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF7C203C-986F-4920-B34A-DD63D2474CF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF7C203C-986F-4920-B34A-DD63D2474CF6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
