@@ -1,15 +1,22 @@
-﻿using System.Numerics.Tensors;
+﻿using System.Diagnostics;
+using System.Numerics.Tensors;
 using KnowledgeSystem.VectorDatabase;
+using Xunit.Abstractions;
+// ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Tests;
 
-public class MutableHnswIndexTests
+public class MutableHnswIndexTests(ITestOutputHelper output)
 {
     private const int Seed = 3141;
     private const int Dimension = 512;
 
     #region Random Generator
 
+    /// <summary>
+    ///     Creates a random vector for testing. Each component is in the range <c>[-1, 1]</c>.
+    /// </summary>
+    /// <returns></returns>
     private static float[] GetTestVector(Random random, int dimension, bool normalized = true)
     {
         var vector = new float[dimension];
@@ -20,6 +27,11 @@ public class MutableHnswIndexTests
             normSqr += vector[i] * vector[i];
         }
 
+        if (normSqr < 1e-8)
+        {
+            Assert.Fail("Encountered zero norm randomly generated vector");
+        }
+        
         if (normalized)
         {
             var k = 1.0f / MathF.Sqrt(normSqr);
@@ -35,7 +47,53 @@ public class MutableHnswIndexTests
     #endregion
     
     #region Helper
-    
+
+    /// <summary>
+    ///     Builds a random corpus array of test vectors.
+    /// </summary>
+    private static float[][] BuildRandomCorpusArray(int count, int seed = Seed)
+    {
+        var random = new Random(seed);
+        var corpus = new float[count][];
+        
+        for (var i = 0; i < count; i++)
+        {
+            corpus[i] = GetTestVector(random, Dimension);
+        }
+        
+        return corpus;
+    }
+
+    /// <summary>
+    ///     Builds a random corpus and inserts all vectors into the index.
+    /// </summary>
+    private static (float[][] corpus, MutableHnswIndex index) BuildRandomCorpusWithIndex(int count, int efConstruction = 200, int seed = Seed)
+    {
+        var corpus = BuildRandomCorpusArray(count, seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction, seed: seed);
+        
+        for (var i = 0; i < count; i++)
+        {
+            index.Insert(corpus[i]);
+        }
+        
+        return (corpus, index);
+    }
+
+    /// <summary>
+    ///     Generates multiple random query vectors.
+    /// </summary>
+    private static float[][] GenerateRandomQueries(int count, int seed = Seed)
+    {
+        var random = new Random(seed);
+        var queries = new float[count][];
+        for (var q = 0; q < count; q++)
+        {
+            queries[q] = GetTestVector(random, Dimension);
+        }
+        return queries;
+    }
+
     /// <summary>
     ///     Brute-force search for the exact K best vectors.
     /// </summary>
@@ -45,7 +103,7 @@ public class MutableHnswIndexTests
         .Take(k)
         .Select(x => x.Index)
         .ToArray();
-    
+
     #endregion
     
     /// <summary>
@@ -58,22 +116,8 @@ public class MutableHnswIndexTests
     [InlineData(200, 20, 20)]
     public void Search_MatchesBruteForce_WithHighRecall(int vectorCount, int k, int queryCount)
     {
+        var (corpus, index) = BuildRandomCorpusWithIndex(vectorCount, efConstruction: 200);
         var random = new Random(Seed);
-        var index = new MutableHnswIndex(
-            dimension: Dimension,
-            maxConnectionsLane: 16,
-            maxConnectionsDense: 32,
-            efConstruction: 200,
-            seed: Seed
-        );
-
-        // Build the corpus:
-        var corpus = new float[vectorCount][];
-        for (var i = 0; i < vectorCount; i++)
-        {
-            corpus[i] = GetTestVector(random, Dimension);
-            index.Insert(corpus[i]);
-        }
 
         // Generate queries and measure recall:
         var totalRecall = 0.0;
@@ -121,14 +165,9 @@ public class MutableHnswIndexTests
     [Fact]
     public void Search_KLargerThanCorpus_ReturnsAllVectors()
     {
-        var random = new Random(Seed);
         const int corpusSize = 10;
-        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
-
-        for (var i = 0; i < corpusSize; i++)
-        {
-            index.Insert(GetTestVector(random, Dimension));
-        }
+        var (_, index) = BuildRandomCorpusWithIndex(corpusSize);
+        var random = new Random(Seed);
 
         var query = GetTestVector(random, Dimension);
         var results = index.Search(query, 100);
@@ -140,15 +179,7 @@ public class MutableHnswIndexTests
     [Fact]
     public void Search_ExactMatch_IsTopResult()
     {
-        var random = new Random(Seed);
-        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
-
-        var corpus = new float[100][];
-        for (var i = 0; i < 100; i++)
-        {
-            corpus[i] = GetTestVector(random, Dimension);
-            index.Insert(corpus[i]);
-        }
+        var (corpus, index) = BuildRandomCorpusWithIndex(100, efConstruction: 200);
 
         const int targetIndex = 50;
         var results = index.Search(corpus[targetIndex], 5);
@@ -160,13 +191,8 @@ public class MutableHnswIndexTests
     [Fact]
     public void Search_ResultsAreSortedByScoreAscending()
     {
+        var (_, index) = BuildRandomCorpusWithIndex(200, efConstruction: 200);
         var random = new Random(Seed);
-        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
-
-        for (var i = 0; i < 200; i++)
-        {
-            index.Insert(GetTestVector(random, Dimension));
-        }
 
         var query = GetTestVector(random, Dimension);
         var results = index.Search(query, 20);
@@ -222,18 +248,6 @@ public class MutableHnswIndexTests
     {
         var query = GetTestVector(new Random(99), Dimension);
 
-        VectorSearchResult[] BuildAndSearch(int s)
-        {
-            var random = new Random(s);
-            var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: s);
-            for (var i = 0; i < 300; i++)
-            {
-                index.Insert(GetTestVector(random, Dimension));
-            }
-            
-            return index.Search(query, 10);
-        }
-
         var run1 = BuildAndSearch(123);
         var run2 = BuildAndSearch(123);
 
@@ -242,6 +256,15 @@ public class MutableHnswIndexTests
         {
             Assert.Equal(run1[i].Index, run2[i].Index);
             Assert.Equal(run1[i].Score, run2[i].Score);
+        }
+
+        return;
+
+        VectorSearchResult[] BuildAndSearch(int s)
+        {
+            var (_, index) = BuildRandomCorpusWithIndex(300, efConstruction: 200, seed: s);
+            
+            return index.Search(query, 10);
         }
     }
 
@@ -300,4 +323,169 @@ public class MutableHnswIndexTests
             new MutableHnswIndex(Dimension, maxConnectionsLane: 0, maxConnectionsDense: 32, seed: Seed)
         );
     }
+
+    #region Regression Tests
+    
+    [Fact]
+    public void Search_Regression_RecallDoesNotDegrade()
+    {
+        var (corpus, index) = BuildRandomCorpusWithIndex(2000, efConstruction: 100);
+        var random = new Random(Seed);
+
+        var totalRecall = 0.0;
+        for (var q = 0; q < 100; q++)
+        {
+            var query = GetTestVector(random, Dimension);
+            var hnswResults = index.Search(query, 10, efSearch: 100);
+            var bruteForceResults = BruteForceSearch(corpus, query, 10);
+            var hnswIndices = new HashSet<int>(hnswResults.Select(r => r.Index));
+            var hits = bruteForceResults.Count(hnswIndices.Contains);
+            totalRecall += (double)hits / 10;
+        }
+
+        var averageRecall = totalRecall / 100.0;
+        
+        const double baselineRecall = 0.937;
+        Assert.True(averageRecall >= baselineRecall, $"Recall regressed from {baselineRecall:P1} to {averageRecall:P1}");
+    }
+
+    #endregion
+
+    #region Performance Benchmarks
+
+    /// <summary>
+    ///     Benchmarks insertion and search performance at various corpus sizes and efSearch values, and reports recall and timing.
+    /// </summary>
+    [Theory]
+    [InlineData(500, 10)]
+    [InlineData(1000, 10)]
+    [InlineData(2000, 10)]
+    [InlineData(5000, 10)]
+    public void Performance_Benchmark(int vectorCount, int k)
+    {
+        const int efConstruction = 200;
+        
+        output.WriteLine($"Performance Test - vectors: {vectorCount}, k: {k}, efConstruction: {efConstruction}");
+        
+        var corpus = BuildRandomCorpusArray(vectorCount);
+
+        #region Insertion Warmup
+
+        var warmupIndex = new MutableHnswIndex(Dimension, 16, 32, efConstruction: efConstruction, seed: Seed);
+        for (var i = 0; i <  Math.Min(250, vectorCount); i++)
+        {
+            warmupIndex.Insert(corpus[i]);
+        }
+        
+        warmupIndex.Search(corpus[0], k, efSearch: 100);
+        BruteForceSearch(corpus, corpus[0], k);
+
+        #endregion
+
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: efConstruction, seed: Seed);
+
+        #region Insertion
+        
+        var insertSw = Stopwatch.StartNew();
+        
+        for (var i = 0; i < vectorCount; i++)
+        {
+            index.Insert(corpus[i]);
+        }
+        
+        insertSw.Stop();
+
+        output.WriteLine($"  Insert: {insertSw.Elapsed.TotalMilliseconds:F}ms total, {insertSw.Elapsed.TotalMilliseconds / vectorCount * 1000:F}µs/v");
+        output.WriteLine($"  Layers: {index.Layers.Count}");
+        
+        #endregion
+        
+        var queries = GenerateRandomQueries(100);
+
+        #region Search Warmup
+
+        for (var i = 0; i < queries.Length; i++)
+        {
+            index.Search(queries[i], k, efSearch: 100);
+        }
+
+        #endregion
+        
+        output.WriteLine("  Search:");
+
+        #region Search
+        
+        var efSearchValues = new[] { 50, 100, 200, 400 };
+        foreach (var efSearch in efSearchValues)
+        {
+            if (efSearch < k)
+            {
+                continue;
+            }
+
+            var resultMatrix = new VectorSearchResult[queries.Length][];
+            
+            var searchSw = Stopwatch.StartNew();
+            
+            for (var q = 0; q < queries.Length; q++)
+            {
+                resultMatrix[q] = index.Search(queries[q], k, efSearch: efSearch);
+            }
+            
+            searchSw.Stop();
+
+            var totalRecall = 0.0;
+            for (var q = 0; q < queries.Length; q++)
+            {
+                var bruteForceResults = BruteForceSearch(corpus, queries[q], k);
+                var hnswIndices = new HashSet<int>(resultMatrix[q].Select(r => r.Index));
+                var hits = bruteForceResults.Count(hnswIndices.Contains);
+                totalRecall += (double)hits / k;
+            }
+
+            var avgRecall = totalRecall / queries.Length;
+            var avgSearchMs = searchSw.Elapsed.TotalMilliseconds / queries.Length;
+
+            output.WriteLine($"    ef: {efSearch,4}, recall: {avgRecall:P1}, search: {avgSearchMs * 1000:F1}µs/v");
+        }
+        
+        #endregion
+    }
+    
+    /// <summary>
+    ///     Benchmarks brute force. Currently faster than HNSW due to the DS not being optimized.
+    /// </summary>
+    [Theory]
+    [InlineData(500)]
+    [InlineData(1000)]
+    [InlineData(2000)]
+    [InlineData(5000)]
+    public void Performance_BruteForceBaseline(int vectorCount)
+    {
+        var corpus = BuildRandomCorpusArray(vectorCount);
+        var queries = GenerateRandomQueries(100);
+
+        #region Warmup
+        
+        for (var i = 0; i < 1000; i++)
+        {
+            BruteForceSearch(corpus, queries[0], 10);
+        }
+        
+        #endregion
+
+        var searchSw = Stopwatch.StartNew();
+        
+        for (var q = 0; q < queries.Length; q++)
+        {
+            BruteForceSearch(corpus, queries[q], 10);
+        }
+        
+        searchSw.Stop();
+
+        var avgSearchMs = searchSw.Elapsed.TotalMilliseconds / queries.Length;
+        output.WriteLine($"Brute force {vectorCount} vectors, k: 10, search: {avgSearchMs * 1000:F1}µs/v");
+    }
+
+    #endregion
 }
