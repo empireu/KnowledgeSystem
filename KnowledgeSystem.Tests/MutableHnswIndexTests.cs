@@ -106,6 +106,24 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
     #endregion
     
+    [Fact]
+    public void Constructor_MaxConnectionsLaneOne_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new MutableHnswIndex(Dimension, maxConnectionsLane: 1, maxConnectionsDense: 32, seed: Seed)
+        );
+    }
+    
+    [Fact]
+    public void Constructor_MaxConnectionsLaneZero_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new MutableHnswIndex(Dimension, maxConnectionsLane: 0, maxConnectionsDense: 32, seed: Seed)
+        );
+    }
+    
+    #region Search
+    
     /// <summary>
     ///     Builds an index with random vectors, then queries it and compares results against a brute-force search.
     ///     Asserts that recall is at least 95%.
@@ -205,15 +223,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
             );
         }
     }
-
-    [Fact]
-    public void Insert_WrongDimension_Throws()
-    {
-        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
-
-        Assert.Throws<ArgumentException>(() => index.Insert(new float[Dimension + 1]));
-    }
-
+    
     [Fact]
     public void Search_WrongDimension_Throws()
     {
@@ -267,7 +277,19 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
             return index.Search(query, 10);
         }
     }
+    
+    #endregion
 
+    #region Insert
+    
+    [Fact]
+    public void Insert_WrongDimension_Throws()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+
+        Assert.Throws<ArgumentException>(() => index.Insert(new float[Dimension + 1]));
+    }
+    
     [Fact]
     public void Insert_ProducesSymmetricEdges()
     {
@@ -308,21 +330,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         Assert.Empty(asymmetricPairs);
     }
 
-    [Fact]
-    public void Constructor_MaxConnectionsLaneOne_ThrowsArgumentOutOfRangeException()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new MutableHnswIndex(Dimension, maxConnectionsLane: 1, maxConnectionsDense: 32, seed: Seed)
-        );
-    }
-    
-    [Fact]
-    public void Constructor_MaxConnectionsLaneZero_ThrowsArgumentOutOfRangeException()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new MutableHnswIndex(Dimension, maxConnectionsLane: 0, maxConnectionsDense: 32, seed: Seed)
-        );
-    }
+    #endregion
 
     #region Regression Tests
     
@@ -498,7 +506,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         var block = page.Allocate().Block;
         
         Assert.Equal(10, block.Length);
-        Assert.Equal(1, page.Count);
+        Assert.Equal(1, page.SlotCount);
     }
 
     [Fact]
@@ -515,7 +523,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         
             Assert.False(h1.Pointer == h2.Pointer);
             Assert.True((float*)h2.Pointer == (float*)h1.Pointer + 4);
-            Assert.Equal(2, page.Count);
+            Assert.Equal(2, page.SlotCount);
         }
     }
 
@@ -544,11 +552,11 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     public void ArenaAllocator_AllocateBlock_UsesFirstPage()
     {
         var allocator = new MutableHnswIndex.ArenaAllocator<double>(allocationLength: 3, pageCapacity: 10);
-        var block = allocator.AllocateBlock().Block;
+        var block = allocator.Allocate().Block;
 
         Assert.Equal(3, block.Length);
         Assert.Single(allocator.Pages);
-        Assert.Equal(1, allocator.Pages[0].Count);
+        Assert.Equal(1, allocator.Pages[0].SlotCount);
     }
 
     [Fact]
@@ -558,11 +566,11 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
         for (var i = 0; i < 5; i++)
         {
-            allocator.AllocateBlock();
+            allocator.Allocate();
         }
 
         Assert.Single(allocator.Pages);
-        Assert.Equal(5, allocator.Pages[0].Count);
+        Assert.Equal(5, allocator.Pages[0].SlotCount);
         Assert.True(allocator.Pages[0].IsFull);
     }
 
@@ -571,13 +579,13 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     {
         var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 1, pageCapacity: 2);
 
-        allocator.AllocateBlock();
-        allocator.AllocateBlock();
+        allocator.Allocate();
+        allocator.Allocate();
         Assert.Single(allocator.Pages);
 
-        allocator.AllocateBlock();
+        allocator.Allocate();
         Assert.Equal(2, allocator.Pages.Length);
-        Assert.Equal(1, allocator.Pages[1].Count);
+        Assert.Equal(1, allocator.Pages[1].SlotCount);
     }
 
     [Fact]
@@ -585,14 +593,14 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     {
         var allocator = new MutableHnswIndex.ArenaAllocator<long>(allocationLength: 1, pageCapacity: 2);
 
-        allocator.AllocateBlock();
-        allocator.AllocateBlock();
-        allocator.AllocateBlock();
+        allocator.Allocate();
+        allocator.Allocate();
+        allocator.Allocate();
         Assert.Equal(2, allocator.Pages.Length);
 
-        allocator.AllocateBlock();
+        allocator.Allocate();
         Assert.Equal(2, allocator.Pages.Length);
-        Assert.Equal(2, allocator.Pages[1].Count);
+        Assert.Equal(2, allocator.Pages[1].SlotCount);
     }
 
     [Fact]
@@ -603,14 +611,14 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
         for (var i = 0; i < totalAllocations; i++)
         {
-            allocator.AllocateBlock();
+            allocator.Allocate();
         }
 
         Assert.Equal(4, allocator.Pages.Length);
         Assert.True(allocator.Pages[0].IsFull);
         Assert.True(allocator.Pages[1].IsFull);
         Assert.True(allocator.Pages[2].IsFull);
-        Assert.Equal(2, allocator.Pages[3].Count);
+        Assert.Equal(2, allocator.Pages[3].SlotCount);
     }
 
     [Fact]
@@ -618,13 +626,13 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     {
         var allocator = new MutableHnswIndex.ArenaAllocator<float>(allocationLength: 4, pageCapacity: 3);
         
-        var block1 = allocator.AllocateBlock().Block;
+        var block1 = allocator.Allocate().Block;
         block1.Span[0] = 1.0f;
         block1.Span[1] = 2.0f;
         block1.Span[2] = 3.0f;
         block1.Span[3] = 4.0f;
 
-        var block2 = allocator.AllocateBlock().Block;
+        var block2 = allocator.Allocate().Block;
         block2.Span[0] = 5.0f;
         block2.Span[1] = 6.0f;
         block2.Span[2] = 7.0f;
@@ -639,6 +647,210 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         Assert.Equal(6.0f, block2.Span[1]);
         Assert.Equal(7.0f, block2.Span[2]);
         Assert.Equal(8.0f, block2.Span[3]);
+    }
+
+    [Fact]
+    public void ArenaAllocator_Deallocate_SlotIsReused()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 1, pageCapacity: 3);
+
+        // ReSharper disable UnusedVariable
+        var a = allocator.Allocate();
+        var b = allocator.Allocate();
+        var c = allocator.Allocate();
+        // ReSharper restore UnusedVariable
+        Assert.True(allocator.Pages[0].IsFull);
+
+        allocator.Deallocate(in b);
+        Assert.False(allocator.Pages[0].IsFull);
+        Assert.True(allocator.Pages[0].HasFreeSlots);
+        Assert.Contains(0, allocator.PagesWithReusedSlots);
+
+        var d = allocator.Allocate();
+        Assert.Equal(1, d.IndexInPage);
+        Assert.True(allocator.Pages[0].IsFull);
+        Assert.DoesNotContain(0, allocator.PagesWithReusedSlots);
+        Assert.Single(allocator.Pages);
+    }
+
+    [Fact]
+    public void ArenaAllocator_Deallocate_PrefersFreeSlotsOverNewPage()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 1, pageCapacity: 2);
+
+        // ReSharper disable UnusedVariable
+        var a = allocator.Allocate();
+        var b = allocator.Allocate();
+        // ReSharper restore UnusedVariable
+        Assert.Single(allocator.Pages);
+
+        allocator.Deallocate(in a);
+        var c = allocator.Allocate();
+        Assert.Equal(0, c.IndexInPage);
+        Assert.Single(allocator.Pages);
+    }
+
+    [Fact]
+    public void ArenaAllocator_Deallocate_TracksPagesWithFreeSlots()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 1, pageCapacity: 2);
+
+        // ReSharper disable UnusedVariable
+        var a = allocator.Allocate();
+        var b = allocator.Allocate();
+        var c = allocator.Allocate();
+        // ReSharper restore UnusedVariable
+
+        allocator.Deallocate(in a);
+        Assert.Contains(0, allocator.PagesWithReusedSlots);
+
+        allocator.Deallocate(in c);
+        Assert.Contains(0, allocator.PagesWithReusedSlots);
+        Assert.Contains(1, allocator.PagesWithReusedSlots);
+
+        allocator.Allocate();
+        Assert.DoesNotContain(0, allocator.PagesWithReusedSlots);
+        allocator.Allocate();
+        Assert.DoesNotContain(1, allocator.PagesWithReusedSlots);
+    }
+
+    [Fact]
+    public void ArenaAllocator_Deallocate_MultipleFreesOnSamePage()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 1, pageCapacity: 3);
+
+        // ReSharper disable UnusedVariable
+        var a = allocator.Allocate();
+        var b = allocator.Allocate();
+        var c = allocator.Allocate();
+        // ReSharper restore UnusedVariable
+
+        allocator.Deallocate(in a);
+        allocator.Deallocate(in c);
+
+        Assert.Equal(2, allocator.Pages[0].FreeIndices.Count);
+
+        var d = allocator.Allocate();
+        Assert.Equal(2, d.IndexInPage);
+
+        var e = allocator.Allocate();
+        Assert.Equal(0, e.IndexInPage);
+    }
+
+    [Fact]
+    public void AllocationPage_Deallocate_MakesFullPageNotFull()
+    {
+        var page = new MutableHnswIndex.AllocationPage<int>(null!, pageIndex: 0, allocationLength: 1, pageCapacity: 1);
+        page.Allocate();
+        Assert.True(page.IsFull);
+
+        page.Deallocate(0);
+        Assert.False(page.IsFull);
+        Assert.True(page.HasFreeSlots);
+    }
+
+    [Fact]
+    public void AllocationPage_Deallocate_DoubleFreeThrows()
+    {
+        var page = new MutableHnswIndex.AllocationPage<int>(null!, pageIndex: 0, allocationLength: 1, pageCapacity: 3);
+        page.Allocate();
+        page.Allocate();
+
+        page.Deallocate(0);
+        Assert.Throws<InvalidOperationException>(() => page.Deallocate(0));
+    }
+
+    [Fact]
+    public void ArenaAllocator_Deallocate_DoubleFreeThrows()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 1, pageCapacity: 3);
+        var a = allocator.Allocate();
+
+        allocator.Deallocate(in a);
+        Assert.Throws<InvalidOperationException>(() => allocator.Deallocate(in a));
+    }
+
+    [Fact]
+    public void ArenaAllocator_Deallocate_ReusePreservesDataIntegrity()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 2, pageCapacity: 3);
+
+        var a = allocator.Allocate();
+        a.Block.Span[0] = 10;
+        a.Block.Span[1] = 20;
+
+        var b = allocator.Allocate();
+        b.Block.Span[0] = 30;
+        b.Block.Span[1] = 40;
+
+        var c = allocator.Allocate();
+        c.Block.Span[0] = 50;
+        c.Block.Span[1] = 60;
+
+        allocator.Deallocate(in b);
+
+        var d = allocator.Allocate();
+        Assert.Equal(1, d.IndexInPage);
+        d.Block.Span[0] = 99;
+        d.Block.Span[1] = 88;
+
+        Assert.Equal(10, a.Block.Span[0]);
+        Assert.Equal(20, a.Block.Span[1]);
+        Assert.Equal(50, c.Block.Span[0]);
+        Assert.Equal(60, c.Block.Span[1]);
+
+        Assert.Equal(99, d.Block.Span[0]);
+        Assert.Equal(88, d.Block.Span[1]);
+    }
+
+    [Fact]
+    public void AllocationPage_Deallocate_UnallocatedIndexThrows()
+    {
+        var page = new MutableHnswIndex.AllocationPage<int>(null!, pageIndex: 0, allocationLength: 1, pageCapacity: 5);
+        page.Allocate();
+        page.Allocate();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => page.Deallocate(2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => page.Deallocate(4));
+        Assert.Throws<ArgumentOutOfRangeException>(() => page.Deallocate(-1));
+    }
+
+    [Fact]
+    public void AllocationPage_Allocate_PrefersFreedSlotsOverBump()
+    {
+        var page = new MutableHnswIndex.AllocationPage<int>(null!, pageIndex: 0, allocationLength: 1, pageCapacity: 5);
+        page.Allocate();
+        page.Allocate();
+        page.Allocate();
+
+        page.Deallocate(1);
+
+        var allocation = page.Allocate();
+        Assert.Equal(1, allocation.IndexInPage);
+        Assert.Equal(3, page.SlotCount);
+    }
+
+    [Fact]
+    public void AllocationPage_AllSlotsFreedThenReallocated()
+    {
+        var page = new MutableHnswIndex.AllocationPage<int>(null!, pageIndex: 0, allocationLength: 1, pageCapacity: 3);
+        page.Allocate();
+        page.Allocate();
+        page.Allocate();
+
+        page.Deallocate(0);
+        page.Deallocate(1);
+        page.Deallocate(2);
+
+        Assert.Equal(3, page.FreeIndices.Count);
+        Assert.False(page.IsFull);
+
+        page.Allocate();
+        page.Allocate();
+        page.Allocate();
+
+        Assert.True(page.IsFull);
+        Assert.Empty(page.FreeIndices);
     }
 
     #endregion

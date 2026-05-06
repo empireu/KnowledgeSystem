@@ -5,7 +5,7 @@ namespace KnowledgeSystem.VectorDatabase;
 public sealed partial class MutableHnswIndex
 {
     /// <summary>
-    ///     Represents a large, fixed-size portion of memory meant to allocate blocks of <paramref name="allocationLength"/> elements. 
+    ///     Represents a large, fixed-size portion of memory meant to allocate (at most) <paramref name="pageCapacity"/> blocks of <paramref name="allocationLength"/> elements. 
     /// </summary>
     internal sealed class AllocationPage<T>(ArenaAllocator<T> allocator, int pageIndex, int allocationLength, int pageCapacity) where T : struct
     {
@@ -15,18 +15,36 @@ public sealed partial class MutableHnswIndex
         ///     The index of the page in the wider allocator.
         /// </summary>
         internal readonly int PageIndex = pageIndex;
+
+        /// <summary>
+        ///     The number of slots currently allocated (including freed slots that haven't been reused yet).
+        /// </summary>
+        internal int SlotCount;
+
+        /// <summary>
+        ///     Stack of freed indices within this page that can be reused.
+        /// </summary>
+        internal readonly Stack<int> FreeIndices = new();
+
+        /// <summary>
+        ///     Set of indices currently in the free list, used to detect double-free errors.
+        /// </summary>
+        internal readonly HashSet<int> FreedIndexSet = [];
+
+        /// <summary>
+        ///     If true, the page has no free slots and cannot allocate any more blocks.
+        /// </summary>
+        public bool IsFull => SlotCount == pageCapacity && FreeIndices.Count == 0;
+
+        /// <summary>
+        ///     If true, the page has at least one freed slot that can be reused.
+        /// </summary>
+        public bool HasFreeSlots => FreeIndices.Count > 0;
         
-        internal readonly T[] Data = new T[allocationLength * pageCapacity];
-
         /// <summary>
-        ///     The number of vectors currently allocated.
+        ///     The actual backing storage.
         /// </summary>
-        internal int Count;
-
-        /// <summary>
-        ///     If true, the page is full and cannot allocate any more blocks.
-        /// </summary>
-        public bool IsFull => Count == pageCapacity;
+        private readonly T[] _data = new T[allocationLength * pageCapacity];
         
         /// <summary>
         ///     Allocates a block out of the page.
@@ -35,16 +53,45 @@ public sealed partial class MutableHnswIndex
         /// <exception cref="InvalidOperationException">Thrown if the page is full.</exception>
         public Allocation<T> Allocate()
         {
-            if (Count == pageCapacity)
+            if (IsFull)
             {
                 throw new InvalidOperationException("Cannot allocate: page full");
             }
 
-            var index = Count;
-            var result = Data.AsMemory(Count * allocationLength, allocationLength);
-            Count++;
+            if (FreeIndices.TryPop(out var index))
+            {
+                if(!FreedIndexSet.Remove(index))
+                {
+                    throw new InvalidOperationException("Expected to  find freed index");
+                }
+                
+                var result = _data.AsMemory(index * allocationLength, allocationLength);
+                return new Allocation<T>(this, result, index);
+            }
 
-            return new Allocation<T>(this, result, index);
+            var newIndex = SlotCount;
+            var newResult = _data.AsMemory(SlotCount * allocationLength, allocationLength);
+            SlotCount++;
+
+            return new Allocation<T>(this, newResult, newIndex);
+        }
+
+        /// <summary>
+        ///     Deallocates a block from the page by its index, making it available for reuse.
+        /// </summary>
+        public void Deallocate(int indexInPage)
+        {
+            if (indexInPage < 0 || indexInPage >= SlotCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(indexInPage), $"Slot {indexInPage} was never allocated; SlotCount is {SlotCount}.");
+            }
+
+            if (!FreedIndexSet.Add(indexInPage))
+            {
+                throw new InvalidOperationException($"Slot {indexInPage} is already freed; double-free detected.");
+            }
+
+            FreeIndices.Push(indexInPage);
         }
     }
     
@@ -56,14 +103,34 @@ public sealed partial class MutableHnswIndex
     internal sealed  class ArenaAllocator<T>(int allocationLength, int pageCapacity) where T : struct
     {
         internal AllocationPage<T>[] Pages = [];
+
+        /// <summary>
+        ///     Set of page indices that have at least one freed slot available for reuse.
+        /// </summary>
+        internal readonly HashSet<int> PagesWithReusedSlots = [];
         
         /// <summary>
         ///     Allocates a new block.
-        ///     Will either allocate it from an existing page (if there is a page that isn't full), or will allocate a new page.
+        ///     Will first try pages with freed slots, then any non-full page, then allocate a new page.
+        ///     <b></b>
         /// </summary>
-        /// <returns></returns>
-        public Allocation<T> AllocateBlock()
+        public Allocation<T> Allocate()
         {
+            // Prefer pages with freed slots for reuse:
+            if (PagesWithReusedSlots.Count > 0)
+            {
+                var pageIndex = PagesWithReusedSlots.First();
+                var page = Pages[pageIndex];
+                var allocation = page.Allocate();
+
+                if (!page.HasFreeSlots)
+                {
+                    PagesWithReusedSlots.Remove(pageIndex);
+                }
+
+                return allocation;
+            }
+
             // Look for space in the existing pages:
             for (var pageIndex = 0; pageIndex < Pages.Length; pageIndex++)
             {
@@ -81,6 +148,16 @@ public sealed partial class MutableHnswIndex
             Pages[^1] = newPage;
 
             return newPage.Allocate();
+        }
+
+        /// <summary>
+        ///     Deallocates a previously allocated block, making its slot available for reuse.
+        /// </summary>
+        public void Deallocate(in Allocation<T> allocation)
+        {
+            var page = allocation.Page;
+            page.Deallocate(allocation.IndexInPage);
+            PagesWithReusedSlots.Add(page.PageIndex);
         }
     }
 
@@ -104,6 +181,6 @@ public sealed partial class MutableHnswIndex
         /// <summary>
         ///     The allocation index, local to the source page.
         /// </summary>
-        public readonly  int IndexInPage = indexInPage;
+        public readonly int IndexInPage = indexInPage;
     }
 }
