@@ -10,8 +10,9 @@ public sealed partial class MutableHnswIndex
     public readonly int MaxConnectionsLane;
     public readonly int MaxConnectionsDense;
     public readonly int ExplorationFactorConstruction;
+    public readonly int VectorPageSize;
+    
     internal readonly List<ILayer> Layers;
-
     private readonly double _recipLogMl;
     private readonly Random _random;
     
@@ -31,7 +32,14 @@ public sealed partial class MutableHnswIndex
     /// <param name="maxConnectionsDense">Maximum number of graph connections in the dense layer.</param>
     /// <param name="efConstruction">The exploration factor for construction.</param>
     /// <param name="seed">The seed for the random number generator used during construction.</param>
-    public MutableHnswIndex(int dimension, int maxConnectionsLane, int maxConnectionsDense, int efConstruction = 200, int? seed = null)
+    /// <param name="vectorPageSize">The number of vectors per allocation page.</param>
+    public MutableHnswIndex(
+        int dimension,
+        int maxConnectionsLane,
+        int maxConnectionsDense, 
+        int efConstruction = 200,
+        int? seed = null,
+        int vectorPageSize = 512)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(dimension, 2);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxConnectionsLane, 2);
@@ -42,6 +50,7 @@ public sealed partial class MutableHnswIndex
         MaxConnectionsLane = maxConnectionsLane;
         MaxConnectionsDense = maxConnectionsDense;
         ExplorationFactorConstruction = efConstruction;
+        VectorPageSize = vectorPageSize;
         Layers = [new DenseLayer(0, MaxConnectionsDense)];
 
         _recipLogMl =  1.0 / Math.Log(MaxConnectionsLane);
