@@ -12,7 +12,7 @@ public sealed partial class MutableHnswIndex
     /// <returns>A vector allocated at the last index.</returns>
     private StoredVectorImpl AllocateVector(float[] sourceData)
     {
-        var storage = new float[Dimension];
+        var storage = _vectorAllocator.Allocate();
         var result = new StoredVectorImpl(_vectors.Count, storage);
 
         _vectors.Add(result);
@@ -236,7 +236,7 @@ public sealed partial class MutableHnswIndex
         {
             var layer = Layers[layerIndex];
 
-            SearchLayer(_searchData, vector, currentNode, layer, ExplorationFactorConstruction);
+            SearchLayer(_searchData, vector.StorageView, currentNode, layer, ExplorationFactorConstruction);
 
             // Results are in reverse order. We will pull them into a buffer and read it backward:
             var queue = _searchData.ResultsQueue;

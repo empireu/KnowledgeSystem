@@ -6,7 +6,7 @@ public sealed partial class MutableHnswIndex
     ///     Greedy best-first search within a single HNSW layer, expanding up to <see cref="explorationFactor"/> candidates.
     ///     Corresponds to Algorithm 2.
     /// </summary>
-    private void SearchLayer(SearchData data, StoredVectorImpl query, StoredVectorImpl entry, ILayer layer, int explorationFactor)
+    private void SearchLayer(SearchData data, ReadOnlySpan<float> query, StoredVectorImpl entry, ILayer layer, int explorationFactor)
     {
         data.Clear();
 
@@ -18,7 +18,7 @@ public sealed partial class MutableHnswIndex
         // Priority is in reverse score order.
         var results = data.ResultsQueue;
 
-        var initialScore = VectorObjective.AdjustedCosineSimilarity(query, entry);
+        var initialScore = VectorObjective.AdjustedCosineSimilarity(query, entry.StorageView);
         visited.Add(entry.Index);
         candidates.Enqueue(entry.Index, initialScore);
         results.Enqueue(entry.Index, -initialScore);
@@ -46,7 +46,7 @@ public sealed partial class MutableHnswIndex
                         continue;
                     }
 
-                    var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, _vectors[neighbor]);
+                    var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, _vectors[neighbor].StorageView);
 
                     results.TryPeek(out _, out var currentInverseWorstScore);
                     if (results.Count < explorationFactor || neighborScore < -currentInverseWorstScore)
@@ -73,7 +73,7 @@ public sealed partial class MutableHnswIndex
     /// <param name="efSearch">The exploration factor.</param>
     /// <returns>The found vectors.</returns>
     /// <exception cref="ArgumentException">Thrown if the <see cref="query"/>'s dimension does not match <see cref="Dimension"/>.</exception>
-    public VectorSearchResult[] Search(float[] query, int k, int efSearch = 200)
+    public VectorSearchResult[] Search(ReadOnlySpan<float> query, int k, int efSearch = 200)
     {
         if (query.Length != Dimension)
         {
@@ -87,13 +87,11 @@ public sealed partial class MutableHnswIndex
 
         if (_entryPointVector == null || k == 0)
         {
-            return Array.Empty<VectorSearchResult>();
+            return [];
         }
-
-        var queryVector = new StoredVectorImpl(-1, query);
-
+        
         var currentNode = _entryPointVector;
-        var currentScore = VectorObjective.AdjustedCosineSimilarity(queryVector, currentNode);
+        var currentScore = VectorObjective.AdjustedCosineSimilarity(query, currentNode.StorageView);
         for (var layerIndex = Layers.Count - 1; layerIndex > 0; layerIndex--)
         {
             while (true)
@@ -108,7 +106,7 @@ public sealed partial class MutableHnswIndex
                 for (var i = 0; i < currentNodeEdges!.Count; i++)
                 {
                     var neighborNode = _vectors[currentNodeEdges[i]];
-                    var neighborScore = VectorObjective.AdjustedCosineSimilarity(queryVector, neighborNode);
+                    var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, neighborNode.StorageView);
 
                     if (neighborScore < currentScore)
                     {
@@ -125,7 +123,7 @@ public sealed partial class MutableHnswIndex
             }
         }
 
-        SearchLayer(_searchData, queryVector, currentNode, Layers[0], Math.Max(k, efSearch));
+        SearchLayer(_searchData, query, currentNode, Layers[0], Math.Max(k, efSearch));
 
         var queue = _searchData.ResultsQueue;
         var count = Math.Min(k, queue.Count);

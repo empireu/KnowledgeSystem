@@ -10,7 +10,6 @@ public sealed partial class MutableHnswIndex
     public readonly int MaxConnectionsLane;
     public readonly int MaxConnectionsDense;
     public readonly int ExplorationFactorConstruction;
-    public readonly int VectorPageSize;
     
     internal readonly List<ILayer> Layers;
     private readonly double _recipLogMl;
@@ -20,6 +19,7 @@ public sealed partial class MutableHnswIndex
     private readonly SearchData _searchData = new();
     private readonly List<ScoredResult> _resultsBuffer = new(200);
     private readonly TrimEdgesData _trimEdgesData = new();
+    private readonly ArenaAllocator<float> _vectorAllocator;
     
     private StoredVectorImpl? _entryPointVector;
 
@@ -45,36 +45,40 @@ public sealed partial class MutableHnswIndex
         ArgumentOutOfRangeException.ThrowIfLessThan(maxConnectionsLane, 2);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxConnectionsDense, 2);
         ArgumentOutOfRangeException.ThrowIfLessThan(efConstruction, 2);
-
+        ArgumentOutOfRangeException.ThrowIfLessThan(vectorPageSize, 2);
+        
         Dimension = dimension;
         MaxConnectionsLane = maxConnectionsLane;
         MaxConnectionsDense = maxConnectionsDense;
         ExplorationFactorConstruction = efConstruction;
-        VectorPageSize = vectorPageSize;
         Layers = [new DenseLayer(0, MaxConnectionsDense)];
 
         _recipLogMl =  1.0 / Math.Log(MaxConnectionsLane);
         _random = seed.HasValue ? new Random(seed.Value) : new Random();
+
+        _vectorAllocator = new ArenaAllocator<float>(dimension, vectorPageSize);
     }
     
     public IReadOnlyList<IStoredVector> Vectors => _vectors;
 
-    private sealed class StoredVectorImpl(int index, float[] storage) : IStoredVector
+    private sealed class StoredVectorImpl(int index, Allocation<float> storage) : IStoredVector
     {
         public int Index { get; } = index;
         
-        public readonly float[] Storage = storage;
+        public readonly Allocation<float> Storage = storage;
 
-        public ReadOnlySpan<float> StorageView =>  Storage.AsSpan();
+        public ReadOnlySpan<float> StorageView =>  Storage.Block.Span;
 
-        public void Load(float[] data)
+        public void Load(ReadOnlySpan<float> data)
         {
-            if (data.Length != Storage.Length)
+            var storage = Storage.Block.Span;
+            
+            if (data.Length != storage.Length)
             {
-                throw new ArgumentException($"Cannot load data vector of dimension {data.Length} into vector of dimension {Storage.Length}");
+                throw new ArgumentException($"Cannot load data vector of dimension {data.Length} into vector of dimension {storage.Length}");
             }
             
-            data.AsSpan().CopyTo(Storage.AsSpan());
+            data.CopyTo(storage);
         }
     }
 }
