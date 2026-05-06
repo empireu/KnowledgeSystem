@@ -7,8 +7,10 @@ public sealed partial class MutableHnswIndex
     /// <summary>
     ///     Represents a large, fixed-size portion of memory meant to allocate blocks of <paramref name="allocationLength"/> elements. 
     /// </summary>
-    internal sealed class AllocationPage<T>(int pageIndex, int allocationLength, int pageCapacity) where T : struct
+    internal sealed class AllocationPage<T>(ArenaAllocator<T> allocator, int pageIndex, int allocationLength, int pageCapacity) where T : struct
     {
+        internal readonly ArenaAllocator<T> Allocator = allocator;
+        
         /// <summary>
         ///     The index of the page in the wider allocator.
         /// </summary>
@@ -31,17 +33,18 @@ public sealed partial class MutableHnswIndex
         /// </summary>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException">Thrown if the page is full.</exception>
-        public Memory<T> AllocateBlock()
+        public Allocation<T> Allocate()
         {
             if (Count == pageCapacity)
             {
                 throw new InvalidOperationException("Cannot allocate: page full");
             }
 
+            var index = Count;
             var result = Data.AsMemory(Count * allocationLength, allocationLength);
             Count++;
 
-            return result;
+            return new Allocation<T>(this, result, index);
         }
     }
     
@@ -59,7 +62,7 @@ public sealed partial class MutableHnswIndex
         ///     Will either allocate it from an existing page (if there is a page that isn't full), or will allocate a new page.
         /// </summary>
         /// <returns></returns>
-        public Memory<T> AllocateBlock()
+        public Allocation<T> AllocateBlock()
         {
             // Look for space in the existing pages:
             for (var pageIndex = 0; pageIndex < Pages.Length; pageIndex++)
@@ -68,16 +71,39 @@ public sealed partial class MutableHnswIndex
 
                 if (!page.IsFull)
                 {
-                    return page.AllocateBlock();
+                    return page.Allocate();
                 }
             }
             
             // Allocate new page:
-            var newPage = new AllocationPage<T>(Pages.Length, allocationLength, pageCapacity);
+            var newPage = new AllocationPage<T>(this, Pages.Length, allocationLength, pageCapacity);
             Array.Resize(ref Pages, Pages.Length + 1);
             Pages[^1] = newPage;
 
-            return newPage.AllocateBlock();
+            return newPage.Allocate();
         }
+    }
+
+    /// <summary>
+    ///     Represents an allocated block from a page.
+    /// </summary>
+    /// <param name="page">The backing page.</param>
+    /// <param name="block">The section of memory allocated from the page.</param>
+    internal readonly struct Allocation<T>(AllocationPage<T> page, Memory<T> block, int indexInPage) where T : struct
+    {
+        /// <summary>
+        ///     The backing page for this allocation.
+        /// </summary>
+        public readonly AllocationPage<T> Page = page;
+            
+        /// <summary>
+        ///     The portion of memory allocated from the page.
+        /// </summary>
+        public readonly Memory<T> Block = block;
+            
+        /// <summary>
+        ///     The allocation index, local to the source page.
+        /// </summary>
+        public readonly  int IndexInPage = indexInPage;
     }
 }

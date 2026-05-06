@@ -494,8 +494,8 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     [Fact]
     public void AllocationPage_AllocateBlock_ReturnsCorrectSize()
     {
-        var page = new MutableHnswIndex.AllocationPage<int>(pageIndex: 0, allocationLength: 10, pageCapacity: 5);
-        var block = page.AllocateBlock();
+        var page = new MutableHnswIndex.AllocationPage<int>(null!, pageIndex: 0, allocationLength: 10, pageCapacity: 5);
+        var block = page.Allocate().Block;
         
         Assert.Equal(10, block.Length);
         Assert.Equal(1, page.Count);
@@ -506,9 +506,9 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     {
         unsafe
         {
-            var page = new MutableHnswIndex.AllocationPage<float>(pageIndex: 0, allocationLength: 4, pageCapacity: 3);
-            var block1 = page.AllocateBlock();
-            var block2 = page.AllocateBlock();
+            var page = new MutableHnswIndex.AllocationPage<float>(null!, pageIndex: 0, allocationLength: 4, pageCapacity: 3);
+            var block1 = page.Allocate().Block;
+            var block2 = page.Allocate().Block;
 
             using var h1 = block1.Pin();
             using var h2 = block2.Pin();
@@ -522,29 +522,29 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     [Fact]
     public void AllocationPage_IsFull_ReturnsTrueWhenFull()
     {
-        var page = new MutableHnswIndex.AllocationPage<int>(pageIndex: 0, allocationLength: 2, pageCapacity: 2);
+        var page = new MutableHnswIndex.AllocationPage<int>(null!, pageIndex: 0, allocationLength: 2, pageCapacity: 2);
 
         Assert.False(page.IsFull);
-        page.AllocateBlock();
+        page.Allocate();
         Assert.False(page.IsFull);
-        page.AllocateBlock();
+        page.Allocate();
         Assert.True(page.IsFull);
     }
 
     [Fact]
     public void AllocationPage_AllocateWhenFull_ThrowsInvalidOperationException()
     {
-        var page = new MutableHnswIndex.AllocationPage<int>(pageIndex: 0, allocationLength: 1, pageCapacity: 1);
-        page.AllocateBlock();
+        var page = new MutableHnswIndex.AllocationPage<int>(null!, pageIndex: 0, allocationLength: 1, pageCapacity: 1);
+        page.Allocate();
 
-        Assert.Throws<InvalidOperationException>(() => page.AllocateBlock());
+        Assert.Throws<InvalidOperationException>(() => page.Allocate());
     }
 
     [Fact]
     public void ArenaAllocator_AllocateBlock_UsesFirstPage()
     {
         var allocator = new MutableHnswIndex.ArenaAllocator<double>(allocationLength: 3, pageCapacity: 10);
-        var block = allocator.AllocateBlock();
+        var block = allocator.AllocateBlock().Block;
 
         Assert.Equal(3, block.Length);
         Assert.Single(allocator.Pages);
@@ -618,13 +618,13 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     {
         var allocator = new MutableHnswIndex.ArenaAllocator<float>(allocationLength: 4, pageCapacity: 3);
         
-        var block1 = allocator.AllocateBlock();
+        var block1 = allocator.AllocateBlock().Block;
         block1.Span[0] = 1.0f;
         block1.Span[1] = 2.0f;
         block1.Span[2] = 3.0f;
         block1.Span[3] = 4.0f;
 
-        var block2 = allocator.AllocateBlock();
+        var block2 = allocator.AllocateBlock().Block;
         block2.Span[0] = 5.0f;
         block2.Span[1] = 6.0f;
         block2.Span[2] = 7.0f;
