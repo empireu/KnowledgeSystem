@@ -488,4 +488,158 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     }
 
     #endregion
+
+    #region Allocator Tests
+
+    [Fact]
+    public void AllocationPage_AllocateBlock_ReturnsCorrectSize()
+    {
+        var page = new MutableHnswIndex.AllocationPage<int>(pageIndex: 0, allocationLength: 10, pageCapacity: 5);
+        var block = page.AllocateBlock();
+        
+        Assert.Equal(10, block.Length);
+        Assert.Equal(1, page.Count);
+    }
+
+    [Fact]
+    public void AllocationPage_AllocateMultipleBlocks_ReturnsDistinctOrderedMemory()
+    {
+        unsafe
+        {
+            var page = new MutableHnswIndex.AllocationPage<float>(pageIndex: 0, allocationLength: 4, pageCapacity: 3);
+            var block1 = page.AllocateBlock();
+            var block2 = page.AllocateBlock();
+
+            using var h1 = block1.Pin();
+            using var h2 = block2.Pin();
+        
+            Assert.False(h1.Pointer == h2.Pointer);
+            Assert.True((float*)h2.Pointer == (float*)h1.Pointer + 4);
+            Assert.Equal(2, page.Count);
+        }
+    }
+
+    [Fact]
+    public void AllocationPage_IsFull_ReturnsTrueWhenFull()
+    {
+        var page = new MutableHnswIndex.AllocationPage<int>(pageIndex: 0, allocationLength: 2, pageCapacity: 2);
+
+        Assert.False(page.IsFull);
+        page.AllocateBlock();
+        Assert.False(page.IsFull);
+        page.AllocateBlock();
+        Assert.True(page.IsFull);
+    }
+
+    [Fact]
+    public void AllocationPage_AllocateWhenFull_ThrowsInvalidOperationException()
+    {
+        var page = new MutableHnswIndex.AllocationPage<int>(pageIndex: 0, allocationLength: 1, pageCapacity: 1);
+        page.AllocateBlock();
+
+        Assert.Throws<InvalidOperationException>(() => page.AllocateBlock());
+    }
+
+    [Fact]
+    public void ArenaAllocator_AllocateBlock_UsesFirstPage()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<double>(allocationLength: 3, pageCapacity: 10);
+        var block = allocator.AllocateBlock();
+
+        Assert.Equal(3, block.Length);
+        Assert.Single(allocator.Pages);
+        Assert.Equal(1, allocator.Pages[0].Count);
+    }
+
+    [Fact]
+    public void ArenaAllocator_AllocateMultipleBlocks_ReusesPage()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<float>(allocationLength: 2, pageCapacity: 5);
+
+        for (var i = 0; i < 5; i++)
+        {
+            allocator.AllocateBlock();
+        }
+
+        Assert.Single(allocator.Pages);
+        Assert.Equal(5, allocator.Pages[0].Count);
+        Assert.True(allocator.Pages[0].IsFull);
+    }
+
+    [Fact]
+    public void ArenaAllocator_PageFull_CreatesNewPage()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 1, pageCapacity: 2);
+
+        allocator.AllocateBlock();
+        allocator.AllocateBlock();
+        Assert.Single(allocator.Pages);
+
+        allocator.AllocateBlock();
+        Assert.Equal(2, allocator.Pages.Length);
+        Assert.Equal(1, allocator.Pages[1].Count);
+    }
+
+    [Fact]
+    public void ArenaAllocator_MultiplePages_UsesNonFullPage()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<long>(allocationLength: 1, pageCapacity: 2);
+
+        allocator.AllocateBlock();
+        allocator.AllocateBlock();
+        allocator.AllocateBlock();
+        Assert.Equal(2, allocator.Pages.Length);
+
+        allocator.AllocateBlock();
+        Assert.Equal(2, allocator.Pages.Length);
+        Assert.Equal(2, allocator.Pages[1].Count);
+    }
+
+    [Fact]
+    public void ArenaAllocator_LargeAllocation_CreatesMultiplePages()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(allocationLength: 10, pageCapacity: 5);
+        const int totalAllocations = 17;
+
+        for (var i = 0; i < totalAllocations; i++)
+        {
+            allocator.AllocateBlock();
+        }
+
+        Assert.Equal(4, allocator.Pages.Length);
+        Assert.True(allocator.Pages[0].IsFull);
+        Assert.True(allocator.Pages[1].IsFull);
+        Assert.True(allocator.Pages[2].IsFull);
+        Assert.Equal(2, allocator.Pages[3].Count);
+    }
+
+    [Fact]
+    public void ArenaAllocator_BlockData_IsPersisted()
+    {
+        var allocator = new MutableHnswIndex.ArenaAllocator<float>(allocationLength: 4, pageCapacity: 3);
+        
+        var block1 = allocator.AllocateBlock();
+        block1.Span[0] = 1.0f;
+        block1.Span[1] = 2.0f;
+        block1.Span[2] = 3.0f;
+        block1.Span[3] = 4.0f;
+
+        var block2 = allocator.AllocateBlock();
+        block2.Span[0] = 5.0f;
+        block2.Span[1] = 6.0f;
+        block2.Span[2] = 7.0f;
+        block2.Span[3] = 8.0f;
+
+        Assert.Equal(1.0f, block1.Span[0]);
+        Assert.Equal(2.0f, block1.Span[1]);
+        Assert.Equal(3.0f, block1.Span[2]);
+        Assert.Equal(4.0f, block1.Span[3]);
+
+        Assert.Equal(5.0f, block2.Span[0]);
+        Assert.Equal(6.0f, block2.Span[1]);
+        Assert.Equal(7.0f, block2.Span[2]);
+        Assert.Equal(8.0f, block2.Span[3]);
+    }
+
+    #endregion
 }
