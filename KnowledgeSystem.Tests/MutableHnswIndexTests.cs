@@ -1,7 +1,9 @@
 ﻿using System.Diagnostics;
 using System.Numerics.Tensors;
-using KnowledgeSystem.VectorDatabase;
+using KnowledgeSystem.Hnsw;
 using Xunit.Abstractions;
+using MutableHnswIndex = KnowledgeSystem.Hnsw.MutableHnswIndex;
+
 // ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Tests;

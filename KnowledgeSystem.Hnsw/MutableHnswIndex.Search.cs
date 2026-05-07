@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.VectorDatabase;
+﻿namespace KnowledgeSystem.Hnsw;
 
 public sealed partial class MutableHnswIndex
 {

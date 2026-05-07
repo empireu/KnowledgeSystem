@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Tests", "Kn
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.EmdParser", "KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj", "{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Hnsw", "KnowledgeSystem.Hnsw\KnowledgeSystem.Hnsw.csproj", "{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

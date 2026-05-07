@@ -4,7 +4,7 @@
 
 using System.Runtime.CompilerServices;
 
-namespace KnowledgeSystem.VectorDatabase;
+namespace KnowledgeSystem.Hnsw;
 
 public sealed partial class MutableHnswIndex
 {
@@ -59,8 +59,8 @@ public sealed partial class MutableHnswIndex
     /// <param name="vectorPageSize">The number of vectors per allocation page.</param>
     /// <param name="sparseEdgePageSize">The number of edges per allocation page for the sparse graphs.</param>
     /// <param name="denseEdgePageSize">The number of edges per allocation page for the dense graph.</param>
-    /// <param name="baseLayerArrayPageCapacity">The starting capacity for the layer array pages (see <see cref="BucketArenaAllocator{T}"/>).</param>
-    /// <param name="minLayerArrayPageSize">The minimum capacity for the layer array pages (see <see cref="BucketArenaAllocator{T}"/>).</param>
+    /// <param name="baseLayerArrayPageCapacity">The starting capacity for the layer array pages (see <see cref="MutableHnswIndex.BucketArenaAllocator{T}"/>).</param>
+    /// <param name="minLayerArrayPageSize">The minimum capacity for the layer array pages (see <see cref="MutableHnswIndex.BucketArenaAllocator{T}"/>).</param>
     public MutableHnswIndex(
         int dimension,
         int maxConnectionsLane,

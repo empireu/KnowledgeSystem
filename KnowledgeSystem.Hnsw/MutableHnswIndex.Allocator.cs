@@ -1,6 +1,6 @@
 ﻿// ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.VectorDatabase;
+namespace KnowledgeSystem.Hnsw;
 
 public sealed partial class MutableHnswIndex
 {
@@ -185,7 +185,7 @@ public sealed partial class MutableHnswIndex
 
         public void Deallocate()
         {
-            page.Allocator.Deallocate(in this);
+            Page.Allocator.Deallocate(in this);
         }
     }
 
