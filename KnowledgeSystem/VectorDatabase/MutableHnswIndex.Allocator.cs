@@ -182,5 +182,44 @@ public sealed partial class MutableHnswIndex
         ///     The allocation index, local to the source page.
         /// </summary>
         public readonly int IndexInPage = indexInPage;
+
+        public void Deallocate()
+        {
+            page.Allocator.Deallocate(in this);
+        }
+    }
+
+    /// <summary>
+    ///     Multiple arena allocators for a small number of consecutively-sized arrays.
+    /// </summary>
+    /// <param name="basePageCapacity">The page size for the 1-length allocators. The page size will be halved each time the allocation length doubles. Should be a power-of-two.</param>
+    /// <param name="minPageSize">The minimum page size.</param>
+    /// <typeparam name="T"></typeparam>
+    internal sealed class BucketArenaAllocator<T>(int basePageCapacity, int minPageSize) where T : struct
+    {
+        internal readonly Dictionary<int, ArenaAllocator<T>> Allocators = new();
+
+        public Allocation<T> Allocate(int allocationLength)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(allocationLength, 1);
+
+            if (Allocators.TryGetValue(allocationLength, out var allocator))
+            {
+                return allocator.Allocate();
+            }
+            
+            var value = allocationLength;
+            var pageCapacity = basePageCapacity;
+            while (value > 1 && pageCapacity > minPageSize)
+            {
+                value >>= 1;
+                pageCapacity >>= 1;
+            }
+            
+            allocator = new ArenaAllocator<T>(allocationLength, Math.Max(pageCapacity, minPageSize));
+            Allocators.Add(allocationLength, allocator);
+            
+            return allocator.Allocate();
+        }
     }
 }

@@ -853,5 +853,146 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         Assert.Empty(page.FreeIndices);
     }
 
+    [Fact]
+    public void BucketArenaAllocator_Allocate_CreatesBucketAndReturnsCorrectBlockSize()
+    {
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<int>(basePageCapacity: 64, minPageSize: 4);
+        var block = bucket.Allocate(5).Block;
+
+        Assert.Equal(5, block.Length);
+        Assert.Single(bucket.Allocators);
+        Assert.True(bucket.Allocators.ContainsKey(5));
+    }
+
+    [Fact]
+    public void BucketArenaAllocator_Allocate_SameBucket_ReusesAllocator()
+    {
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<float>(basePageCapacity: 64, minPageSize: 4);
+
+        bucket.Allocate(3);
+        bucket.Allocate(3);
+        bucket.Allocate(3);
+
+        Assert.Single(bucket.Allocators);
+        Assert.Equal(3, bucket.Allocators[3].Pages[0].SlotCount);
+    }
+
+    [Fact]
+    public void BucketArenaAllocator_Allocate_DifferentLengths_CreatesSeparateBuckets()
+    {
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<double>(basePageCapacity: 64, minPageSize: 4);
+
+        bucket.Allocate(1);
+        bucket.Allocate(2);
+        bucket.Allocate(3);
+
+        Assert.Equal(3, bucket.Allocators.Count);
+        Assert.True(bucket.Allocators.ContainsKey(1));
+        Assert.True(bucket.Allocators.ContainsKey(2));
+        Assert.True(bucket.Allocators.ContainsKey(3));
+    }
+
+    [Fact]
+    public void BucketArenaAllocator_Allocate_PageCapacityScalesWithAllocationLength()
+    {
+        const int basePageCapacity = 64;
+        const int minPageSize = 4;
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<int>(basePageCapacity, minPageSize);
+
+        Assert.Equal(64, FillAndGetSlots(bucket, 1));
+        Assert.Equal(32, FillAndGetSlots(bucket, 2));
+        Assert.Equal(16, FillAndGetSlots(bucket, 4));
+        Assert.Equal(8, FillAndGetSlots(bucket, 8));
+        Assert.Equal(minPageSize, FillAndGetSlots(bucket, 16));
+        return;
+
+        static int FillAndGetSlots(MutableHnswIndex.BucketArenaAllocator<int> b, int length)
+        {
+            b.Allocate(length);
+            var page = b.Allocators[length].Pages[0];
+            while (!page.IsFull)
+            {
+                b.Allocate(length);
+            }
+
+            return page.SlotCount;
+        }
+    }
+
+    [Fact]
+    public void BucketArenaAllocator_Allocate_MinPageSizeIsRespected()
+    {
+        const int minPageSize = 8;
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<int>(basePageCapacity: 16, minPageSize);
+
+        bucket.Allocate(32);
+        var page = bucket.Allocators[32].Pages[0];
+        while (!page.IsFull)
+        {
+            bucket.Allocate(32);
+        }
+
+        Assert.Equal(minPageSize, page.SlotCount);
+    }
+
+    [Fact]
+    public void BucketArenaAllocator_Allocate_ZeroLength_ThrowsArgumentOutOfRangeException()
+    {
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<int>(basePageCapacity: 64, minPageSize: 4);
+        Assert.Throws<ArgumentOutOfRangeException>(() => bucket.Allocate(0));
+    }
+
+    [Fact]
+    public void BucketArenaAllocator_Allocate_NegativeLength_ThrowsArgumentOutOfRangeException()
+    {
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<int>(basePageCapacity: 64, minPageSize: 4);
+        Assert.Throws<ArgumentOutOfRangeException>(() => bucket.Allocate(-1));
+    }
+
+    [Fact]
+    public void BucketArenaAllocator_Allocate_DataIsPersistedAcrossBlocks()
+    {
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<int>(basePageCapacity: 64, minPageSize: 4);
+
+        var block1 = bucket.Allocate(3).Block;
+        block1.Span[0] = 10;
+        block1.Span[1] = 20;
+        block1.Span[2] = 30;
+
+        var block2= bucket.Allocate(5).Block;
+        block2.Span[0] = 100;
+        block2.Span[1] = 200;
+        block2.Span[2] = 300;
+        block2.Span[3] = 400;
+        block2.Span[4] = 500;
+
+        Assert.Equal(10, block1.Span[0]);
+        Assert.Equal(20, block1.Span[1]);
+        Assert.Equal(30, block1.Span[2]);
+
+        Assert.Equal(100, block2.Span[0]);
+        Assert.Equal(200, block2.Span[1]);
+        Assert.Equal(300, block2.Span[2]);
+        Assert.Equal(400, block2.Span[3]);
+        Assert.Equal(500, block2.Span[4]);
+    }
+
+    [Fact]
+    public void BucketArenaAllocator_Allocate_ManyAllocations_CreatesMultiplePages()
+    {
+        const int basePageCapacity = 4;
+        const int minPageSize = 2;
+        var bucket = new MutableHnswIndex.BucketArenaAllocator<int>(basePageCapacity, minPageSize);
+
+        for (var i = 0; i < 5; i++)
+        {
+            bucket.Allocate(1);
+        }
+
+        Assert.Equal(2, bucket.Allocators[1].Pages.Length);
+        Assert.True(bucket.Allocators[1].Pages[0].IsFull);
+        Assert.Equal(1, bucket.Allocators[1].Pages[1].SlotCount);
+    }
+
     #endregion
 }
