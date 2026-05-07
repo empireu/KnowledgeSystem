@@ -6,65 +6,87 @@ namespace KnowledgeSystem.VectorDatabase;
 public sealed partial class MutableHnswIndex
 {
     /// <summary>
+    ///     Rolls a layer using the formula for the layer, adjusted for the .NET Random.
+    ///     The output layer is, at most, one higher than the current highest layer.
+    /// </summary>
+    /// <param name="increasedHeight">If true, the layer rolled above the current highest layer, which creates a new layer.</param>
+    /// <returns>The target layer for the inserted node.</returns>
+    private int RollLayer(out bool increasedHeight)
+    {
+        var value = 1.0 - _random.NextDouble();
+        var probabilisticIndex = (int)Math.Floor(-Math.Log(value) * _recipLogMl);
+        var adjustedIndex = Math.Clamp(probabilisticIndex, 0, LayerCount);
+
+        if (adjustedIndex < LayerCount)
+        {
+            increasedHeight = false;
+        }
+        else
+        {
+            LayerCount++;
+            increasedHeight = true;
+        }
+
+        return adjustedIndex;
+    }
+
+    /// <summary>
     ///     Allocates a vector and loads in the <see cref="sourceData"/>.
+    ///     Pre-allocates the dense graph storage and all sparse storages (based on the rolled layer).
     /// </summary>
     /// <param name="sourceData">A (temporary) vector that matches the <see cref="Dimension"/>.</param>
+    /// <param name="increasedHeight">If true, the rolled layer is one higher than the current highest layer.</param>
     /// <returns>A vector allocated at the last index.</returns>
-    private StoredVectorImpl AllocateVector(float[] sourceData)
+    private StoredVectorImpl AllocateVector(float[] sourceData, out bool increasedHeight)
     {
-        var storage = _vectorAllocator.Allocate();
-        var result = new StoredVectorImpl(_vectors.Count, storage);
+        var vectorStorage = _vectorAllocator.Allocate();
+        var targetLayer = RollLayer(out increasedHeight);
 
-        _vectors.Add(result);
+        var denseGraph = new EdgeList(MaxConnectionsDense + 1, _denseEdgeStorageAllocator.Allocate());
+        denseGraph.Clear();
+        
+        Allocation<EdgeList>? sparseGraphs = targetLayer > 0 
+            ? _layerStorageAllocator.Allocate(targetLayer)
+            : null;
+
+        if (sparseGraphs.HasValue)
+        {
+            var array = sparseGraphs.Value.Block.Span;
+            for (var i = 0; i < array.Length; i++)
+            {
+                var sparseList = new EdgeList(MaxConnectionsLane + 1, _laneEdgeStorageAllocator.Allocate());
+                sparseList.Clear();
+                array[i] = sparseList;
+            }
+        }
+        
+        var result = new StoredVectorImpl(VectorsInternal.Count, vectorStorage, denseGraph, sparseGraphs);
+
+        VectorsInternal.Add(result);
         result.Load(sourceData);
 
         return result;
     }
 
     /// <summary>
-    ///     Rolls a layer using the formula for the layer, adjusted for the .NET Random.
-    ///     The output layer is, at most, one higher than the current highest layer.
-    /// </summary>
-    /// <param name="increasedHeight">If true, the layer rolled above the current highest layer, which creates a new layer.</param>
-    /// <returns>The target layer for the inserted node.</returns>
-    private ILayer RollLayer(out bool increasedHeight)
-    {
-        var value = 1.0 - _random.NextDouble();
-        var probabilisticIndex = (int)Math.Floor(-Math.Log(value) * _recipLogMl);
-        var adjustedIndex = Math.Clamp(probabilisticIndex, 0, Layers.Count);
-
-        if (adjustedIndex < Layers.Count)
-        {
-            increasedHeight = false;
-            return Layers[adjustedIndex];
-        }
-
-        increasedHeight = true;
-
-        var layer = new SparseLayer(adjustedIndex, MaxConnectionsLane);
-        Layers.Add(layer);
-        return layer;
-    }
-    
-    /// <summary>
-    ///     Trims the <see cref="edges"/> of a node to the specified maximum count <see cref="maximumEdges"/>, with the special heuristic.
+    ///     Trims the edges of the <see cref="targetNode"/> in the specified <see cref="layer"/> to the specified maximum count <see cref="maximumEdges"/>, with the special heuristic.
     ///     Also removes reverse edges from evicted neighbors to keep the graph symmetric.
     /// </summary>
-    /// <param name="data">Buffer.</param>
-    /// <param name="targetNode">The node whose edges are being trimmed.</param>
-    /// <param name="edges">The edges of a node that got mutated.</param>
-    /// <param name="maximumEdges">The maximum number of edges.</param>
-    /// <param name="layer">The layer the edges belong to, used for reverse edge cleanup.</param>
-    private void TrimEdges(TrimEdgesData data, StoredVectorImpl targetNode, List<int> edges, int maximumEdges, ILayer layer)
+    private void TrimEdges(TrimEdgesData data, StoredVectorImpl targetNode, int layer, int maximumEdges)
     {
         data.Clear();
+        
         var candidateList = data.Candidates;
         var keptEdges = data.KeptEdges;
+        var edges = targetNode.GetEdgesInLayer(layer);
+        
+        // ReSharper disable once InlineTemporaryVariable
+        var vectors = VectorsInternal;
 
         for (var i = 0; i < edges.Count; i++)
         {
             var node = edges[i];
-            var score = VectorObjective.AdjustedCosineSimilarity(targetNode, _vectors[node]);
+            var score = VectorObjective.AdjustedCosineSimilarity(targetNode, vectors[node]);
             candidateList.Add(new TrimEdgesData.TrimEdgesCandidate(node, score));
         }
 
@@ -85,9 +107,12 @@ public sealed partial class MutableHnswIndex
                 }
             }
 
-            if (!wasKept && layer.TryGetEdges(evictedIndex, out var evictedEdges) && evictedEdges != null)
+            if (!wasKept)
             {
-                evictedEdges.Remove(targetNode.Index);
+                if (!vectors[evictedIndex].GetEdgesInLayer(layer).Remove(targetNode.Index))
+                {
+                    throw new Exception("Expected to remove neighbor node");
+                }
             }
         }
 
@@ -142,20 +167,17 @@ public sealed partial class MutableHnswIndex
         var candidateList = data.Candidates;
         var keptEdges = data.KeptEdges;
 
-        for (var candidateIndex = 0;
-             candidateIndex < candidateList.Count && keptEdges.Count < maximumEdges;
-             candidateIndex++)
+        for (var candidateIndex = 0; candidateIndex < candidateList.Count && keptEdges.Count < maximumEdges; candidateIndex++)
         {
             var candidate = candidateList[candidateIndex];
 
             var keep = true;
-            var candidateVector = _vectors[candidate.Index];
+            var candidateVector = VectorsInternal[candidate.Index];
 
             // Compares this candidate against every node we are already keeping:
             for (var i = 0; i < keptEdges.Count; i++)
             {
-                if (VectorObjective.AdjustedCosineSimilarity(candidateVector, _vectors[keptEdges[i].Index]) <
-                    candidate.Score)
+                if (VectorObjective.AdjustedCosineSimilarity(candidateVector, VectorsInternal[keptEdges[i].Index]) < candidate.Score)
                 {
                     keep = false;
                     break;
@@ -181,7 +203,7 @@ public sealed partial class MutableHnswIndex
             throw new ArgumentException("Invalid data vector dimension");
         }
 
-        var vector = AllocateVector(data);
+        var vector = AllocateVector(data, out var increasedHeight);
 
         if (_entryPointVector == null)
         {
@@ -190,28 +212,27 @@ public sealed partial class MutableHnswIndex
             return vector;
         }
 
-        var targetLayer = RollLayer(out var increasedHeight);
+        // ReSharper disable once InlineTemporaryVariable
+        var vectors = VectorsInternal;
 
+        var targetLayer = vector.TargetLayer;
+        
         // Finds the closest vector to the inserted one, based on the edges from the layer just above the target layer.
         var currentNode = _entryPointVector!;
         var currentScore = VectorObjective.AdjustedCosineSimilarity(vector, currentNode);
-        var currentStructureHeight = increasedHeight ? targetLayer.Index - 1 : Layers.Count - 1;
-        for (var layerIndex = currentStructureHeight; layerIndex > targetLayer.Index; layerIndex--)
+        var currentStructureHeight = increasedHeight ? targetLayer - 1 : LayerCount - 1;
+        for (var layerIndex = currentStructureHeight; layerIndex > targetLayer; layerIndex--)
         {
             // Greedily searches the current level's graph for the best node.
             // The search should not have cycles since the selection by cost will prevent it. 
             while (true)
             {
-                if (!Layers[layerIndex].TryGetEdges(currentNode.Index, out var currentNodeEdges))
-                {
-                    break;
-                }
-
+                var currentNodeEdges = currentNode.GetEdgesInLayer(layerIndex);
                 var minimumChanged = false;
 
-                for (var i = 0; i < currentNodeEdges!.Count; i++)
+                for (var i = 0; i < currentNodeEdges.Count; i++)
                 {
-                    var neighborNode = _vectors[currentNodeEdges[i]];
+                    var neighborNode = vectors[currentNodeEdges[i]];
                     var neighborScore = VectorObjective.AdjustedCosineSimilarity(vector, neighborNode);
 
                     if (neighborScore < currentScore)
@@ -231,12 +252,10 @@ public sealed partial class MutableHnswIndex
             // On the next iterations, we will expand nodes on the denser layer below.
         }
 
-        var retopologizeStart = Math.Min(targetLayer.Index, currentStructureHeight);
-        for (var layerIndex = retopologizeStart; layerIndex >= 0; layerIndex--)
+        var retopologizeStart = Math.Min(targetLayer, currentStructureHeight);
+        for (var layer = retopologizeStart; layer >= 0; layer--)
         {
-            var layer = Layers[layerIndex];
-
-            SearchLayer(_searchData, vector.StorageView, currentNode, layer, ExplorationFactorConstruction);
+            SearchLayer(_searchData, vector.VectorView, currentNode, layer, ExplorationFactorConstruction);
 
             // Results are in reverse order. We will pull them into a buffer and read it backward:
             var queue = _searchData.ResultsQueue;
@@ -245,24 +264,24 @@ public sealed partial class MutableHnswIndex
                 _resultsBuffer.Add(new ScoredResult(element, -inverseScore));
             }
 
-            var foundBest = _vectors[_resultsBuffer[^1].Index];
+            var foundBest = vectors[_resultsBuffer[^1].Index];
 
-            var maxConnections = layerIndex == 0 ? MaxConnectionsDense : MaxConnectionsLane;
+            var maxConnections = layer == 0 ? MaxConnectionsDense : MaxConnectionsLane;
             TrimEdges(_trimEdgesData, _resultsBuffer, maxConnections);
 
-            var vectorEdges = layer.GetOrCreateEdges(vector.Index);
+            var vectorEdges = vector.GetEdgesInLayer(layer);
 
             for (var i = 0; i < _resultsBuffer.Count; i++)
             {
-                var neighbor = _vectors[_resultsBuffer[i].Index];
-                var neighborEdges = layer.GetOrCreateEdges(neighbor.Index);
+                var neighbor = vectors[_resultsBuffer[i].Index];
+                var neighborEdges = neighbor.GetEdgesInLayer(layer);
 
                 vectorEdges.Add(neighbor.Index);
                 neighborEdges.Add(vector.Index);
 
                 if (neighborEdges.Count > maxConnections)
                 {
-                    TrimEdges(_trimEdgesData, neighbor, neighborEdges, maxConnections, layer);
+                    TrimEdges(_trimEdgesData, neighbor, layer, maxConnections);
                 }
             }
 

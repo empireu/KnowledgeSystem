@@ -13,5 +13,5 @@ public static class VectorObjective
     public static float AdjustedCosineSimilarity(ReadOnlySpan<float> a, ReadOnlySpan<float> b) => 1.0f - TensorPrimitives.CosineSimilarity(a, b);
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static float AdjustedCosineSimilarity(IStoredVector a, IStoredVector b) => AdjustedCosineSimilarity(a.StorageView, b.StorageView);
+    public static float AdjustedCosineSimilarity(IStoredVector a, IStoredVector b) => AdjustedCosineSimilarity(a.VectorView, b.VectorView);
 }

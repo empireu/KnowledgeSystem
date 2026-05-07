@@ -308,19 +308,26 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
             index.Insert(GetTestVector(random, Dimension));
         }
 
-        var edgesList = ((MutableHnswIndex.DenseLayer)index.Layers[0])._edges;
-
         var asymmetricPairs = new List<(int From, int To)>();
 
-        for (var nodeIndex = 0; nodeIndex < edgesList.Count; nodeIndex++)
+        for (var nodeIndex = 0; nodeIndex < index.Vectors.Count; nodeIndex++)
         {
-            var nodeEdges = edgesList[nodeIndex];
-            if (nodeEdges == null) continue;
-
-            foreach (var neighborIndex in nodeEdges)
+            var edgeCount = index.VectorsInternal[nodeIndex].GetEdgesInLayer(0).Count;
+            for (var i = 0; i < edgeCount; i++)
             {
-                var neighborEdges = neighborIndex < edgesList.Count ? edgesList[neighborIndex] : null;
-                if (neighborEdges == null || !neighborEdges.Contains(nodeIndex))
+                var neighborIndex = index.VectorsInternal[nodeIndex].GetEdgesInLayer(0)[i];
+                var neighborEdgeCount = neighborIndex < index.Vectors.Count ? index.VectorsInternal[neighborIndex].GetEdgesInLayer(0).Count : 0;
+                var found = false;
+                for (var j = 0; j < neighborEdgeCount; j++)
+                {
+                    if (index.VectorsInternal[neighborIndex].GetEdgesInLayer(0)[j] == nodeIndex)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
                 {
                     asymmetricPairs.Add((From: nodeIndex, To: neighborIndex));
                 }
@@ -354,6 +361,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         var averageRecall = totalRecall / 100.0;
         
         const double baselineRecall = 0.937;
+        output.WriteLine($"Recall test: {averageRecall:P1} current, baseline: {baselineRecall:P1}");
         Assert.True(averageRecall >= baselineRecall, $"Recall regressed from {baselineRecall:P1} to {averageRecall:P1}");
     }
 
@@ -404,7 +412,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         insertSw.Stop();
 
         output.WriteLine($"  Insert: {insertSw.Elapsed.TotalMilliseconds:F}ms total, {insertSw.Elapsed.TotalMilliseconds / vectorCount * 1000:F}µs/v");
-        output.WriteLine($"  Layers: {index.Layers.Count}");
+        output.WriteLine($"  Layers: {index.LayerCount}");
         
         #endregion
         
@@ -1000,8 +1008,8 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
     private static MutableHnswIndex.EdgeList CreateEdgeList(int capacity)
     {
-        var storage = new int[capacity + 1];
-        return new MutableHnswIndex.EdgeList(capacity, storage);
+        var allocator = new MutableHnswIndex.ArenaAllocator<int>(capacity + 1, 4);
+        return new MutableHnswIndex.EdgeList(capacity, allocator.Allocate());
     }
 
     [Fact]

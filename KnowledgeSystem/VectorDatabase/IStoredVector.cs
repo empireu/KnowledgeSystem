@@ -4,7 +4,7 @@ public interface IStoredVector
 {
     int Index { get; }
         
-    ReadOnlySpan<float> StorageView { get; }
+    ReadOnlySpan<float> VectorView { get; }
         
-    int Dimension => StorageView.Length;
+    int Dimension => VectorView.Length;
 }

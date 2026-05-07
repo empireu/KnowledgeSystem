@@ -6,7 +6,7 @@ public sealed partial class MutableHnswIndex
     ///     Greedy best-first search within a single HNSW layer, expanding up to <see cref="explorationFactor"/> candidates.
     ///     Corresponds to Algorithm 2.
     /// </summary>
-    private void SearchLayer(SearchData data, ReadOnlySpan<float> query, StoredVectorImpl entry, ILayer layer, int explorationFactor)
+    private void SearchLayer(SearchData data, ReadOnlySpan<float> query, StoredVectorImpl entry, int layer, int explorationFactor)
     {
         data.Clear();
 
@@ -18,10 +18,13 @@ public sealed partial class MutableHnswIndex
         // Priority is in reverse score order.
         var results = data.ResultsQueue;
 
-        var initialScore = VectorObjective.AdjustedCosineSimilarity(query, entry.StorageView);
+        var initialScore = VectorObjective.AdjustedCosineSimilarity(query, entry.VectorView);
         visited.Add(entry.Index);
         candidates.Enqueue(entry.Index, initialScore);
         results.Enqueue(entry.Index, -initialScore);
+
+        // ReSharper disable once InlineTemporaryVariable
+        var vectors = VectorsInternal;
 
         while (candidates.TryDequeue(out var currentCandidate, out var currentScore))
         {
@@ -34,31 +37,30 @@ public sealed partial class MutableHnswIndex
                 break;
             }
 
+            var edges = vectors[currentCandidate].GetEdgesInLayer(layer);
+
             // Expand the neighbors of the candidate:
-            if (layer.TryGetEdges(currentCandidate, out var edges))
+            for (var i = 0; i < edges.Count; i++)
             {
-                for (var i = 0; i < edges!.Count; i++)
+                var neighbor = edges[i];
+
+                if (!visited.Add(neighbor))
                 {
-                    var neighbor = edges[i];
+                    continue;
+                }
 
-                    if (!visited.Add(neighbor))
+                var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor].VectorView);
+
+                results.TryPeek(out _, out var currentInverseWorstScore);
+                if (results.Count < explorationFactor || neighborScore < -currentInverseWorstScore)
+                {
+                    candidates.Enqueue(neighbor, neighborScore);
+                    results.Enqueue(neighbor, -neighborScore);
+
+                    // Discards the worst result:
+                    if (results.Count > explorationFactor)
                     {
-                        continue;
-                    }
-
-                    var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, _vectors[neighbor].StorageView);
-
-                    results.TryPeek(out _, out var currentInverseWorstScore);
-                    if (results.Count < explorationFactor || neighborScore < -currentInverseWorstScore)
-                    {
-                        candidates.Enqueue(neighbor, neighborScore);
-                        results.Enqueue(neighbor, -neighborScore);
-
-                        // Discards the worst result:
-                        if (results.Count > explorationFactor)
-                        {
-                            results.Dequeue();
-                        }
+                        results.Dequeue();
                     }
                 }
             }
@@ -91,22 +93,18 @@ public sealed partial class MutableHnswIndex
         }
         
         var currentNode = _entryPointVector;
-        var currentScore = VectorObjective.AdjustedCosineSimilarity(query, currentNode.StorageView);
-        for (var layerIndex = Layers.Count - 1; layerIndex > 0; layerIndex--)
+        var currentScore = VectorObjective.AdjustedCosineSimilarity(query, currentNode.VectorView);
+        for (var layerIndex = LayerCount - 1; layerIndex > 0; layerIndex--)
         {
             while (true)
             {
-                if (!Layers[layerIndex].TryGetEdges(currentNode.Index, out var currentNodeEdges))
-                {
-                    break;
-                }
-
+                var currentNodeEdges = currentNode.GetEdgesInLayer(layerIndex);
                 var minimumChanged = false;
 
-                for (var i = 0; i < currentNodeEdges!.Count; i++)
+                for (var i = 0; i < currentNodeEdges.Count; i++)
                 {
-                    var neighborNode = _vectors[currentNodeEdges[i]];
-                    var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, neighborNode.StorageView);
+                    var neighborNode = VectorsInternal[currentNodeEdges[i]];
+                    var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, neighborNode.VectorView);
 
                     if (neighborScore < currentScore)
                     {
@@ -123,7 +121,7 @@ public sealed partial class MutableHnswIndex
             }
         }
 
-        SearchLayer(_searchData, query, currentNode, Layers[0], Math.Max(k, efSearch));
+        SearchLayer(_searchData, query, currentNode, 0, Math.Max(k, efSearch));
 
         var queue = _searchData.ResultsQueue;
         var count = Math.Min(k, queue.Count);
