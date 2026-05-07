@@ -59,10 +59,21 @@ public sealed partial class MutableHnswIndex
                 array[i] = sparseList;
             }
         }
-        
-        var result = new StoredVectorImpl(VectorsInternal.Count, vectorStorage, denseGraph, sparseGraphs);
 
-        VectorsInternal.Add(result);
+        var isReusedSlot = _freeSlots.Count > 0;
+        var index = isReusedSlot ? _freeSlots.Pop() : VectorsInternal.Count;
+
+        var result = new StoredVectorImpl(index, vectorStorage, denseGraph, sparseGraphs);
+
+        if (isReusedSlot)
+        {
+            VectorsInternal[index] = result;
+        }
+        else
+        {
+            VectorsInternal.Add(result);
+        }
+
         result.Load(sourceData);
 
         return result;
@@ -86,7 +97,7 @@ public sealed partial class MutableHnswIndex
         for (var i = 0; i < edges.Count; i++)
         {
             var node = edges[i];
-            var score = VectorObjective.AdjustedCosineSimilarity(targetNode, vectors[node]);
+            var score = VectorObjective.AdjustedCosineSimilarity(targetNode, vectors[node]!);
             candidateList.Add(new TrimEdgesData.TrimEdgesCandidate(node, score));
         }
 
@@ -109,7 +120,7 @@ public sealed partial class MutableHnswIndex
 
             if (!wasKept)
             {
-                if (!vectors[evictedIndex].GetEdgesInLayer(layer).Remove(targetNode.Index))
+                if (!vectors[evictedIndex]!.GetEdgesInLayer(layer).Remove(targetNode.Index))
                 {
                     throw new Exception("Expected to remove neighbor node");
                 }
@@ -172,12 +183,12 @@ public sealed partial class MutableHnswIndex
             var candidate = candidateList[candidateIndex];
 
             var keep = true;
-            var candidateVector = VectorsInternal[candidate.Index];
+            var candidateVector = VectorsInternal[candidate.Index]!;
 
             // Compares this candidate against every node we are already keeping:
             for (var i = 0; i < keptEdges.Count; i++)
             {
-                if (VectorObjective.AdjustedCosineSimilarity(candidateVector, VectorsInternal[keptEdges[i].Index]) < candidate.Score)
+                if (VectorObjective.AdjustedCosineSimilarity(candidateVector, VectorsInternal[keptEdges[i].Index]!) < candidate.Score)
                 {
                     keep = false;
                     break;
@@ -232,7 +243,7 @@ public sealed partial class MutableHnswIndex
 
                 for (var i = 0; i < currentNodeEdges.Count; i++)
                 {
-                    var neighborNode = vectors[currentNodeEdges[i]];
+                    var neighborNode = vectors[currentNodeEdges[i]]!;
                     var neighborScore = VectorObjective.AdjustedCosineSimilarity(vector, neighborNode);
 
                     if (neighborScore < currentScore)
@@ -258,13 +269,13 @@ public sealed partial class MutableHnswIndex
             SearchLayer(_searchData, vector.VectorView, currentNode, layer, ExplorationFactorConstruction);
 
             // Results are in reverse order. We will pull them into a buffer and read it backward:
-            var queue = _searchData.ResultsQueue;
-            while (queue.TryDequeue(out var element, out var inverseScore))
+            var resultsQueue = _searchData.ResultsQueue;
+            while (resultsQueue.TryDequeue(out var element, out var inverseScore))
             {
                 _resultsBuffer.Add(new ScoredResult(element, -inverseScore));
             }
 
-            var foundBest = vectors[_resultsBuffer[^1].Index];
+            var foundBest = vectors[_resultsBuffer[^1].Index]!;
 
             var maxConnections = layer == 0 ? MaxConnectionsDense : MaxConnectionsLane;
             TrimEdges(_trimEdgesData, _resultsBuffer, maxConnections);
@@ -273,7 +284,7 @@ public sealed partial class MutableHnswIndex
 
             for (var i = 0; i < _resultsBuffer.Count; i++)
             {
-                var neighbor = vectors[_resultsBuffer[i].Index];
+                var neighbor = vectors[_resultsBuffer[i].Index]!;
                 var neighborEdges = neighbor.GetEdgesInLayer(layer);
 
                 vectorEdges.Add(neighbor.Index);

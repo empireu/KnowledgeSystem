@@ -310,17 +310,20 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
         var asymmetricPairs = new List<(int From, int To)>();
 
-        for (var nodeIndex = 0; nodeIndex < index.Vectors.Count; nodeIndex++)
+        for (var nodeIndex = 0; nodeIndex < index.VectorsInternal.Count; nodeIndex++)
         {
-            var edgeCount = index.VectorsInternal[nodeIndex].GetEdgesInLayer(0).Count;
+            var node = index.VectorsInternal[nodeIndex]!;
+
+            var edgeCount = node.GetEdgesInLayer(0).Count;
             for (var i = 0; i < edgeCount; i++)
             {
-                var neighborIndex = index.VectorsInternal[nodeIndex].GetEdgesInLayer(0)[i];
-                var neighborEdgeCount = neighborIndex < index.Vectors.Count ? index.VectorsInternal[neighborIndex].GetEdgesInLayer(0).Count : 0;
+                var neighborIndex = node.GetEdgesInLayer(0)[i];
+                var neighbor = index.VectorsInternal[neighborIndex];
+                var neighborEdgeCount = neighbor!.GetEdgesInLayer(0).Count;
                 var found = false;
                 for (var j = 0; j < neighborEdgeCount; j++)
                 {
-                    if (index.VectorsInternal[neighborIndex].GetEdgesInLayer(0)[j] == nodeIndex)
+                    if (neighbor.GetEdgesInLayer(0)[j] == nodeIndex)
                     {
                         found = true;
                         break;
@@ -1104,6 +1107,416 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     {
         var list = CreateEdgeList(4);
         Assert.False(list.Remove(1));
+    }
+
+    #endregion
+
+    #region Removal
+
+    [Fact]
+    public void Remove_ValidVector_ReturnsTrue()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var vector = new float[Dimension];
+        vector[0] = 1f;
+        var stored = index.Insert(vector);
+
+        var result = index.Remove(stored);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void Remove_AlreadyRemoved_ReturnsFalse()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var vector = new float[Dimension];
+        vector[0] = 1f;
+        var stored = index.Insert(vector);
+
+        index.Remove(stored);
+        var result = index.Remove(stored);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void Remove_LastVector_IndexIsEmpty()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var vector = new float[Dimension];
+        vector[0] = 1f;
+        var stored = index.Insert(vector);
+
+        index.Remove(stored);
+
+        var query = new float[Dimension];
+        query[0] = 1f;
+        var results = index.Search(query, 10);
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void Remove_EntryPoint_NewEntryPointSelected()
+    {
+        var (corpus, index) = BuildRandomCorpusWithIndex(100, seed: Seed);
+        var entryPointIndex = index.VectorsInternal.First(v => v != null && v.TargetLayer == index.LayerCount - 1)!.Index;
+        var entryPoint = index.Vectors[entryPointIndex]!;
+
+        Assert.True(index.Remove(entryPoint));
+
+        // Search should still work:
+        var results = index.Search(corpus[0], 5);
+        Assert.NotEmpty(results);
+    }
+
+    [Fact]
+    public void Remove_PreservesSymmetricEdges()
+    {
+        const int smallMaxConnections = 4;
+        var random = new Random(Seed);
+        var index = new MutableHnswIndex(
+            dimension: Dimension,
+            maxConnectionsLane: 4,
+            maxConnectionsDense: smallMaxConnections,
+            efConstruction: 20,
+            seed: Seed
+        );
+
+        var vectors = new IStoredVector[100];
+        for (var i = 0; i < 100; i++)
+        {
+            vectors[i] = index.Insert(GetTestVector(random, Dimension));
+        }
+
+        // Remove some vectors:
+        for (var i = 0; i < 20; i++)
+        {
+            index.Remove(vectors[i * 3]);
+        }
+
+        // Verify all remaining edges are symmetric:
+        var asymmetricPairs = new List<(int From, int To)>();
+
+        for (var nodeIndex = 0; nodeIndex < index.VectorsInternal.Count; nodeIndex++)
+        {
+            var node = index.VectorsInternal[nodeIndex];
+            
+            if (node == null)
+            {
+                continue;
+            }
+
+            var edgeCount = node.GetEdgesInLayer(0).Count;
+            for (var i = 0; i < edgeCount; i++)
+            {
+                var neighborIndex = node.GetEdgesInLayer(0)[i];
+                var neighbor = index.VectorsInternal[neighborIndex];
+                if (neighbor == null)
+                {
+                    asymmetricPairs.Add((From: nodeIndex, To: neighborIndex));
+                    continue;
+                }
+
+                var neighborEdgeCount = neighbor.GetEdgesInLayer(0).Count;
+                var found = false;
+                for (var j = 0; j < neighborEdgeCount; j++)
+                {
+                    if (neighbor.GetEdgesInLayer(0)[j] == nodeIndex)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    asymmetricPairs.Add((From: nodeIndex, To: neighborIndex));
+                }
+            }
+        }
+
+        Assert.Empty(asymmetricPairs);
+    }
+
+    [Theory]
+    [InlineData(500, 10, 50, 50)]
+    [InlineData(500, 10, 50, 200)]
+    public void Remove_RecallRemainsHigh(int vectorCount, int k, int queryCount, int removeCount)
+    {
+        var (corpus, index) = BuildRandomCorpusWithIndex(vectorCount, efConstruction: 200);
+        var random = new Random(Seed);
+
+        // Remove a portion of vectors:
+        var removedSet = new HashSet<int>();
+        for (var i = 0; i < removeCount; i++)
+        {
+            var stored = index.Vectors[i];
+            if (stored != null)
+            {
+                index.Remove(stored);
+                removedSet.Add(i);
+            }
+        }
+
+        // Brute-force on the full corpus, then filter out removed indices:
+        var totalRecall = 0.0;
+        for (var q = 0; q < queryCount; q++)
+        {
+            var query = GetTestVector(random, Dimension);
+            var hnswResults = index.Search(query, k, efSearch: 200);
+            var bruteForceResults = BruteForceSearch(corpus, query, vectorCount)
+                .Where(idx => !removedSet.Contains(idx))
+                .Take(k)
+                .ToHashSet();
+            var hnswIndices = new HashSet<int>(hnswResults.Select(r => r.Index));
+            var hits = hnswIndices.Count(bruteForceResults.Contains);
+
+            totalRecall += (double)hits / k;
+        }
+
+        var averageRecall = totalRecall / queryCount;
+        Assert.True(averageRecall >= 0.95, $"Bad average recall after removal: {averageRecall:P1}");
+    }
+
+    [Fact]
+    public void Remove_SlotReuse_WorksCorrectly()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var random = new Random(Seed);
+
+        // ReSharper disable UnusedVariable
+        var v1 = index.Insert(GetTestVector(random, Dimension));
+        var v2 = index.Insert(GetTestVector(random, Dimension));
+        var v3 = index.Insert(GetTestVector(random, Dimension));
+        // ReSharper restore UnusedVariable
+
+        var removedIndex = v2.Index;
+        index.Remove(v2);
+
+        var v4 = index.Insert(GetTestVector(random, Dimension));
+        Assert.Equal(removedIndex, v4.Index);
+        Assert.NotNull(index.VectorsInternal[v4.Index]);
+    }
+
+    [Fact]
+    public void Remove_DeallocatesStorage()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var random = new Random(Seed);
+
+        var vectors = new IStoredVector[20];
+        for (var i = 0; i < 20; i++)
+        {
+            vectors[i] = index.Insert(GetTestVector(random, Dimension));
+        }
+
+        for (var i = 0; i < 10; i++)
+        {
+            index.Remove(vectors[i]);
+        }
+
+        for (var i = 0; i < 10; i++)
+        {
+            var newVector = index.Insert(GetTestVector(random, Dimension));
+            Assert.True(newVector.Index < 20, "New vector should reuse a dead slot");
+        }
+    }
+
+    [Fact]
+    public void Remove_MultipleRemoves_LayerCountAdjusts()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var random = new Random(Seed);
+
+        // Insert enough vectors to build multiple layers:
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < 500; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        var initialLayerCount = index.LayerCount;
+        Assert.True(initialLayerCount > 1, "Expected multiple layers for 500 vectors");
+
+        // Remove all vectors in the top layer:
+        var topLayerVectors = vectors.Where(v => index.VectorsInternal[v.Index]?.TargetLayer == initialLayerCount - 1).ToList();
+        foreach (var v in topLayerVectors)
+        {
+            index.Remove(v);
+        }
+
+        Assert.True(index.LayerCount < initialLayerCount, "LayerCount should decrease after removing all top-layer vectors");
+    }
+
+    [Fact]
+    public void Remove_AllVectors_IndexIsEmpty()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var random = new Random(Seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < 20; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        foreach (var v in vectors)
+        {
+            Assert.True(index.Remove(v));
+        }
+
+        // Search should return empty:
+        var query = new float[Dimension];
+        query[0] = 1f;
+        Assert.Empty(index.Search(query, 5));
+
+        // Can insert again after full removal:
+        var newVector = index.Insert(GetTestVector(random, Dimension));
+        var results = index.Search(newVector.VectorView.ToArray(), 1);
+        Assert.Single(results);
+        Assert.Equal(newVector.Index, results[0].Index);
+    }
+
+    [Fact]
+    public void Remove_PreservesSymmetricEdges_AcrossAllLayers()
+    {
+        var random = new Random(Seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < 500; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        // Remove some vectors:
+        for (var i = 0; i < 50; i++)
+        {
+            index.Remove(vectors[i]);
+        }
+
+        // Check symmetry on every layer that exists:
+        var asymmetricPairs = new List<(int From, int To, int Layer)>();
+
+        for (var nodeIndex = 0; nodeIndex < index.VectorsInternal.Count; nodeIndex++)
+        {
+            var node = index.VectorsInternal[nodeIndex];
+            if (node == null)
+            {
+                continue;
+            }
+
+            for (var layer = 0; layer <= node.TargetLayer; layer++)
+            {
+                var edges = node.GetEdgesInLayer(layer);
+                for (var i = 0; i < edges.Count; i++)
+                {
+                    var neighborIndex = edges[i];
+                    var neighbor = index.VectorsInternal[neighborIndex];
+                    if (neighbor == null)
+                    {
+                        asymmetricPairs.Add((From: nodeIndex, To: neighborIndex, Layer: layer));
+                        continue;
+                    }
+
+                    // Neighbor must exist in this layer:
+                    if (neighbor.TargetLayer < layer)
+                    {
+                        asymmetricPairs.Add((From: nodeIndex, To: neighborIndex, Layer: layer));
+                        continue;
+                    }
+
+                    var neighborEdges = neighbor.GetEdgesInLayer(layer);
+                    var found = false;
+                    for (var j = 0; j < neighborEdges.Count; j++)
+                    {
+                        if (neighborEdges[j] == nodeIndex)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        asymmetricPairs.Add((From: nodeIndex, To: neighborIndex, Layer: layer));
+                    }
+                }
+            }
+        }
+
+        Assert.Empty(asymmetricPairs);
+    }
+
+    [Fact]
+    public void Remove_SparseLayerVector_CleansUpSparseEdges()
+    {
+        var random = new Random(Seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        // Insert enough vectors to ensure some are on a sparse layer:
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < 500; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+        
+        var sparseVector = vectors.First(v => index.VectorsInternal[v.Index]!.TargetLayer > 0);
+        var sparseNode = index.VectorsInternal[sparseVector.Index]!;
+        var targetLayer = sparseNode.TargetLayer;
+
+        // Collect its neighbors in the top sparse layer before removal:
+        var sparseNeighborIndices = new List<int>();
+        var sparseEdges = sparseNode.GetEdgesInLayer(targetLayer);
+        for (var i = 0; i < sparseEdges.Count; i++)
+        {
+            sparseNeighborIndices.Add(sparseEdges[i]);
+        }
+
+        Assert.NotEmpty(sparseNeighborIndices);
+
+        // Remove it:
+        Assert.True(index.Remove(sparseVector));
+
+        // Verify none of the former sparse neighbors still have an edge to the removed node:
+        foreach (var edges in sparseNeighborIndices
+                     .Select(neighborIdx => index.VectorsInternal[neighborIdx]!)
+                     .Select(neighbor => neighbor.GetEdgesInLayer(targetLayer)))
+        {
+            for (var i = 0; i < edges.Count; i++)
+            {
+                Assert.NotEqual(sparseVector.Index, edges[i]);
+            }
+        }
+    }
+
+    [Fact]
+    public void Remove_ThenInsertAtReusedSlot_IsSearchable()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var random = new Random(Seed);
+
+        var vectors = new IStoredVector[10];
+        for (var i = 0; i < 10; i++)
+        {
+            vectors[i] = index.Insert(GetTestVector(random, Dimension));
+        }
+
+        var removedIndex = vectors[5].Index;
+        index.Remove(vectors[5]);
+
+        // Insert a new vector at the reused slot:
+        var newData = new float[Dimension];
+        newData[0] = 42f;
+        var newVector = index.Insert(newData);
+
+        Assert.Equal(removedIndex, newVector.Index);
+
+        // Search for the new vector:
+        var results = index.Search(newData, 1);
+        Assert.NotEmpty(results);
+        Assert.Equal(newVector.Index, results[0].Index);
     }
 
     #endregion

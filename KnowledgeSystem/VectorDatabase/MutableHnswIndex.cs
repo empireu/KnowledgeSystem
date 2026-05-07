@@ -16,10 +16,12 @@ public sealed partial class MutableHnswIndex
     private readonly double _recipLogMl;
     private readonly Random _random;
     
-    internal readonly List<StoredVectorImpl> VectorsInternal = [];
+    internal readonly List<StoredVectorImpl?> VectorsInternal = [];
+    private readonly Stack<int> _freeSlots = new();
     private readonly SearchData _searchData = new();
     private readonly List<ScoredResult> _resultsBuffer = new(200);
     private readonly TrimEdgesData _trimEdgesData = new();
+    private readonly List<int> _neighborSnapshotBuffer = [];
   
     /// <summary>
     ///     Storage for float arrays representing the vector data for each node.
@@ -38,7 +40,11 @@ public sealed partial class MutableHnswIndex
     /// </summary>
     private readonly BucketArenaAllocator<EdgeList> _layerStorageAllocator;
     
+    /// <summary>
+    ///     Gets the number of layers, including the dense layer.
+    /// </summary>
     public int LayerCount { get; private set; } = 1;
+    
     private StoredVectorImpl? _entryPointVector;
 
     /// <summary>
@@ -90,7 +96,7 @@ public sealed partial class MutableHnswIndex
     /// <summary>
     ///     Gets the vectors indexed by <see cref="IStoredVector.Index"/>.
     /// </summary>
-    public IReadOnlyList<IStoredVector> Vectors => VectorsInternal;
+    public IReadOnlyList<IStoredVector?> Vectors => VectorsInternal;
 
     /// <summary>
     ///     Fixed-size list for node indices.

@@ -18,12 +18,12 @@ public sealed partial class MutableHnswIndex
         var candidates = data.CandidatesQueue;
 
         // Priority is in reverse score order.
-        var results = data.ResultsQueue;
+        var resultsQueue = data.ResultsQueue;
 
         var initialScore = VectorObjective.AdjustedCosineSimilarity(query, entry.VectorView);
         visited[entry.Index] = generation;
         candidates.Enqueue(entry.Index, initialScore);
-        results.Enqueue(entry.Index, -initialScore);
+        resultsQueue.Enqueue(entry.Index, -initialScore);
 
         // ReSharper disable once InlineTemporaryVariable
         var vectors = VectorsInternal;
@@ -32,14 +32,14 @@ public sealed partial class MutableHnswIndex
         {
             // Bounds for the search:
             // If the best candidate is worse than the current worst result, and the results queue is full, the search ends.
-            if (results.Count >= explorationFactor &&
-                results.TryPeek(out _, out var inverseWorstScore) && // Always passes. Peek doesn't give the value
+            if (resultsQueue.Count >= explorationFactor &&
+                resultsQueue.TryPeek(out _, out var inverseWorstScore) && // Always passes. Peek doesn't give the value
                 currentScore > -inverseWorstScore)
             {
                 break;
             }
 
-            var edges = vectors[currentCandidate].GetEdgesInLayer(layer);
+            var edges = vectors[currentCandidate]!.GetEdgesInLayer(layer);
 
             // Expand the neighbors of the candidate:
             for (var i = 0; i < edges.Count; i++)
@@ -53,18 +53,18 @@ public sealed partial class MutableHnswIndex
 
                 visited[neighbor] = generation;
 
-                var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor].VectorView);
+                var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor]!.VectorView);
 
-                results.TryPeek(out _, out var currentInverseWorstScore);
-                if (results.Count < explorationFactor || neighborScore < -currentInverseWorstScore)
+                resultsQueue.TryPeek(out _, out var currentInverseWorstScore);
+                if (resultsQueue.Count < explorationFactor || neighborScore < -currentInverseWorstScore)
                 {
                     candidates.Enqueue(neighbor, neighborScore);
-                    results.Enqueue(neighbor, -neighborScore);
+                    resultsQueue.Enqueue(neighbor, -neighborScore);
 
                     // Discards the worst result:
-                    if (results.Count > explorationFactor)
+                    if (resultsQueue.Count > explorationFactor)
                     {
-                        results.Dequeue();
+                        resultsQueue.Dequeue();
                     }
                 }
             }
@@ -107,7 +107,7 @@ public sealed partial class MutableHnswIndex
 
                 for (var i = 0; i < currentNodeEdges.Count; i++)
                 {
-                    var neighborNode = VectorsInternal[currentNodeEdges[i]];
+                    var neighborNode = VectorsInternal[currentNodeEdges[i]]!;
                     var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, neighborNode.VectorView);
 
                     if (neighborScore < currentScore)
