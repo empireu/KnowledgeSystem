@@ -1,4 +1,6 @@
-﻿namespace KnowledgeSystem.VectorDatabase;
+﻿using System.Runtime.CompilerServices;
+
+namespace KnowledgeSystem.VectorDatabase;
 
 public sealed partial class MutableHnswIndex
 {
@@ -84,6 +86,67 @@ public sealed partial class MutableHnswIndex
             }
 
             return edges;
+        }
+    }
+
+    /// <summary>
+    ///     Fixed-size list for node indices.
+    /// </summary>
+    /// <param name="edgeCapacity">The fixed maximum capacity of the list.</param>
+    /// <param name="storage">The backing storage. Must be <see cref="EdgeCapacity"/> + 1 in length.</param>
+    internal readonly struct EdgeList(int edgeCapacity, Memory<int> storage)
+    {
+        public readonly int EdgeCapacity = edgeCapacity;
+        public readonly Memory<int> Storage = storage;
+
+        public int Count
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Storage.Span[0];
+        }
+
+        public int this[int index]
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Storage.Span[1 + index];
+        }
+
+        public void Add(int edge)
+        {
+            var count = Count;
+
+            if (count == EdgeCapacity)
+            {
+                throw new InvalidOperationException("Edge list is full");
+            }
+
+            var span = Storage.Span;
+            span[1 + count] = edge;
+            span[0] = count + 1;
+        }
+
+        /// <summary>
+        ///     Removes the first occurrence of <paramref name="edge"/> by swapping the last element into its position.
+        /// </summary>
+        /// <returns>True if the element was found and removed. Otherwise, false.</returns>
+        public bool Remove(int edge)
+        {
+            var span = Storage.Span;
+            var count = span[0];
+
+            for (var i = 0; i < count; i++)
+            {
+                if (span[1 + i] != edge)
+                {
+                    continue;
+                }
+
+                span[1 + i] = span[count];
+                span[0] = count - 1;
+                return true;
+            }
+
+            return false;
         }
     }
 }
