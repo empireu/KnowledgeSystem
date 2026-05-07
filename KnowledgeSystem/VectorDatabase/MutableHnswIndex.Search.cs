@@ -9,8 +9,10 @@ public sealed partial class MutableHnswIndex
     private void SearchLayer(SearchData data, ReadOnlySpan<float> query, StoredVectorImpl entry, int layer, int explorationFactor)
     {
         data.Clear();
+        data.EnsureCapacity(VectorsInternal.Count);
 
         var visited = data.Visited;
+        var generation = data.VisitedGeneration;
 
         // Priority is in score order.
         var candidates = data.CandidatesQueue;
@@ -19,7 +21,7 @@ public sealed partial class MutableHnswIndex
         var results = data.ResultsQueue;
 
         var initialScore = VectorObjective.AdjustedCosineSimilarity(query, entry.VectorView);
-        visited.Add(entry.Index);
+        visited[entry.Index] = generation;
         candidates.Enqueue(entry.Index, initialScore);
         results.Enqueue(entry.Index, -initialScore);
 
@@ -44,10 +46,12 @@ public sealed partial class MutableHnswIndex
             {
                 var neighbor = edges[i];
 
-                if (!visited.Add(neighbor))
+                if (visited[neighbor] == generation)
                 {
                     continue;
                 }
+
+                visited[neighbor] = generation;
 
                 var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor].VectorView);
 
@@ -145,15 +149,25 @@ public sealed partial class MutableHnswIndex
     
     private sealed class SearchData
     {
-        public readonly HashSet<int> Visited = new();
+        public int[] Visited = [];
+        public int VisitedGeneration = 1;
         public readonly PriorityQueue<int, float> CandidatesQueue = new();
         public readonly PriorityQueue<int, float> ResultsQueue = new();
 
         public void Clear()
         {
-            Visited.Clear();
+            VisitedGeneration++;
             CandidatesQueue.Clear();
             ResultsQueue.Clear();
+        }
+
+        public void EnsureCapacity(int capacity)
+        {
+            if (Visited.Length < capacity)
+            {
+                Visited = new int[capacity];
+                VisitedGeneration = 1;
+            }
         }
     }
 }
