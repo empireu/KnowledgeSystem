@@ -1522,4 +1522,165 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     }
 
     #endregion
+
+    #region Saving
+
+    [Fact]
+    public void SaveLoad_EmptyIndex_RoundTrips()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+     
+        using var stream = new MemoryStream();
+        index.SaveToFile(stream);
+        stream.Position = 0;
+     
+        var loaded = MutableHnswIndex.Load(stream);
+     
+        Assert.Equal(index.Dimension, loaded.Dimension);
+        Assert.Equal(index.MaxConnectionsLane, loaded.MaxConnectionsLane);
+        Assert.Equal(index.MaxConnectionsDense, loaded.MaxConnectionsDense);
+        Assert.Equal(index.ExplorationFactorConstruction, loaded.ExplorationFactorConstruction);
+        Assert.Equal(index.LayerCount, loaded.LayerCount);
+        Assert.Empty(loaded.Vectors);
+    }
+     
+    [Fact]
+    public void SaveLoad_SingleVector_RoundTrips()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, seed: Seed);
+        var vector = new float[Dimension];
+        vector[0] = 1f;
+        index.Insert(vector);
+     
+        using var stream = new MemoryStream();
+        index.SaveToFile(stream);
+        stream.Position = 0;
+     
+        var loaded = MutableHnswIndex.Load(stream);
+     
+        Assert.Single(loaded.Vectors);
+        Assert.Equal(1, loaded.LayerCount);
+     
+        var results = loaded.Search(vector, 1);
+        Assert.Single(results);
+        Assert.Equal(0, results[0].Index);
+    }
+     
+    [Theory]
+    [InlineData(100, 10)]
+    [InlineData(500, 20)]
+    public void SaveLoad_PreservedIndex_MaintainsRecall(int vectorCount, int k)
+    {
+        var (corpus, index) = BuildRandomCorpusWithIndex(vectorCount, efConstruction: 200);
+     
+        using var stream = new MemoryStream();
+        index.SaveToFile(stream);
+        stream.Position = 0;
+     
+        var loaded = MutableHnswIndex.Load(stream);
+     
+        var random = new Random(Seed + 1);
+        var totalRecallOriginal = 0.0;
+        var totalRecallLoaded = 0.0;
+        const int queryCount = 20;
+     
+        for (var q = 0; q < queryCount; q++)
+        {
+            var query = GetTestVector(random, Dimension);
+     
+            var originalResults = index.Search(query, k, efSearch: 20);
+            var loadedResults = loaded.Search(query, k, efSearch: 20);
+            var bruteForceResults = BruteForceSearch(corpus, query, k);
+     
+            var originalIndices = new HashSet<int>(originalResults.Select(r => r.Index));
+            var loadedIndices = new HashSet<int>(loadedResults.Select(r => r.Index));
+     
+            totalRecallOriginal += (double)bruteForceResults.Count(originalIndices.Contains) / k;
+            totalRecallLoaded += (double)bruteForceResults.Count(loadedIndices.Contains) / k;
+        }
+     
+        var avgRecallOriginal = totalRecallOriginal / queryCount;
+        var avgRecallLoaded = totalRecallLoaded / queryCount;
+     
+        Assert.True(Math.Abs(avgRecallOriginal - avgRecallLoaded) < 1e-5, $"Recall mismatch: original {avgRecallOriginal:P1}, loaded {avgRecallLoaded:P1}");
+    }
+     
+    [Fact]
+    public void SaveLoad_WithRemovals_PreservesFreeSlots()
+    {
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 100, seed: Seed);
+        var random = new Random(Seed);
+     
+        var vectors = new IStoredVector[20];
+        for (var i = 0; i < 20; i++)
+        {
+            vectors[i] = index.Insert(GetTestVector(random, Dimension));
+        }
+     
+        index.Remove(vectors[5]);
+        index.Remove(vectors[10]);
+        index.Remove(vectors[15]);
+     
+        using var stream = new MemoryStream();
+        index.SaveToFile(stream);
+        stream.Position = 0;
+     
+        var loaded = MutableHnswIndex.Load(stream);
+     
+        Assert.Null(loaded.Vectors[5]);
+        Assert.Null(loaded.Vectors[10]);
+        Assert.Null(loaded.Vectors[15]);
+     
+        var newVector = loaded.Insert(GetTestVector(random, Dimension));
+        Assert.True(newVector.Index is 5 or 10 or 15, $"Expected reused slot, got index {newVector.Index}");
+     
+        var query = GetTestVector(random, Dimension);
+        var results = loaded.Search(query, 5, efSearch: 100);
+        Assert.True(results.Length > 0);
+    }
+     
+    [Fact]
+    public void SaveLoad_InvalidMagic_ThrowsInvalidDataException()
+    {
+        using var stream = new MemoryStream();
+        stream.WriteByte((byte)'X');
+        stream.WriteByte((byte)'Y');
+        stream.WriteByte((byte)'Z');
+        stream.WriteByte((byte)'W');
+        stream.Position = 0;
+     
+        Assert.Throws<InvalidDataException>(() => MutableHnswIndex.Load(stream));
+    }
+     
+    [Fact]
+    public void SaveLoad_FilePath_RoundTrips()
+    {
+        var (_, index) = BuildRandomCorpusWithIndex(50, efConstruction: 100);
+        var path = Path.GetTempFileName();
+     
+        try
+        {
+            index.Save(path);
+     
+            var loaded = MutableHnswIndex.LoadFromFile(path);
+     
+            Assert.Equal(index.Dimension, loaded.Dimension);
+            Assert.Equal(index.MaxConnectionsLane, loaded.MaxConnectionsLane);
+            Assert.Equal(index.MaxConnectionsDense, loaded.MaxConnectionsDense);
+            Assert.Equal(index.Vectors.Count, loaded.Vectors.Count);
+     
+            var random = new Random(Seed + 1);
+            var query = GetTestVector(random, Dimension);
+            var originalResults = index.Search(query, 5, efSearch: 100);
+            var loadedResults = loaded.Search(query, 5, efSearch: 100);
+     
+            Assert.Equal(originalResults.Length, loadedResults.Length);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    #endregion
 }
