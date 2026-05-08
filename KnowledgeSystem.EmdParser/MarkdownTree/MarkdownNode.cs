@@ -80,7 +80,7 @@ public class MarkdownNode(MarkdownNode.Type type, int startOffset, int endOffset
     /// <summary>
     ///     The child nodes. Will be empty for logical content.
     /// </summary>
-    public List<MarkdownNode> Children { get; } = new();
+    public List<MarkdownNode> Children { get; } = [];
 
     /// <summary>
     ///     Start offset of this node's span in the input string (inclusive).

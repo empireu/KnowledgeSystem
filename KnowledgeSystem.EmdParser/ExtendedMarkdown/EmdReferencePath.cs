@@ -1,6 +1,6 @@
 ﻿namespace KnowledgeSystem.EmdParser.ExtendedMarkdown;
 
-public readonly struct EmdReferencePath(string path, EmdReferencePath.ReferenceType type, string definition, int startOffset, int endOffset)
+public readonly struct EmdReferencePath(string repositoryRelativePath, EmdReferencePath.ReferenceType type, string definition, int startOffset, int endOffset) : IEquatable<EmdReferencePath>
 {
     public enum ReferenceType : byte
     {
@@ -21,11 +21,36 @@ public readonly struct EmdReferencePath(string path, EmdReferencePath.ReferenceT
         /// </summary>
         Offsets
     }
+
+    /// <summary>
+    ///     Creates a file reference.
+    /// </summary>
+    /// <param name="repositoryRelativePath">The repository-relative normalized path to the file.</param>
+    /// <returns></returns>
+    public static EmdReferencePath CreateFile(string repositoryRelativePath) => new(repositoryRelativePath,
+        ReferenceType.File,
+        definition: string.Empty,
+        startOffset: 0,
+        endOffset: 0
+    );
+    
+    /// <summary>
+    ///     Creates a reference towards a definition in a file.
+    /// </summary>
+    /// <param name="repositoryRelativePath">The repository-relative normalized path to the file.</param>
+    /// <param name="definition">The definition found in the file.</param>
+    /// <returns></returns>
+    public static EmdReferencePath CreateDefinition(string repositoryRelativePath, string definition) => new(repositoryRelativePath,
+        ReferenceType.Definition,
+        definition: definition,
+        startOffset: 0,
+        endOffset: 0
+    );
     
     /// <summary>
     ///     Path to the directory or file, plus additional data. Meaning is based on the <see cref="Type"/>.
     /// </summary>
-    public readonly string Path = path;
+    public readonly string RepositoryRelativePath = repositoryRelativePath;
     
     /// <summary>
     ///     The type of reference.
@@ -137,5 +162,113 @@ public readonly struct EmdReferencePath(string path, EmdReferencePath.ReferenceT
 
         result = new EmdReferencePath(input, type, definition: string.Empty, startOffset: 0, endOffset: 0);
         return true;
+    }
+
+    public bool Equals(EmdReferencePath other)
+    {
+        if (RepositoryRelativePath != other.RepositoryRelativePath)
+        {
+            return false;
+        }
+
+        if (Type != other.Type)
+        {
+            return false;
+        }
+
+        return Type switch
+        {
+            ReferenceType.Directory => true,
+            ReferenceType.File => true,
+            ReferenceType.Definition => Definition == other.Definition,
+            ReferenceType.Offsets => StartOffset == other.StartOffset && EndOffset == other.EndOffset,
+            _ => throw new ArgumentOutOfRangeException($"Invalid reference type {Type}")
+        };
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is EmdReferencePath other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        var hashCode = new HashCode();
+        hashCode.Add(RepositoryRelativePath);
+        hashCode.Add(Type);
+
+        switch (Type)
+        {
+            case ReferenceType.Definition:
+                hashCode.Add(Definition);
+                break;
+            case ReferenceType.Offsets:
+                hashCode.Add(StartOffset);
+                hashCode.Add(EndOffset);
+                break;
+            case ReferenceType.Directory:
+            case ReferenceType.File:
+            default:
+                // Ignored
+                break;
+        }
+        
+        return hashCode.ToHashCode();
+    }
+
+    public static bool operator ==(EmdReferencePath left, EmdReferencePath right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(EmdReferencePath left, EmdReferencePath right)
+    {
+        return !left.Equals(right);
+    }
+
+    /// <summary>
+    ///     Returns a <see cref="ReferenceType.File"/> reference pointing to the document that this reference resides in.
+    ///     Valid for <see cref="ReferenceType.File"/>, <see cref="ReferenceType.Definition"/>, and <see cref="ReferenceType.Offsets"/> references.
+    /// </summary>
+    public EmdReferencePath GetFile()
+    {
+        return Type switch
+        {
+            ReferenceType.File => this,
+            ReferenceType.Definition or ReferenceType.Offsets => new EmdReferencePath(
+                RepositoryRelativePath,
+                ReferenceType.File,
+                definition: string.Empty,
+                startOffset: 0, 
+                endOffset: 0
+            ),
+            _ => throw new InvalidOperationException($"Cannot get file reference for {Type} reference")
+        };
+    }
+
+    /// <summary>
+    ///     Returns a <see cref="ReferenceType.Directory"/> reference pointing to the directory containing this reference.
+    ///     For <see cref="ReferenceType.Directory"/> references, returns itself.
+    ///     For other types, extracts the parent directory from the path.
+    /// </summary>
+    public EmdReferencePath GetDirectory()
+    {
+        if (Type == ReferenceType.Directory)
+        {
+            return this;
+        }
+
+        var lastSlash = RepositoryRelativePath.LastIndexOfAny(['/', '\\']);
+        var dirPath = lastSlash >= 0
+            ? RepositoryRelativePath[..(lastSlash + 1)]
+            : string.Empty;
+
+        return new EmdReferencePath(
+            dirPath,
+            ReferenceType.Directory,
+            definition: string.Empty,
+            startOffset: 0,
+            endOffset: 0
+        );
     }
 }

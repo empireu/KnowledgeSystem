@@ -19,8 +19,4 @@
       <ProjectReference Include="..\KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="VectorDatabase\" />
-    </ItemGroup>
-
 </Project>
