@@ -7,6 +7,9 @@ using Microsoft.Extensions.Options;
 
 namespace KnowledgeSystem.Retrieval;
 
+/// <summary>
+///     The RAG engine handles embedding queries and retrieving extracts from the repo using the HNSW.
+/// </summary>
 public sealed class RagEngine
 {
     private readonly RagDbContext _db;
@@ -34,6 +37,8 @@ public sealed class RagEngine
     ///     The loaded repo. Available after calling <see cref="InitializeAsync"/>.
     /// </summary>
     public EmdRepository Repo => _repo ?? throw new InvalidDataException("RAG engine not initialized");
+
+    #region Setup
     
     /// <summary>
     ///     Initializes the RAG engine:
@@ -64,14 +69,6 @@ public sealed class RagEngine
         }
         
         await SynchronizeAsync(cancellationToken);
-    }
-
-    /// <summary>
-    ///     Saves the HNSW index to disk. Call this after sync or modifications.
-    /// </summary>
-    public void SaveHnsw()
-    {
-        _hnsw?.Save(_options.HnswIndexPath);
     }
 
     /// <summary>
@@ -107,28 +104,7 @@ public sealed class RagEngine
         await SyncExistingFilesAsync(_repo, existingPaths, cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
-        SaveHnsw();
-    }
-
-    /// <summary>
-    ///     Searches for the <paramref name="k"/> chunks most similar to the query text.
-    /// </summary>
-    public async Task<VectorSearchResult[]> SearchAsync(string query, int k, int efSearch = 200, CancellationToken cancellationToken = default)
-    {
-        var queryVector = await _embeddingService.EmbedAsync(query, cancellationToken);
-        return Hnsw.Search(queryVector.Span, k, efSearch);
-    }
-    
-    /// <summary>
-    ///     Searches for the <paramref name="k"/> chunks most similar to the query text batch.
-    /// </summary>
-    public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, int efSearch = 200, CancellationToken cancellationToken = default)
-    {
-        var queryVectors = await _embeddingService.EmbedBatchAsync(queries, cancellationToken);
-       
-        // Synchronous, compute-heavy in this async?
-        // We may want to fix that at some point.
-        return queryVectors.Select(x => Hnsw.Search(x.Span, k, efSearch)).ToArray();
+        _hnsw?.Save(_options.HnswIndexPath);
     }
     
     private async Task RemoveDeletedFilesAsync(List<string> deletedPaths, CancellationToken cancellationToken)
@@ -253,4 +229,31 @@ public sealed class RagEngine
             });
         }
     }
+    
+    #endregion
+
+    #region API
+    
+    /// <summary>
+    ///     Searches for the <paramref name="k"/> chunks most similar to the query text.
+    /// </summary>
+    public async Task<VectorSearchResult[]> SearchAsync(string query, int k, int efSearch = 200, CancellationToken cancellationToken = default)
+    {
+        var queryVector = await _embeddingService.EmbedAsync(query, cancellationToken);
+        return Hnsw.Search(queryVector.Span, k, efSearch);
+    }
+    
+    /// <summary>
+    ///     Searches for the <paramref name="k"/> chunks most similar to the query text batch.
+    /// </summary>
+    public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, int efSearch = 200, CancellationToken cancellationToken = default)
+    {
+        var queryVectors = await _embeddingService.EmbedBatchAsync(queries, cancellationToken);
+       
+        // Synchronous, compute-heavy in this async?
+        // We may want to fix that at some point.
+        return queryVectors.Select(x => Hnsw.Search(x.Span, k, efSearch)).ToArray();
+    }
+    
+    #endregion
 }

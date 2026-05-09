@@ -9,7 +9,6 @@ namespace KnowledgeSystem.Retrieval.Embeddings;
 /// </summary>
 public sealed class OpenAiEmbeddingService : IEmbeddingService
 {
-    private readonly OpenAIClient _client;
     private readonly EmbeddingClient _embeddingClient;
 
     public int Dimension { get; }
@@ -29,8 +28,8 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
         
         var credentials = new ApiKeyCredential(apiKey);
         
-        _client = new OpenAIClient(credentials, options);
-        _embeddingClient = _client.GetEmbeddingClient(modelId);
+        var client = new OpenAIClient(credentials, options);
+        _embeddingClient = client.GetEmbeddingClient(modelId);
     }
 
     public async Task<ReadOnlyMemory<float>> EmbedAsync(string text, CancellationToken cancellationToken = default)
