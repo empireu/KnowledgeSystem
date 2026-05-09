@@ -23,8 +23,14 @@ public readonly struct EmdChunkHash(byte[] hash, int preComputedHashCode) : IEqu
         AppendHeadingPath(chunk.Node.RawNode, sb);
         
         // Identifies the position within the node (disambiguates sub-chunks of the same node):
-        sb.Append(chunk.StartOffset).Append(' ');
+        sb.Append(chunk.StartOffset).Append(' ').AppendLine();
+        
+        // Identifies path to this node (disambiguates duplicate bodies):
+        sb.Append(chunk.Node.RawNode.StartOffset + chunk.StartOffset);
+        sb.Append(chunk.Node.RawNode.StartOffset + chunk.StartOffset + chunk.Length);
 
+        sb.AppendLine();
+        
         // Identifies changes in the content:
         sb.Append(chunk.ChunkText);
         

@@ -12,6 +12,8 @@ public sealed class EmdDocument
     public readonly EmdNode RootNode;
     public readonly Dictionary<MarkdownNode, EmdNode> AttachedNodes;
     public readonly Dictionary<EmdReferencePath, EmdNode> NodesWithDefinition;
+    public readonly Dictionary<EmdChunkHash, EmdChunk> ChunksByHash = new();
+    public readonly Dictionary<string, EmdChunk> ChunksByHexHash = new();
 
     private EmdDocument(
         EmdRepository repository,
@@ -19,7 +21,8 @@ public sealed class EmdDocument
         string content,
         EmdNode rootNode,
         Dictionary<MarkdownNode, EmdNode> attachedNodes, 
-        Dictionary<EmdReferencePath, EmdNode> nodesWithDefinition)
+        Dictionary<EmdReferencePath, EmdNode> nodesWithDefinition
+        )
     {
         Repository = repository;
         Path = path;
@@ -56,8 +59,9 @@ public sealed class EmdDocument
             repository,
             path, content,
             data.Attachments[root],
-            data.Attachments, data.Refs
-        );
+            data.Attachments, 
+            data.Refs
+            );
 
         // Attach document to nodes:
         foreach (var node in data.Attachments.Values)
@@ -72,24 +76,22 @@ public sealed class EmdDocument
     ///     Generates chunks for all nodes and computes their hashes.
     ///     Must be called after the document is created and nodes have their <see cref="EmdNode.Document"/> set.
     /// </summary>
-    public void GenerateChunksAndHashes(Chunker chunker)
+    public void GenerateChunksAndIndex(Chunker chunker)
     {
         chunker.GenerateChunks(RootNode);
-        ComputeHashes();
-    }
-
-    private void ComputeHashes()
-    {
+        
         foreach (var node in AttachedNodes.Values)
         {
             for (var chunkIndex = 0; chunkIndex < node.Chunks.Count; chunkIndex++)
             {
                 var nodeChunk = node.Chunks[chunkIndex];
                 nodeChunk.Hash = EmdChunkHash.Compute(nodeChunk);
+                node.Document.ChunksByHash.Add(nodeChunk.Hash, nodeChunk);
+                node.Document.ChunksByHexHash.Add(nodeChunk.Hash.ToHexString(), nodeChunk);
             }
         }
     }
-
+    
     /// <summary>
     ///     Traverses the raw Markdown tree, parsing the raw EMD data.
     /// </summary>
@@ -221,18 +223,17 @@ public sealed class EmdDocument
                 startOffset: 0,
                 endOffset: 0
             );
-
+            
             data.Refs.Add(attachment.DefinitionPath.Value, attachment);
         }
 
         // Parse declared dependencies:
-        var docDir = System.IO.Path.GetDirectoryName(data.DocumentPath) ?? string.Empty;
-
         foreach (var attachment in data.Attachments.Values)
         {
             for (var depIndex = 0; depIndex < attachment.DeclaredDependencies.Count; depIndex++)
             {
                 var localDependency = attachment.DeclaredDependencies[depIndex];
+                
                 EmdReferencePath refPath;
 
                 if (localDependency.StartsWith('@'))
@@ -267,7 +268,7 @@ public sealed class EmdDocument
                     }
 
                     // Resolve relative paths against the document's directory within the repo:
-                    var resolvedPath = ResolveRelativePath(data.Repository.RootDirectory, docDir, refPath.RepositoryRelativePath);
+                    var resolvedPath = EmdRepository.NormalizePath(refPath.RepositoryRelativePath);
 
                     refPath = new EmdReferencePath(
                         resolvedPath,
@@ -277,28 +278,9 @@ public sealed class EmdDocument
                         refPath.Type == EmdReferencePath.ReferenceType.Offsets ? refPath.EndOffset : 0
                     );
                 }
-
+                
                 attachment.DeclaredDependencyRefs.Add(refPath);
             }
         }
     }
-
-    /// <summary>
-    ///     Resolves a potentially relative path against the document's directory, returning a normalized repository-relative path.
-    /// </summary>
-    private static string ResolveRelativePath(string repoRoot, string documentDir, string path)
-    {
-        // Already absolute within the repo (starts with '/' or drive letter).
-        if (path.StartsWith('/') || path.StartsWith('\\') || path.Length >= 2 && path[1] == ':')
-        {
-            return EmdRepository.NormalizePath(path);
-        }
-
-        // Combine document directory with the relative path, then resolve to repository-relative.
-        var combined = System.IO.Path.Combine(documentDir, path);
-        var absolute = System.IO.Path.GetFullPath(System.IO.Path.Combine(repoRoot, combined));
-
-        return EmdRepository.GetRepositoryRelativePath(repoRoot, absolute);
-    }
-
 }

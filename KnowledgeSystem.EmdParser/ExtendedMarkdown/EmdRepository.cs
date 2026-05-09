@@ -38,7 +38,7 @@ public sealed class EmdRepository(string rootDirectory, Dictionary<EmdReferenceP
         // Chunk and hash after all documents are loaded and dependencies verified:
         foreach (var document in documents.Values)
         {
-            document.GenerateChunksAndHashes(chunker);
+            document.GenerateChunksAndIndex(chunker);
         }
 
         return repo;
