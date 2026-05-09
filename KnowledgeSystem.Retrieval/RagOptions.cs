@@ -42,6 +42,9 @@ public class RagOptions
     /// </summary>
     public string SystemPrompt { get; set; } = string.Empty;
 
+    [Range(1, 16)]
+    public int MaxReadTasks { get; set; } = 8;
+    
     [Range(4, 128)]
     public int MaxConnectionsLane { get; set; } = 16;
     

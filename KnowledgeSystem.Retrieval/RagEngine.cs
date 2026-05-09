@@ -48,6 +48,7 @@ public sealed class RagEngine
     {
         await _db.Database.EnsureCreatedAsync(cancellationToken);
 
+        // We accept the synchronous call in here.
         _hnsw = File.Exists(_options.HnswIndexPath)
             ? MutableHnswIndex.LoadFromFile(_options.HnswIndexPath, _embeddingService.Dimension)
             : new MutableHnswIndex(
@@ -78,7 +79,12 @@ public sealed class RagEngine
     /// </summary>
     public async Task SynchronizeAsync(CancellationToken cancellationToken = default)
     {
-        _repo = EmdRepository.Load(_options.RepositoryPath, _chunker);
+        _repo = await EmdRepository.LoadAsync(
+            _options.RepositoryPath,
+            _chunker,
+            _options.MaxReadTasks,
+            cancellationToken
+        );
 
         var repoPaths = _repo.Documents.Keys
             .Select(k => k.RepositoryRelativePath)

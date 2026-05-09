@@ -6,13 +6,44 @@ namespace KnowledgeSystem.EmdParser.ExtendedMarkdown;
 
 public sealed class EmdDocument
 {
+    /// <summary>
+    ///     The repository that owns the document.
+    /// </summary>
     public readonly EmdRepository Repository;
+    
+    /// <summary>
+    ///     The path to the file.
+    /// </summary>
     public readonly string Path;
+    
+    /// <summary>
+    ///     The raw text from the file.
+    /// </summary>
     public readonly string Content;
+    
+    /// <summary>
+    ///     The raw document node.
+    /// </summary>
     public readonly EmdNode RootNode;
+    
+    /// <summary>
+    ///     All nodes in the document.
+    /// </summary>
     public readonly Dictionary<MarkdownNode, EmdNode> AttachedNodes;
+    
+    /// <summary>
+    ///     All nodes that declare a definition.
+    /// </summary>
     public readonly Dictionary<EmdReferencePath, EmdNode> NodesWithDefinition;
+    
+    /// <summary>
+    ///     The chunks keyed by their hash.
+    /// </summary>
     public readonly Dictionary<EmdChunkHash, EmdChunk> ChunksByHash = new();
+    
+    /// <summary>
+    ///     The chunks keyed by their database-representation hash.
+    /// </summary>
     public readonly Dictionary<string, EmdChunk> ChunksByHexHash = new();
 
     private EmdDocument(
@@ -42,11 +73,11 @@ public sealed class EmdDocument
     }
     
     /// <summary>
-    ///     Loads the extended Markdown document from the specified Markdown file.
+    ///     Parses the extended Markdown document from the specified Markdown file.
     ///     The references will not be checked or resolved.
     /// </summary>
     /// <returns>The fully parsed EMD document.</returns>
-    public static EmdDocument Load(EmdRepository repository, string path, string content)
+    public static EmdDocument Parse(EmdRepository repository, string path, string content)
     {
         var root = MarkdownTreeParser.Parse(content);
         
@@ -61,7 +92,7 @@ public sealed class EmdDocument
             data.Attachments[root],
             data.Attachments, 
             data.Refs
-            );
+        );
 
         // Attach document to nodes:
         foreach (var node in data.Attachments.Values)
@@ -76,7 +107,7 @@ public sealed class EmdDocument
     ///     Generates chunks for all nodes and computes their hashes.
     ///     Must be called after the document is created and nodes have their <see cref="EmdNode.Document"/> set.
     /// </summary>
-    public void GenerateChunksAndIndex(Chunker chunker)
+    public void GenerateChunksAndLookups(Chunker chunker)
     {
         chunker.GenerateChunks(RootNode);
         

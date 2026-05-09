@@ -18,27 +18,40 @@ public sealed class EmdRepository(string rootDirectory, Dictionary<EmdReferenceP
     ///     Contains all documents in the repo.
     /// </summary>
     public readonly Dictionary<EmdReferencePath, EmdDocument> Documents = documents;
-
-    public static EmdRepository Load(string rootDirectory, Chunker chunker)
+    
+    public static async Task<EmdRepository> LoadAsync(string rootDirectory, Chunker chunker, int maxTasks = 4, CancellationToken cancellationToken = default)
     {
         var documents = new Dictionary<EmdReferencePath, EmdDocument>();
         var repo = new EmdRepository(rootDirectory, documents);
 
-        foreach (var filePath in Directory.EnumerateFiles(rootDirectory, "*.md", SearchOption.AllDirectories))
+        var options = new ParallelOptions
         {
-            var relativePath = GetRepositoryRelativePath(rootDirectory, filePath);
-            var content = File.ReadAllText(filePath);
-            var document = EmdDocument.Load(repo, relativePath, content);
-            var key = EmdReferencePath.CreateFile(relativePath);
-            documents.Add(key, document);
-        }
+            MaxDegreeOfParallelism = maxTasks,
+            CancellationToken = cancellationToken
+        };
+        
+        var obj = new object();
+        await Parallel.ForEachAsync(Directory.GetFiles(rootDirectory, "*.md", SearchOption.AllDirectories), options,
+            async (filePath, token) =>
+            {
+                var relativePath = GetRepositoryRelativePath(rootDirectory, filePath);
+                var content = await File.ReadAllTextAsync(filePath, token);
+                var document = EmdDocument.Parse(repo, relativePath, content);
+                var key = EmdReferencePath.CreateFile(relativePath);
+
+                lock (obj)
+                {
+                    documents.Add(key, document);
+                }
+            }
+        );
 
         VerifyDependencies(repo);
 
         // Chunk and hash after all documents are loaded and dependencies verified:
         foreach (var document in documents.Values)
         {
-            document.GenerateChunksAndIndex(chunker);
+            document.GenerateChunksAndLookups(chunker);
         }
 
         return repo;
