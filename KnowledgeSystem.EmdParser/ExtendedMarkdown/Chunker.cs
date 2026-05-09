@@ -1,4 +1,5 @@
-﻿using KnowledgeSystem.EmdParser.MarkdownTree;
+using System.Text;
+using KnowledgeSystem.EmdParser.MarkdownTree;
 
 namespace KnowledgeSystem.EmdParser.ExtendedMarkdown;
 
@@ -35,14 +36,32 @@ public sealed class Chunker(int maxChunkLength)
             {
                 // Should not happen, but skip
             }
-            else if (text.Length <= MaxChunkLength)
-            {
-                // TODO enrich
-                node.Chunks.Add(new EmdChunk(node, startOffset: 0, length: text.Length, chunkText: text));
-            }
             else
             {
-                SplitNode(node, text);
+                var prefix = BuildContextPrefix(node);
+
+                if (prefix.Length >= MaxChunkLength / 2) // Crazy if it does reach this
+                {
+                    prefix = string.Empty;
+                }
+
+                if (text.Length <= MaxChunkLength - prefix.Length)
+                {
+                    // If possible, insert the prefix:
+                    node.Chunks.Add(
+                        new EmdChunk(
+                            node,
+                            startOffset: 0,
+                            length: text.Length, 
+                            chunkText: 
+                            prefix + text
+                        )
+                    );
+                }
+                else
+                {
+                    SplitNode(node, text, prefix);
+                }
             }
         }
 
@@ -52,9 +71,12 @@ public sealed class Chunker(int maxChunkLength)
         }
     }
     
-    private void SplitNode(EmdNode node, string text)
+    private void SplitNode(EmdNode node, string text, string prefix)
     {
+        var effectiveMax = MaxChunkLength - prefix.Length;
+        
         var isCode = node.RawNode.NodeType == MarkdownNode.Type.CodeBlock;
+        
         var positions = isCode 
             ? FindCodeSplitPoints(text)
             : FindTextSplitPoints(text);
@@ -62,7 +84,7 @@ public sealed class Chunker(int maxChunkLength)
         if (positions.Count == 0)
         {
             // No natural split points found:
-            HardSplit(node, text);
+            HardSplit(node, text, prefix);
             return;
         }
 
@@ -72,14 +94,14 @@ public sealed class Chunker(int maxChunkLength)
         {
             var chunkText = text[start..splitEnd];
 
-            if (chunkText.Length > MaxChunkLength && start < splitEnd)
+            if (chunkText.Length > effectiveMax && start < splitEnd)
             {
                 // Segment between two split points is still too long, hard-split:
-                HardSplitRange(node, text, start, splitEnd);
+                HardSplitRange(node, text, start, splitEnd, prefix);
             }
             else if (chunkText.Length > 0)
             {
-                node.Chunks.Add(new EmdChunk(node, startOffset: start, length: chunkText.Length, chunkText: chunkText));
+                node.Chunks.Add(new EmdChunk(node, startOffset: start, length: chunkText.Length, chunkText: prefix + chunkText));
             }
 
             start = splitEnd;
@@ -90,13 +112,13 @@ public sealed class Chunker(int maxChunkLength)
         {
             var tail = text[start..];
 
-            if (tail.Length > MaxChunkLength)
+            if (tail.Length > effectiveMax)
             {
-                HardSplitRange(node, text, start, text.Length);
+                HardSplitRange(node, text, start, text.Length, prefix);
             }
             else if (tail.Length > 0)
             {
-                node.Chunks.Add(new EmdChunk(node, startOffset: start, length: tail.Length, chunkText: tail));
+                node.Chunks.Add(new EmdChunk(node, startOffset: start, length: tail.Length, chunkText: prefix + tail));
             }
         }
     }
@@ -178,22 +200,119 @@ public sealed class Chunker(int maxChunkLength)
     /// <summary>
     ///     Hard-splits text that has no natural boundaries.
     /// </summary>
-    private void HardSplit(EmdNode node, string text)
+    private void HardSplit(EmdNode node, string text, string prefix)
     {
-        HardSplitRange(node, text, 0, text.Length);
+        HardSplitRange(node, text, 0, text.Length, prefix);
     }
 
-    private void HardSplitRange(EmdNode node, string text, int rangeStart, int rangeEnd)
+    private void HardSplitRange(EmdNode node, string text, int rangeStart, int rangeEnd, string prefix)
     {
+        var effectiveMax = Math.Max(50, MaxChunkLength - prefix.Length);
         var start = rangeStart;
 
         while (start < rangeEnd)
         {
             var remaining = rangeEnd - start;
-            var take = Math.Min(remaining, MaxChunkLength);
+            var take = Math.Min(remaining, effectiveMax);
             var chunkText = text.Substring(start, take);
-            node.Chunks.Add(new EmdChunk(node, startOffset: start, length: take, chunkText: chunkText));
+            node.Chunks.Add(new EmdChunk(node, startOffset: start, length: take, chunkText: prefix + chunkText));
             start += take;
         }
+    }
+
+    private static string BuildContextPrefix(EmdNode node)
+    {
+        var sb = new StringBuilder();
+
+        // Document Path:
+        if (!string.IsNullOrEmpty(node.Document.Path))
+        {
+            sb.AppendLine($"[Document: {node.Document.Path}]");
+        }
+
+        // Definitions and dependencies:
+        var definitions = new List<string>();
+        var dependencies = new List<string>();
+        var currentNode = node.RawNode;
+        while (currentNode != null)
+        {
+            if (node.Document != null && node.Document.AttachedNodes.TryGetValue(currentNode, out var currentEmd))
+            {
+                if (!string.IsNullOrEmpty(currentEmd.Definition))
+                {
+                    definitions.Add(currentEmd.Definition);
+                }
+                
+                dependencies.AddRange(currentEmd.DeclaredDependencies);
+            }
+            
+            currentNode = currentNode.Parent;
+        }
+
+        if (definitions.Count > 0)
+        {
+            sb.AppendLine($"[Definitions: {string.Join(", ", definitions.Distinct())}]");
+        }
+        
+        if (dependencies.Count > 0)
+        {
+            sb.AppendLine($"[Dependencies: {string.Join(", ", dependencies.Distinct())}]");
+        }
+
+        // Heading path:
+        var headings = new List<string>();
+        currentNode = node.RawNode.Parent;
+        while (currentNode != null)
+        {
+            if (currentNode.HeadingLevel > 0 && !string.IsNullOrWhiteSpace(currentNode.Text))
+            {
+                headings.Insert(0, currentNode.Text.Trim());
+            }
+            
+            currentNode = currentNode.Parent;
+        }
+
+        if (headings.Count > 0)
+        {
+            sb.AppendLine($"[Path: {string.Join(" > ", headings)}]");
+        }
+
+        // Structural hint:
+        switch (node.RawNode.NodeType)
+        {
+            case MarkdownNode.Type.CodeBlock:
+                var language = string.IsNullOrEmpty(node.RawNode.Language) ? "code" : node.RawNode.Language;
+                sb.AppendLine($"[Code Block ({language})]");
+                break;
+            case MarkdownNode.Type.ListItem:
+                sb.AppendLine("[List Item]");
+                break;
+            case MarkdownNode.Type.Blockquote:
+                sb.AppendLine("[Quote]");
+                break;
+            case MarkdownNode.Type.Invalid:
+            case MarkdownNode.Type.Document:
+            case MarkdownNode.Type.H1:
+            case MarkdownNode.Type.H2:
+            case MarkdownNode.Type.H3:
+            case MarkdownNode.Type.H4:
+            case MarkdownNode.Type.H5:
+            case MarkdownNode.Type.H6:
+            case MarkdownNode.Type.Paragraph:
+            case MarkdownNode.Type.UnorderedList:
+            case MarkdownNode.Type.OrderedList:
+            case MarkdownNode.Type.ThematicBreak:
+            default:
+                // Ignored
+                break;
+        }
+
+        if (sb.Length > 0)
+        {
+            // Empty line before actual content:
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
     }
 }
