@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.EmdParser",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Hnsw", "KnowledgeSystem.Hnsw\KnowledgeSystem.Hnsw.csproj", "{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Retrieval", "KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj", "{574786EA-13DE-427E-ACEE-87E5C29EE4DD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{574786EA-13DE-427E-ACEE-87E5C29EE4DD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{574786EA-13DE-427E-ACEE-87E5C29EE4DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{574786EA-13DE-427E-ACEE-87E5C29EE4DD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{574786EA-13DE-427E-ACEE-87E5C29EE4DD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
