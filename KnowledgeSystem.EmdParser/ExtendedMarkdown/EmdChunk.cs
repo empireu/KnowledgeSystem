@@ -8,12 +8,12 @@ public sealed class EmdChunk(EmdNode node, int startOffset, int length, string c
     public readonly EmdNode Node = node;
     
     /// <summary>
-    ///     The start offset in the node's <see cref="MarkdownTree.MarkdownNode.Text"/>
+    ///     The start offset in the node's <see cref="MarkdownTree.MarkdownNode.Text"/>. <b>This is for the raw content; doesn't include enrichment!</b>
     /// </summary>
     public readonly int StartOffset = startOffset;
     
     /// <summary>
-    ///     The length of the content, after chunking.
+    ///     The length of the content, after chunking. <b>This is for the raw content; doesn't include enrichment!</b>
     /// </summary>
     public readonly int Length = length;
     

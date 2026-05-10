@@ -274,7 +274,7 @@ public sealed class Chunker(int maxChunkLength)
 
         if (headings.Count > 0)
         {
-            sb.AppendLine($"[Path: {string.Join(" > ", headings)}]");
+            sb.AppendLine($"[Document Tree: {string.Join(" > ", headings)}]");
         }
 
         // Structural hint:

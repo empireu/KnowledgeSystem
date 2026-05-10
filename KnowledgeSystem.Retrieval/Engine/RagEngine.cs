@@ -5,7 +5,7 @@ using KnowledgeSystem.Retrieval.Embeddings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-namespace KnowledgeSystem.Retrieval;
+namespace KnowledgeSystem.Retrieval.Engine;
 
 /// <summary>
 ///     The RAG engine handles embedding queries and retrieving extracts from the repo using the HNSW.

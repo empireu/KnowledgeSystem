@@ -2,7 +2,7 @@
 
 using System.ComponentModel.DataAnnotations;
 
-namespace KnowledgeSystem.Retrieval;
+namespace KnowledgeSystem.Retrieval.Engine;
 
 /// <summary>
 ///     Configuration options for the RAG system, bound from IConfiguration.
