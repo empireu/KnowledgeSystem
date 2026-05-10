@@ -11,7 +11,6 @@ using OpenAI.Chat;
 using System.Text.Json;
 using KnowledgeSystem.Retrieval.Engine;
 using Serilog;
-using Serilog.Events;
 
 var builder = Host.CreateDefaultBuilder(args)
     .ConfigureServices((context, services) =>
@@ -42,8 +41,6 @@ var options = new OpenAIClientOptions
 var credentials = new ApiKeyCredential("none");
         
 var client = new OpenAIClient(credentials, options);
-
-
 var chat = client.GetChatClient( "google/gemma-4-e4b");
 
 var tools = new List<ChatTool>
@@ -84,13 +81,14 @@ var tools = new List<ChatTool>
 
 var history = new List<ChatMessage>
 {
-   //new SystemChatMessage("You are an expert internal documentation assistant. Your purpose is to answer user queries strictly using the provided internal Markdown documentation. \n\n**CORE DIRECTIVES:**\n1. NO EXTERNAL KNOWLEDGE: You must answer using ONLY the information returned by your tools. If the tools do not provide the answer, say: \"I do not have enough information to answer that.\"\n2. ALWAYS SEARCH FIRST: You must trigger `semantic_search` for every user query. Do not attempt to answer from memory.\n3. MULTI-SEARCH STRATEGY: For complex queries, execute multiple `semantic_search` calls (e.g., search for the whole concept, then search for individual keywords). Use full, descriptive sentences for your search queries to maximize vector DB retrieval.\n4. MANDATORY CITATIONS: Every claim in your final response must end with an inline citation using this exact format: (from: path/to/file.md@Section).\n\n**TOOL USE:**\nYou have access to two tools.\n\n1. `semantic_search`: Queries the vector database.\n2. `repo_fetch`: Pulls specific context. Acceptable path formats:\n   - \"path/to/file.md@Section\" (Pulls a specific section)\n   - \"path/to/file.md:10,20\" (Pulls text between zero-based index 10 and 20, exclusive)\n   - \"path/to/file.md\" (Pulls the entire file. Use rarely).\n**MANDATORY MULTI-TOPIC SEARCH PROTOCOL:**\nWhen the user's prompt contains multiple distinct concepts, entities, or questions, you must execute a \"Comprehensive Search Strategy\". You must execute MULTIPLE `semantic_search` calls to cover all bases.\n\n1. **Deconstruct the Prompt:** Identify all distinct topics.\n2. **Execute the Combinatorial Search:** \n   - **Step A (The Intersection):** Execute one search combining the terms to see if they relate to each other.\n   - **Step B (The Isolated Searches):** You MUST ALSO execute separate, isolated searches for each individual concept. This prevents common topics from drowning out rare topics in the database.\n   \n   **EXAMPLE: User asks about \"Topic A and Topic B\"**\n   - Call 1: `semantic_search(\"Relationship between Topic A and Topic B\")`\n   - Call 2: `semantic_search(\"Comprehensive overview of Topic A\")`\n   - Call 3: `semantic_search(\"Detailed information regarding Topic B\")`\n\n3. **Verify Completeness:** Review the chunks returned from all your searches. Did you get information on both topics? If one is still missing, try one more isolated search using synonyms for the missing topic before giving up.\n\n**DEPENDENCY HANDLING (CRITICAL):**\nIf `semantic_search` returns a chunk containing a ```[dependsOn: ...]``` tag, you MUST resolve this dependency before answering. \n- If the tag looks like ```[dependsOn: @Something]```, you resolve it by calling `repo_fetch` with the pattern: \"path/to/document.md@Something\" with \"path/to/document\" being the path from the `[Document: ...]` metadata from the chunk.\n- Otherwise, use repo_fetch with the indicated location.\n\n**RESPONSE FORMAT:**\nWhen constructing your final reply to the user, strictly adhere to this format:\nKeep your response concise. Quote directly when necessary. \nInclude citations immediately after the relevant fact, NOT just at the end of the response.\n\nExample Output:\nThe authentication module uses OAuth2 for standard logins (from: backend/auth.md@Overview). However, admin endpoints require a dedicated API key (from: backend/security.md@Admin-Endpoints).")
    new SystemChatMessage(await File.ReadAllTextAsync("system_prompt.md"))
 };
 
+var excludedIndices = new HashSet<int>();
+
 while (true)
 {
-    Console.Write($"({history.Sum(x => x.Content.Sum(c => c.Text.Length))}) > ");
+    Console.Write($"({history.Sum(x => x.Content.Sum(c => c.Text.Length))} chars, {excludedIndices.Count} vecs) > ");
     var userQuery = Console.ReadLine();
 
     if (string.IsNullOrEmpty(userQuery))
@@ -127,16 +125,15 @@ while (true)
 
                     foreach (var s in query.Split('|'))
                     {
-                        var engineResults = await engine.SearchAsync(s, 5);
+                        var engineResults = await engine.SearchAsync(s, 5, excludedIndices: excludedIndices);
                     
                         foreach (var vectorSearchResult in engineResults.OrderByDescending(x => x.Score))
                         {
-                            var chunkRecord = await ctx.Chunks.FirstAsync(x => x.HnswId == vectorSearchResult.Index);
-                            var document = engine.Repo.Documents[EmdReferencePath.CreateFile(chunkRecord.DocumentPath)];
-                            var chunk = document.ChunksByHexHash[chunkRecord.HashHex];
-
-                            if (!chunks.Contains(chunk))
+                            if (excludedIndices.Add(vectorSearchResult.Index))
                             {
+                                var chunkRecord = await ctx.Chunks.FirstAsync(x => x.HnswId == vectorSearchResult.Index);
+                                var document = engine.Repo.Documents[EmdReferencePath.CreateFile(chunkRecord.DocumentPath)];
+                                var chunk = document.ChunksByHexHash[chunkRecord.HashHex];
                                 chunks.Add(chunk);
                             }
                         }
