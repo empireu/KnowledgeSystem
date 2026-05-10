@@ -237,22 +237,22 @@ public sealed class RagEngine
     /// <summary>
     ///     Searches for the <paramref name="k"/> chunks most similar to the query text.
     /// </summary>
-    public async Task<VectorSearchResult[]> SearchAsync(string query, int k, int efSearch = 200, CancellationToken cancellationToken = default)
+    public async Task<VectorSearchResult[]> SearchAsync(string query, int k, int efSearch = 200, IReadOnlySet<int>? excludedIndices = null, CancellationToken cancellationToken = default)
     {
         var queryVector = await _embeddingService.EmbedAsync(query, cancellationToken);
-        return Hnsw.Search(queryVector.Span, k, efSearch);
+        return Hnsw.Search(queryVector.Span, k, efSearch, excludedIndices);
     }
     
     /// <summary>
     ///     Searches for the <paramref name="k"/> chunks most similar to the query text batch.
     /// </summary>
-    public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, int efSearch = 200, CancellationToken cancellationToken = default)
+    public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, int efSearch = 200, IReadOnlySet<int>? excludedIndices = null, CancellationToken cancellationToken = default)
     {
         var queryVectors = await _embeddingService.EmbedBatchAsync(queries, cancellationToken);
        
         // Synchronous, compute-heavy in this async?
         // We may want to fix that at some point.
-        return queryVectors.Select(x => Hnsw.Search(x.Span, k, efSearch)).ToArray();
+        return queryVectors.Select(x => Hnsw.Search(x.Span, k, efSearch, excludedIndices)).ToArray();
     }
     
     #endregion

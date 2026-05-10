@@ -280,6 +280,81 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         }
     }
     
+    [Fact]
+    public void Search_ExcludedIndices_NotInResults()
+    {
+        const int vectorCount = 200;
+        var (_, index) = BuildRandomCorpusWithIndex(vectorCount, efConstruction: 200);
+        var random = new Random(Seed);
+
+        var query = GetTestVector(random, Dimension);
+        var normalResults = index.Search(query, 10, efSearch: 200);
+
+        var excluded = new HashSet<int>
+        {
+            normalResults[0].Index, 
+            normalResults[1].Index,
+            normalResults[2].Index
+        };
+        
+        var excludedResults = index.Search(query, 10, efSearch: 200, excludedIndices: excluded);
+
+        Assert.DoesNotContain(excludedResults, r => excluded.Contains(r.Index));
+        Assert.Equal(10, excludedResults.Length);
+    }
+
+    [Fact]
+    public void Search_ExcludedIndices_NullBehavesAsNormal()
+    {
+        const int vectorCount = 200;
+        var (_, index) = BuildRandomCorpusWithIndex(vectorCount, efConstruction: 200);
+        var random = new Random(Seed);
+
+        var query = GetTestVector(random, Dimension);
+        var normalResults = index.Search(query, 10, efSearch: 200);
+        var nullExcludedResults = index.Search(query, 10, efSearch: 200, excludedIndices: null);
+
+        Assert.Equal(normalResults.Length, nullExcludedResults.Length);
+        for (var i = 0; i < normalResults.Length; i++)
+        {
+            Assert.Equal(normalResults[i].Index, nullExcludedResults[i].Index);
+        }
+    }
+
+    [Fact]
+    public void Search_ExcludedIndices_PaginationReturnsDistinctResults()
+    {
+        const int vectorCount = 200;
+        var (_, index) = BuildRandomCorpusWithIndex(vectorCount, efConstruction: 200);
+        var random = new Random(Seed);
+
+        var query = GetTestVector(random, Dimension);
+
+        var page1 = index.Search(query, 5, efSearch: 200);
+        var excluded = new HashSet<int>(page1.Select(r => r.Index));
+        var page2 = index.Search(query, 5, efSearch: 200, excludedIndices: excluded);
+
+        foreach (var r in page2)
+        {
+            excluded.Add(r.Index);
+        }
+        var page3 = index.Search(query, 5, efSearch: 200, excludedIndices: excluded);
+
+        // All results across pages should be distinct:
+        var allIndices = page1.Select(r => r.Index)
+            .Concat(page2.Select(r => r.Index))
+            .Concat(page3.Select(r => r.Index))
+            .ToList();
+
+        Assert.Equal(allIndices.Count, allIndices.Distinct().Count());
+
+        // Results within each page should be sorted by score:
+        for (var i = 1; i < page2.Length; i++)
+        {
+            Assert.True(page2[i].Score >= page2[i - 1].Score);
+        }
+    }
+
     #endregion
 
     #region Insert

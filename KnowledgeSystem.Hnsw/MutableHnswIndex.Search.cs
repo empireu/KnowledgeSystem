@@ -6,7 +6,7 @@ public sealed partial class MutableHnswIndex
     ///     Greedy best-first search within a single HNSW layer, expanding up to <see cref="explorationFactor"/> candidates.
     ///     Corresponds to Algorithm 2.
     /// </summary>
-    private void SearchLayer(SearchData data, ReadOnlySpan<float> query, StoredVectorImpl entry, int layer, int explorationFactor)
+    private void SearchLayer(SearchData data, ReadOnlySpan<float> query, StoredVectorImpl entry, int layer, int explorationFactor, IReadOnlySet<int>? excludedIndices = null)
     {
         data.Clear();
         data.EnsureCapacity(VectorsInternal.Count);
@@ -23,7 +23,12 @@ public sealed partial class MutableHnswIndex
         var initialScore = VectorObjective.AdjustedCosineSimilarity(query, entry.VectorView);
         visited[entry.Index] = generation;
         candidates.Enqueue(entry.Index, initialScore);
-        resultsQueue.Enqueue(entry.Index, -initialScore);
+ 
+        // Entry point is added to candidates for traversal, but only to results if not excluded:
+        if (excludedIndices == null || !excludedIndices.Contains(entry.Index))
+        {
+            resultsQueue.Enqueue(entry.Index, -initialScore);
+        }
 
         // ReSharper disable once InlineTemporaryVariable
         var vectors = VectorsInternal;
@@ -42,25 +47,70 @@ public sealed partial class MutableHnswIndex
             var edges = vectors[currentCandidate]!.GetEdgesInLayer(layer);
 
             // Expand the neighbors of the candidate:
-            for (var i = 0; i < edges.Count; i++)
+             for (var i = 0; i < edges.Count; i++)
             {
                 var neighbor = edges[i];
-
+ 
                 if (visited[neighbor] == generation)
                 {
                     continue;
                 }
-
+ 
                 visited[neighbor] = generation;
-
+ 
+                var neighborExcluded = excludedIndices != null && excludedIndices.Contains(neighbor);
+ 
+                if (neighborExcluded)
+                {
+                    // Traverse through excluded nodes but don't add them to results.
+                    // Conditional two-hop: expand the excluded node's neighbors to maintain graph connectivity:
+                    candidates.Enqueue(neighbor, VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor]!.VectorView));
+ 
+                    var twoHopEdges = vectors[neighbor]!.GetEdgesInLayer(layer);
+                    for (var j = 0; j < twoHopEdges.Count; j++)
+                    {
+                        var twoHopNeighbor = twoHopEdges[j];
+ 
+                        if (visited[twoHopNeighbor] == generation)
+                        {
+                            continue;
+                        }
+ 
+                        visited[twoHopNeighbor] = generation;
+ 
+                        var twoHopScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[twoHopNeighbor]!.VectorView);
+                        var twoHopExcluded = excludedIndices!.Contains(twoHopNeighbor);
+ 
+                        // Always add to candidates for traversal, even if excluded, to maintain connectivity:
+                        candidates.Enqueue(twoHopNeighbor, twoHopScore);
+ 
+                        if (!twoHopExcluded)
+                        {
+                            resultsQueue.TryPeek(out _, out var twoHopInverseWorstScore);
+                            if (resultsQueue.Count < explorationFactor || twoHopScore < -twoHopInverseWorstScore)
+                            {
+                                resultsQueue.Enqueue(twoHopNeighbor, -twoHopScore);
+ 
+                                // Discards the worst result:
+                                if (resultsQueue.Count > explorationFactor)
+                                {
+                                    resultsQueue.Dequeue();
+                                }
+                            }
+                        }
+                    }
+ 
+                    continue;
+                }
+ 
                 var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor]!.VectorView);
-
+ 
                 resultsQueue.TryPeek(out _, out var currentInverseWorstScore);
                 if (resultsQueue.Count < explorationFactor || neighborScore < -currentInverseWorstScore)
                 {
                     candidates.Enqueue(neighbor, neighborScore);
                     resultsQueue.Enqueue(neighbor, -neighborScore);
-
+ 
                     // Discards the worst result:
                     if (resultsQueue.Count > explorationFactor)
                     {
@@ -79,7 +129,7 @@ public sealed partial class MutableHnswIndex
     /// <param name="efSearch">The exploration factor.</param>
     /// <returns>The found vectors.</returns>
     /// <exception cref="ArgumentException">Thrown if the <see cref="query"/>'s dimension does not match <see cref="Dimension"/>.</exception>
-    public VectorSearchResult[] Search(ReadOnlySpan<float> query, int k, int efSearch = 200)
+    public VectorSearchResult[] Search(ReadOnlySpan<float> query, int k, int efSearch = 200, IReadOnlySet<int>? excludedIndices = null)
     {
         if (query.Length != Dimension)
         {
@@ -125,7 +175,7 @@ public sealed partial class MutableHnswIndex
             }
         }
 
-        SearchLayer(_searchData, query, currentNode, 0, Math.Max(k, efSearch));
+        SearchLayer(_searchData, query, currentNode, 0, Math.Max(k, efSearch), excludedIndices);
 
         var queue = _searchData.ResultsQueue;
         var count = Math.Min(k, queue.Count);
