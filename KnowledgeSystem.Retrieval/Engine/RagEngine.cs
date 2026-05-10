@@ -3,6 +3,7 @@ using KnowledgeSystem.Hnsw;
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Retrieval.Embeddings;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace KnowledgeSystem.Retrieval.Engine;
@@ -12,6 +13,7 @@ namespace KnowledgeSystem.Retrieval.Engine;
 /// </summary>
 public sealed class RagEngine
 {
+    private readonly ILogger<RagEngine> _logger;
     private readonly RagDbContext _db;
     private readonly IEmbeddingService _embeddingService;
     private readonly RagOptions _options;
@@ -20,8 +22,9 @@ public sealed class RagEngine
     private MutableHnswIndex? _hnsw;
     private EmdRepository? _repo;
 
-    public RagEngine(RagDbContext db, IEmbeddingService embeddingService, IOptions<RagOptions> options)
+    public RagEngine(ILogger<RagEngine> logger, RagDbContext db, IEmbeddingService embeddingService, IOptions<RagOptions> options)
     {
+        _logger = logger;
         _db = db;
         _embeddingService = embeddingService;
         _options = options.Value;
@@ -51,17 +54,26 @@ public sealed class RagEngine
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Initializing RAG Engine");
+        
         await _db.Database.EnsureCreatedAsync(cancellationToken);
-
+        
         // We accept the synchronous call in here.
-        _hnsw = File.Exists(_options.HnswIndexPath)
-            ? MutableHnswIndex.LoadFromFile(_options.HnswIndexPath, _embeddingService.Dimension)
-            : new MutableHnswIndex(
+        if (File.Exists(_options.HnswIndexPath))
+        {
+            _logger.LogInformation("Loading HNSW from {path}", _options.HnswIndexPath);
+            _hnsw = MutableHnswIndex.LoadFromFile(_options.HnswIndexPath, _embeddingService.Dimension);
+        }
+        else
+        {
+            _logger.LogInformation("Creating fresh HNSW");
+            _hnsw = new MutableHnswIndex(
                 _embeddingService.Dimension,
                 maxConnectionsLane: _options.MaxConnectionsLane,
                 maxConnectionsDense: _options.MaxConnectionsDense,
                 efConstruction: _options.EfConstruction
             );
+        }
 
         if (_hnsw.Dimension != _embeddingService.Dimension)
         {
@@ -76,6 +88,8 @@ public sealed class RagEngine
     /// </summary>
     public async Task SynchronizeAsync(CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Loading HNSW repository");
+        
         _repo = await EmdRepository.LoadAsync(
             _options.RepositoryPath,
             _chunker,
@@ -86,11 +100,13 @@ public sealed class RagEngine
         var repoPaths = _repo.Documents.Keys
             .Select(k => k.RepositoryRelativePath)
             .ToHashSet();
-
+        
         var dbPaths = await _db.Documents
             .Select(d => d.Path)
             .ToHashSetAsync(cancellationToken);
 
+        _logger.LogInformation("Repo paths: {repo}, DB paths: {db}", repoPaths.Count, dbPaths.Count);
+        
         // Deleted files:
         var deletedPaths = dbPaths.Except(repoPaths).ToList();
         await RemoveDeletedFilesAsync(deletedPaths, cancellationToken);
@@ -103,6 +119,8 @@ public sealed class RagEngine
         var existingPaths = repoPaths.Intersect(dbPaths).ToList();
         await SyncExistingFilesAsync(_repo, existingPaths, cancellationToken);
 
+        _logger.LogInformation("Freezing DB. Vectors: {vec}", _hnsw?.Vectors.Sum(x => x == null ? 0 : 1));
+        
         await _db.SaveChangesAsync(cancellationToken);
         _hnsw?.Save(_options.HnswIndexPath);
     }
@@ -111,6 +129,8 @@ public sealed class RagEngine
     {
         foreach (var path in deletedPaths)
         {
+            _logger.LogInformation("Deleting {path}", path);
+            
             var chunks = await _db.Chunks
                 .Where(c => c.DocumentPath == path)
                 .ToListAsync(cancellationToken);
@@ -136,6 +156,8 @@ public sealed class RagEngine
     {
         foreach (var path in newPaths)
         {
+            _logger.LogInformation("Adding {path}", path);
+            
             var key = EmdReferencePath.CreateFile(path);
             var document = repo.Documents[key];
 
@@ -167,6 +189,12 @@ public sealed class RagEngine
 
             // Removed chunks: in DB but not in repo
             var removedHashes = dbHashes.Except(repoHashes).ToList();
+
+            if (removedHashes.Count > 0)
+            {
+                _logger.LogInformation("Updating {path}: deleted {num} chunks", path, removedHashes.Count);
+            }
+            
             await RemoveChunksAsync(removedHashes, cancellationToken);
 
             // New chunks: in repo but not in DB
@@ -176,6 +204,11 @@ public sealed class RagEngine
                 .Where(c => addedHashes.Contains(c.Hash.ToHexString()))
                 .ToList();
 
+            if (newChunks.Count > 0)
+            {
+                _logger.LogInformation("Updating {path}: added {num} chunks", path, newChunks.Count);
+            }
+            
             await EmbedAndAddChunksAsync(newChunks, path, cancellationToken);
         }
     }
