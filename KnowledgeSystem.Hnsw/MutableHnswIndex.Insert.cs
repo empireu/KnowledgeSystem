@@ -222,7 +222,7 @@ public sealed partial class MutableHnswIndex
 
             return vector;
         }
-
+        
         // ReSharper disable once InlineTemporaryVariable
         var vectors = VectorsInternal;
 
@@ -262,52 +262,61 @@ public sealed partial class MutableHnswIndex
 
             // On the next iterations, we will expand nodes on the denser layer below.
         }
+        
+        var searchData = _searchDataPool.Get();
 
-        var retopologizeStart = Math.Min(targetLayer, currentStructureHeight);
-        for (var layer = retopologizeStart; layer >= 0; layer--)
+        try
         {
-            _resultsBuffer.Clear();
+             var retopologizeStart = Math.Min(targetLayer, currentStructureHeight);
+             for (var layer = retopologizeStart; layer >= 0; layer--)
+             {
+                 _resultsBuffer.Clear();
 
-            SearchLayer(_searchData, vector.VectorView, currentNode, layer, ExplorationFactorConstruction);
+                 SearchLayer(searchData, vector.VectorView, currentNode, layer, ExplorationFactorConstruction);
 
-            // Results are in reverse order. We will pull them into a buffer and read it backward:
-            var resultsQueue = _searchData.ResultsQueue;
-            while (resultsQueue.TryDequeue(out var element, out var inverseScore))
-            {
-                _resultsBuffer.Add(new ScoredResult(element, -inverseScore));
-            }
+                 // Results are in reverse order. We will pull them into a buffer and read it backward:
+                 var resultsQueue = searchData.ResultsQueue;
+                 while (resultsQueue.TryDequeue(out var element, out var inverseScore))
+                 {
+                     _resultsBuffer.Add(new ScoredResult(element, -inverseScore));
+                 }
 
-            var foundBest = vectors[_resultsBuffer[^1].Index]!;
+                 var foundBest = vectors[_resultsBuffer[^1].Index]!;
 
-            var maxConnections = layer == 0 ? MaxConnectionsDense : MaxConnectionsLane;
-            TrimEdges(_trimEdgesData, _resultsBuffer, maxConnections);
+                 var maxConnections = layer == 0 ? MaxConnectionsDense : MaxConnectionsLane;
+                 TrimEdges(_trimEdgesData, _resultsBuffer, maxConnections);
 
-            var vectorEdges = vector.GetEdgesInLayer(layer);
+                 var vectorEdges = vector.GetEdgesInLayer(layer);
 
-            for (var i = 0; i < _resultsBuffer.Count; i++)
-            {
-                var neighbor = vectors[_resultsBuffer[i].Index]!;
-                var neighborEdges = neighbor.GetEdgesInLayer(layer);
+                 for (var i = 0; i < _resultsBuffer.Count; i++)
+                 {
+                     var neighbor = vectors[_resultsBuffer[i].Index]!;
+                     var neighborEdges = neighbor.GetEdgesInLayer(layer);
 
-                vectorEdges.Add(neighbor.Index);
-                neighborEdges.Add(vector.Index);
+                     vectorEdges.Add(neighbor.Index);
+                     neighborEdges.Add(vector.Index);
 
-                if (neighborEdges.Count > maxConnections)
-                {
-                    TrimEdges(_trimEdgesData, neighbor, layer, maxConnections);
-                }
-            }
+                     if (neighborEdges.Count > maxConnections)
+                     {
+                         TrimEdges(_trimEdgesData, neighbor, layer, maxConnections);
+                     }
+                 }
 
-            // Update the current node to the best one found on the layer by the extended search:
-            currentNode = foundBest;
+                 // Update the current node to the best one found on the layer by the extended search:
+                 currentNode = foundBest;
+             }
+
+             if (increasedHeight)
+             {
+                 EntryPointVector = vector;
+             }
+
+             return vector;
         }
-
-        if (increasedHeight)
+        finally
         {
-            EntryPointVector = vector;
+            _searchDataPool.Return(searchData);
         }
-
-        return vector;
     }
     
     private readonly struct ScoredResult(int index, float score)

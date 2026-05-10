@@ -3,6 +3,7 @@
 // ReSharper disable LoopCanBeConvertedToQuery
 
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.ObjectPool;
 
 namespace KnowledgeSystem.Hnsw;
 
@@ -18,11 +19,26 @@ public sealed partial class MutableHnswIndex
     
     internal readonly List<StoredVectorImpl?> VectorsInternal = [];
     private readonly Stack<int> _freeSlots = new();
-    private readonly SearchData _searchData = new();
     private readonly List<ScoredResult> _resultsBuffer = new(200);
     private readonly TrimEdgesData _trimEdgesData = new();
     private readonly List<int> _neighborSnapshotBuffer = [];
-  
+
+    private readonly ObjectPool<SearchData> _searchDataPool = new DefaultObjectPool<SearchData>(new SearchDataPoolPolicy(), 128);
+
+    private sealed class SearchDataPoolPolicy : IPooledObjectPolicy<SearchData>
+    {
+        public SearchData Create()
+        {
+            return new SearchData();
+        }
+
+        public bool Return(SearchData obj)
+        {
+            obj.Clear();
+            return true;
+        }
+    }
+        
     /// <summary>
     ///     Storage for float arrays representing the vector data for each node.
     /// </summary>

@@ -23,132 +23,141 @@ public sealed partial class MutableHnswIndex
         {
             return false;
         }
-
-        // ReSharper disable InlineTemporaryVariable
-        var vectors = VectorsInternal;
-        var neighborSnapshotBuffer = _neighborSnapshotBuffer;
-        var resultsBuffer = _resultsBuffer;
-        // ReSharper restore InlineTemporaryVariable
         
-        // For each layer the node participates in, remove reverse edges and search-repair neighbors:
-        for (var layer = 0; layer <= node.TargetLayer; layer++)
+        var searchData = _searchDataPool.Get();
+        
+        try
         {
-            var nodeEdges = node.GetEdgesInLayer(layer);
-            var maxConnections = layer == 0 ? MaxConnectionsDense : MaxConnectionsLane;
-
-            // Copy the neighbor indices (edges will be modified during repair):
-            var neighborCount = nodeEdges.Count;
-            neighborSnapshotBuffer.Clear();
-            for (var neighborIndex = 0; neighborIndex < neighborCount; neighborIndex++)
+            // ReSharper disable InlineTemporaryVariable
+            var vectors = VectorsInternal;
+            var neighborSnapshotBuffer = _neighborSnapshotBuffer;
+            var resultsBuffer = _resultsBuffer;
+            // ReSharper restore InlineTemporaryVariable
+        
+            // For each layer the node participates in, remove reverse edges and search-repair neighbors:
+            for (var layer = 0; layer <= node.TargetLayer; layer++)
             {
-                neighborSnapshotBuffer.Add(nodeEdges[neighborIndex]);
-            }
+                var nodeEdges = node.GetEdgesInLayer(layer);
+                var maxConnections = layer == 0 ? MaxConnectionsDense : MaxConnectionsLane;
 
-            // Remove reverse edges from all neighbors:
-            for (var i = 0; i < neighborCount; i++)
-            {
-                vectors[neighborSnapshotBuffer[i]]!.GetEdgesInLayer(layer).Remove(node.Index);
-            }
-
-            // Repair using search.
-            // For each neighbor that lost the edge, re-search from it to find the optimal new connection.
-            // This is similar to insertion and should preserve graph quality much better than e.g. just connecting the neighbors to each other.
-            // The cost high, though.
-            for (var neighborIndex = 0; neighborIndex < neighborCount; neighborIndex++)
-            {
-                var neighbor = vectors[neighborSnapshotBuffer[neighborIndex]]!;
-                var neighborEdges = neighbor.GetEdgesInLayer(layer);
-
-                if (neighborEdges.Count >= maxConnections)
+                // Copy the neighbor indices (edges will be modified during repair):
+                var neighborCount = nodeEdges.Count;
+                neighborSnapshotBuffer.Clear();
+                for (var neighborIndex = 0; neighborIndex < neighborCount; neighborIndex++)
                 {
-                    continue;
+                    neighborSnapshotBuffer.Add(nodeEdges[neighborIndex]);
                 }
 
-                // Search from the neighbor's own position to find its best candidates:
-                SearchLayer(_searchData, neighbor.VectorView, neighbor, layer, ExplorationFactorConstruction);
-
-                var resultsQueue = _searchData.ResultsQueue;
-                resultsBuffer.Clear();
-                
-                while (resultsQueue.TryDequeue(out var element, out var inverseScore))
+                // Remove reverse edges from all neighbors:
+                for (var i = 0; i < neighborCount; i++)
                 {
-                    resultsBuffer.Add(new ScoredResult(element, -inverseScore));
+                    vectors[neighborSnapshotBuffer[i]]!.GetEdgesInLayer(layer).Remove(node.Index);
                 }
 
-                // Add new edges from search results, skipping junk:
-                for (var j = resultsBuffer.Count - 1; j >= 0; j--)
+                // Repair using search.
+                // For each neighbor that lost the edge, re-search from it to find the optimal new connection.
+                // This is similar to insertion and should preserve graph quality much better than e.g. just connecting the neighbors to each other.
+                // The cost high, though.
+                for (var neighborIndex = 0; neighborIndex < neighborCount; neighborIndex++)
                 {
-                    var candidateIndex = resultsBuffer[j].Index;
-                    if (candidateIndex == neighbor.Index || candidateIndex == node.Index)
+                    var neighbor = vectors[neighborSnapshotBuffer[neighborIndex]]!;
+                    var neighborEdges = neighbor.GetEdgesInLayer(layer);
+
+                    if (neighborEdges.Count >= maxConnections)
                     {
                         continue;
                     }
 
-                    // Skip if already connected:
-                    var alreadyConnected = false;
-                    for (var k = 0; k < neighborEdges.Count; k++)
+                    // Search from the neighbor's own position to find its best candidates:
+                    SearchLayer(searchData, neighbor.VectorView, neighbor, layer, ExplorationFactorConstruction);
+
+                    var resultsQueue = searchData.ResultsQueue;
+                    resultsBuffer.Clear();
+                
+                    while (resultsQueue.TryDequeue(out var element, out var inverseScore))
                     {
-                        if (neighborEdges[k] == candidateIndex)
+                        resultsBuffer.Add(new ScoredResult(element, -inverseScore));
+                    }
+
+                    // Add new edges from search results, skipping junk:
+                    for (var j = resultsBuffer.Count - 1; j >= 0; j--)
+                    {
+                        var candidateIndex = resultsBuffer[j].Index;
+                        if (candidateIndex == neighbor.Index || candidateIndex == node.Index)
                         {
-                            alreadyConnected = true;
+                            continue;
+                        }
+
+                        // Skip if already connected:
+                        var alreadyConnected = false;
+                        for (var k = 0; k < neighborEdges.Count; k++)
+                        {
+                            if (neighborEdges[k] == candidateIndex)
+                            {
+                                alreadyConnected = true;
+                                break;
+                            }
+                        }
+
+                        if (alreadyConnected)
+                        {
+                            continue;
+                        }
+
+                        neighborEdges.Add(candidateIndex);
+                        var candidateNode = vectors[candidateIndex]!;
+                        var candidateEdges = candidateNode.GetEdgesInLayer(layer);
+                        candidateEdges.Add(neighbor.Index);
+
+                        if (candidateEdges.Count > maxConnections)
+                        {
+                            TrimEdges(_trimEdgesData, candidateNode, layer, maxConnections);
+                        }
+
+                        if (neighborEdges.Count >= maxConnections)
+                        {
                             break;
                         }
                     }
 
-                    if (alreadyConnected)
+                    if (neighborEdges.Count > maxConnections)
                     {
-                        continue;
+                        TrimEdges(_trimEdgesData, neighbor, layer, maxConnections);
                     }
-
-                    neighborEdges.Add(candidateIndex);
-                    var candidateNode = vectors[candidateIndex]!;
-                    var candidateEdges = candidateNode.GetEdgesInLayer(layer);
-                    candidateEdges.Add(neighbor.Index);
-
-                    if (candidateEdges.Count > maxConnections)
-                    {
-                        TrimEdges(_trimEdgesData, candidateNode, layer, maxConnections);
-                    }
-
-                    if (neighborEdges.Count >= maxConnections)
-                    {
-                        break;
-                    }
-                }
-
-                if (neighborEdges.Count > maxConnections)
-                {
-                    TrimEdges(_trimEdgesData, neighbor, layer, maxConnections);
                 }
             }
-        }
 
-        // If the vector was the entry point, we will replace it:
-        if (EntryPointVector == node)
-        {
-            SelectNewEntryPoint(node);
-        }
-
-        // Deallocate:
-        
-        if (node.SparseGraphs.HasValue)
-        {
-            var sparseSpan = node.SparseGraphs.Value.Block.Span;
-            for (var i = 0; i < sparseSpan.Length; i++)
+            // If the vector was the entry point, we will replace it:
+            if (EntryPointVector == node)
             {
-                sparseSpan[i].Storage.Deallocate();
+                SelectNewEntryPoint(node);
             }
 
-            node.SparseGraphs.Value.Deallocate();
-        }
-
-        node.DenseGraph.Storage.Deallocate();
-        node.VectorStorage.Deallocate();
+            // Deallocate:
         
-        VectorsInternal[node.Index] = null;
-        _freeSlots.Push(node.Index);
+            if (node.SparseGraphs.HasValue)
+            {
+                var sparseSpan = node.SparseGraphs.Value.Block.Span;
+                for (var i = 0; i < sparseSpan.Length; i++)
+                {
+                    sparseSpan[i].Storage.Deallocate();
+                }
 
-        return true;
+                node.SparseGraphs.Value.Deallocate();
+            }
+
+            node.DenseGraph.Storage.Deallocate();
+            node.VectorStorage.Deallocate();
+        
+            VectorsInternal[node.Index] = null;
+            _freeSlots.Push(node.Index);
+
+            return true;
+        }
+        finally
+        {
+            _searchDataPool.Return(searchData);
+        }
     }
 
     /// <summary>

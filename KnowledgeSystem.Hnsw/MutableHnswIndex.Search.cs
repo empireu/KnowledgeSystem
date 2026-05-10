@@ -175,27 +175,36 @@ public sealed partial class MutableHnswIndex
                 }
             }
         }
+        
+        var searchData = _searchDataPool.Get();
 
-        SearchLayer(_searchData, query, currentNode, 0, Math.Max(k, efSearch), excludedIndices);
-
-        var queue = _searchData.ResultsQueue;
-        var count = Math.Min(k, queue.Count);
-        var results = new VectorSearchResult[count];
-
-        var total = queue.Count;
-        var skip = total - count;
-        while (skip > 0 && queue.TryDequeue(out _, out _))
+        try
         {
-            skip--;
-        }
+            SearchLayer(searchData, query, currentNode, 0, Math.Max(k, efSearch), excludedIndices);
 
-        for (var i = count - 1; i >= 0; i--)
+            var queue = searchData.ResultsQueue;
+            var count = Math.Min(k, queue.Count);
+            var results = new VectorSearchResult[count];
+
+            var total = queue.Count;
+            var skip = total - count;
+            while (skip > 0 && queue.TryDequeue(out _, out _))
+            {
+                skip--;
+            }
+
+            for (var i = count - 1; i >= 0; i--)
+            {
+                queue.TryDequeue(out var element, out var inverseScore);
+                results[i] = new VectorSearchResult(element, -inverseScore);
+            }
+
+            return results;
+        }
+        finally
         {
-            queue.TryDequeue(out var element, out var inverseScore);
-            results[i] = new VectorSearchResult(element, -inverseScore);
+            _searchDataPool.Return(searchData);
         }
-
-        return results;
     }
     
     private sealed class SearchData
