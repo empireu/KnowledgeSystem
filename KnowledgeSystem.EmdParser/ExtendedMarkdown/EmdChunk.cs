@@ -28,6 +28,11 @@ public sealed class EmdChunk(EmdNode node, int startOffset, int length, string c
     /// </summary>
     public EmdChunkHash Hash { get; internal set; }
 
+    /// <summary>
+    ///     The raw content text, without the context prefix.
+    /// </summary>
+    public string RawContent => Node.RawNode.Text.Substring(StartOffset, Length);
+
     public bool Equals(EmdChunk? other)
     {
         if (other is null) return false;

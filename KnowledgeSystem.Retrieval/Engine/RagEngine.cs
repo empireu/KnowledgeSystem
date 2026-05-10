@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+// ReSharper disable ForCanBeConvertedToForeach
+
 namespace KnowledgeSystem.Retrieval.Engine;
 
 /// <summary>
@@ -21,6 +23,13 @@ public sealed class RagEngine
 
     private MutableHnswIndex? _hnsw;
     private EmdRepository? _repo;
+
+    /// <summary>
+    ///     Maps HNSW vector index to the corresponding chunk.
+    ///     Populated during <see cref="SynchronizeAsync"/>.
+    /// </summary>
+    private readonly Dictionary<int, EmdChunk> _chunkByHnswId = new();
+    private readonly Dictionary<EmdChunkHash, int> _hnswIdByChunkHash = new();
 
     public RagEngine(ILogger<RagEngine> logger, RagDbContext db, IEmbeddingService embeddingService, IOptions<RagOptions> options)
     {
@@ -40,6 +49,13 @@ public sealed class RagEngine
     ///     The loaded repo. Available after calling <see cref="InitializeAsync"/>.
     /// </summary>
     public EmdRepository Repo => _repo ?? throw new InvalidDataException("RAG engine not initialized");
+    
+    public IReadOnlyDictionary<int, EmdChunk> ChunkByHnswId => _chunkByHnswId;
+
+    /// <summary>
+    ///     Attempts to get the HNSW vector index for a given chunk.
+    /// </summary>
+    public bool TryGetHnswId(EmdChunk chunk, out int hnswId) => _hnswIdByChunkHash.TryGetValue(chunk.Hash, out hnswId);
 
     #region Setup
     
@@ -121,6 +137,20 @@ public sealed class RagEngine
 
         _logger.LogInformation("Freezing DB. Vectors: {vec}", _hnsw?.Vectors.Sum(x => x == null ? 0 : 1));
         
+        _chunkByHnswId.Clear();
+        _hnswIdByChunkHash.Clear();
+        var allChunkRecords = await _db.Chunks.ToListAsync(cancellationToken);
+        foreach (var record in allChunkRecords)
+        {
+            var fileKey = EmdReferencePath.CreateFile(record.DocumentPath);
+            if (_repo.Documents.TryGetValue(fileKey, out var doc) &&
+                doc.ChunksByHexHash.TryGetValue(record.HashHex, out var chunk))
+            {
+                _chunkByHnswId[record.HnswId] = chunk;
+                _hnswIdByChunkHash[chunk.Hash] = record.HnswId;
+            }
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
         _hnsw?.Save(_options.HnswIndexPath);
     }
@@ -266,6 +296,129 @@ public sealed class RagEngine
     #endregion
 
     #region API
+
+    /// <summary>
+    ///     Gets the <see cref="EmdChunk"/> corresponding to the given HNSW vector index.
+    /// </summary>
+    public EmdChunk GetChunkByHnswId(int hnswId) =>
+        _chunkByHnswId.TryGetValue(hnswId, out var chunk)
+            ? chunk
+            : throw new KeyNotFoundException($"No chunk found for HNSW id {hnswId}");
+
+    /// <summary>
+    ///     Resolves the declared dependencies of the given chunks and returns the chunks belonging to the dependency target nodes, preserving the order in which dependencies were declared.
+    /// </summary>
+    public List<EmdChunk> ResolveDependencies(IEnumerable<EmdChunk> chunks)
+    {
+        var result = new List<EmdChunk>();
+        var seen = new HashSet<EmdChunkHash>();
+        var queue = new Queue<EmdChunk>();
+
+        foreach (var chunk in chunks)
+        {
+            seen.Add(chunk.Hash);
+            queue.Enqueue(chunk);
+        }
+
+        while (queue.Count > 0)
+        {
+            var chunk = queue.Dequeue();
+
+            // Walk up the tree to collect all declared dependency refs:
+            var currentNode = chunk.Node;
+            while (currentNode != null)
+            {
+                for (var depRefIndex = 0; depRefIndex < currentNode.DeclaredDependencyRefs.Count; depRefIndex++)
+                {
+                    var depRef = currentNode.DeclaredDependencyRefs[depRefIndex];
+                    var targetChunks = GetChunksForRef(depRef);
+                    
+                    for (var depChunkIndex = 0; depChunkIndex < targetChunks.Count; depChunkIndex++)
+                    {
+                        var depChunk = targetChunks[depChunkIndex];
+                    
+                        if (seen.Add(depChunk.Hash))
+                        {
+                            result.Add(depChunk);
+                            queue.Enqueue(depChunk);
+                        }
+                    }
+                }
+
+                currentNode = currentNode.RawNode.Parent != null
+                    ? currentNode.Document.AttachedNodes.GetValueOrDefault(currentNode.RawNode.Parent)
+                    : null;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    ///     Returns all chunks belonging to the node(s) targeted by a dependency reference.
+    /// </summary>
+    private List<EmdChunk> GetChunksForRef(EmdReferencePath depRef)
+    {
+        var fileKey = depRef.GetFile();
+        
+        if (!_repo!.Documents.TryGetValue(fileKey, out var doc))
+        {
+            return [];
+        }
+
+        switch (depRef.Type)
+        {
+            case EmdReferencePath.ReferenceType.Definition:
+            {
+                if (doc.NodesWithDefinition.TryGetValue(depRef, out var node))
+                {
+                    // Definition nodes are typically headings, which have no chunks of their own.
+                    // Collect chunks from the node and all its descendants.
+                    var chunks = new List<EmdChunk>();
+                    CollectChunksDown(node, chunks);
+                    return chunks;
+                }
+                
+                return [];
+            }
+            case EmdReferencePath.ReferenceType.File:
+            {
+                // Return all chunks in the file:
+                return doc.ChunksByHash.Values.ToList();
+            }
+            case EmdReferencePath.ReferenceType.Offsets:
+            {
+                // Return chunks that overlap with the offset range
+                return doc.AttachedNodes.Values
+                    .SelectMany(n => n.Chunks)
+                    .Where(c =>
+                    {
+                        var chunkStart = c.Node.RawNode.StartOffset + c.StartOffset;
+                        var chunkEnd = chunkStart + c.Length;
+                        return chunkStart < depRef.EndOffset && chunkEnd > depRef.StartOffset;
+                    })
+                    .ToList();
+            }
+            case EmdReferencePath.ReferenceType.Directory:
+            default:
+                return [];
+        }
+    }
+
+    /// <summary>
+    ///     Collects chunks from the given node and all its descendant nodes.
+    /// </summary>
+    private static void CollectChunksDown(EmdNode node, List<EmdChunk> result)
+    {
+        result.AddRange(node.Chunks);
+        for (var childIndex = 0; childIndex < node.RawNode.Children.Count; childIndex++)
+        {
+            var child = node.RawNode.Children[childIndex];
+            var childEmd = node.Document.AttachedNodes[child];
+            
+            CollectChunksDown(childEmd, result);
+        }
+    }
     
     /// <summary>
     ///     Searches for the <paramref name="k"/> chunks most similar to the query text.

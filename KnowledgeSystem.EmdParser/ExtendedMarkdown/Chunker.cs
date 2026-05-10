@@ -229,6 +229,9 @@ public sealed class Chunker(int maxChunkLength)
         {
             sb.AppendLine($"[Document: {node.Document.Path}]");
         }
+        
+        // Offsets:
+        sb.AppendLine($"[Offsets: {node.RawNode.StartOffset}, {node.RawNode.EndOffset}]");
 
         // Definitions and dependencies:
         var definitions = new List<string>();
