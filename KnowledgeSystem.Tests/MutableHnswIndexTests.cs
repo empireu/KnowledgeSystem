@@ -100,12 +100,112 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     ///     Brute-force search for the exact K best vectors.
     /// </summary>
     private static int[] BruteForceSearch(float[][] corpus, float[] query, int k) => corpus
-        .Select((v, i) => (Index: i, Score: 1.0f - TensorPrimitives.CosineSimilarity(v, query)))
+        .Select((v, i) => (Index: i, Score: VectorObjective.AdjustedCosineSimilarity(v, query)))
         .OrderBy(x => x.Score)
         .Take(k)
         .Select(x => x.Index)
         .ToArray();
+    
+    private static void AssertGraphIntegrity(MutableHnswIndex index)
+    {
+        var violations = new List<string>();
 
+        // Check LayerCount matches the actual highest TargetLayer + 1:
+        var actualMaxLayer = 0;
+        for (var i = 0; i < index.VectorsInternal.Count; i++)
+        {
+            var node = index.VectorsInternal[i];
+            if (node != null && node.TargetLayer >= actualMaxLayer)
+            {
+                actualMaxLayer = node.TargetLayer;
+            }
+        }
+
+        if (index.LayerCount != actualMaxLayer + 1)
+        {
+            violations.Add($"LayerCount: {index.LayerCount} but actual max TargetLayer: {actualMaxLayer}");
+        }
+
+        // Check entry point exists and is on the highest layer:
+        if (index.EntryPointVector == null)
+        {
+            var hasAnyNode = index.VectorsInternal.Any(v => v != null);
+           
+            if (hasAnyNode)
+            {
+                violations.Add("EntryPointVector is null but graph has nodes");
+            }
+        }
+        else
+        {
+            if (index.EntryPointVector.TargetLayer != actualMaxLayer)
+            {
+                violations.Add($"EntryPointVector TargetLayer: {index.EntryPointVector.TargetLayer} but actual max TargetLayer: {actualMaxLayer}");
+            }
+        }
+
+        for (var nodeIndex = 0; nodeIndex < index.VectorsInternal.Count; nodeIndex++)
+        {
+            var node = index.VectorsInternal[nodeIndex];
+            
+            if (node == null)
+            {
+                continue;
+            }
+
+            for (var layer = 0; layer <= node.TargetLayer; layer++)
+            {
+                var edges = node.GetEdgesInLayer(layer);
+                for (var i = 0; i < edges.Count; i++)
+                {
+                    var neighborIndex = edges[i];
+
+                    // Edge must not point out of range:
+                    if (neighborIndex < 0 || neighborIndex >= index.VectorsInternal.Count)
+                    {
+                        violations.Add($"Node {nodeIndex} layer {layer} edge out of range {neighborIndex}");
+                        continue;
+                    }
+
+                    // Edge must not point to a dead slot:
+                    var neighbor = index.VectorsInternal[neighborIndex];
+                
+                    if (neighbor == null)
+                    {
+                        violations.Add($"Node {nodeIndex} layer {layer} edge dead slot {neighborIndex}");
+                        continue;
+                    }
+
+                    // Neighbor must participate in this layer:
+                    if (neighbor.TargetLayer < layer)
+                    {
+                        violations.Add($"Node {nodeIndex} layer {layer} edge node {neighborIndex} (TargetLayer: {neighbor.TargetLayer})");
+                        continue;
+                    }
+
+                    // Edge must be symmetric:
+                    var neighborEdges = neighbor.GetEdgesInLayer(layer);
+                    var found = false;
+                    for (var j = 0; j < neighborEdges.Count; j++)
+                    {
+                        if (neighborEdges[j] == nodeIndex)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        violations.Add($"Node {nodeIndex} layer {layer} edge {neighborIndex} not reciprocated");
+                    }
+                }
+            }
+        }
+
+        Assert.Empty(violations);
+    }
+    
     #endregion
     
     [Fact]
@@ -1594,6 +1694,290 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         var results = index.Search(newData, 1);
         Assert.NotEmpty(results);
         Assert.Equal(newVector.Index, results[0].Index);
+    }
+
+    [Fact]
+    public void Remove_ThenInsert_MaintainsGraphIntegrity()
+    {
+        var random = new Random(Seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < 500; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        AssertGraphIntegrity(index);
+
+        // Remove a batch including sparse-layer nodes:
+        for (var i = 0; i < 50; i++)
+        {
+            Assert.True(index.Remove(vectors[i]));
+        }
+
+        AssertGraphIntegrity(index);
+
+        // Re-insert into freed slots:
+        for (var i = 0; i < 50; i++)
+        {
+            index.Insert(GetTestVector(random, Dimension));
+        }
+
+        AssertGraphIntegrity(index);
+    }
+
+    [Fact]
+    public void Remove_SparseLayerNode_ThenInsert_MaintainsGraphIntegrity()
+    {
+        var random = new Random(Seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < 500; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        // Remove only nodes that have sparse layers:
+        var sparseVectors = vectors
+            .Where(v => index.VectorsInternal[v.Index]!.TargetLayer > 0)
+            .Take(20)
+            .ToList();
+
+        Assert.NotEmpty(sparseVectors);
+
+        foreach (var v in sparseVectors)
+        {
+            Assert.True(index.Remove(v));
+        }
+
+        AssertGraphIntegrity(index);
+
+        // Insert new vectors, some will reuse freed slots:
+        for (var i = 0; i < 20; i++)
+        {
+            index.Insert(GetTestVector(random, Dimension));
+        }
+
+        AssertGraphIntegrity(index);
+    }
+
+    [Fact]
+    public void SaveLoad_RemoveThenInsert_MaintainsGraphIntegrity()
+    {
+        var random = new Random(Seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < 500; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        // Remove some vectors:
+        for (var i = 0; i < 30; i++)
+        {
+            index.Remove(vectors[i]);
+        }
+
+        // Save and reload:
+        using var stream = new MemoryStream();
+        index.SaveToFile(stream);
+        stream.Position = 0;
+        var loaded = MutableHnswIndex.Load(stream);
+
+        AssertGraphIntegrity(loaded);
+
+        // Now insert into the loaded index:
+        for (var i = 0; i < 30; i++)
+        {
+            loaded.Insert(GetTestVector(random, Dimension));
+        }
+
+        AssertGraphIntegrity(loaded);
+    }
+
+    [Theory]
+    [InlineData(48, 500)]
+    [InlineData(16, 500)]
+    public void Remove_EachStep_MaintainsGraphIntegrity(int seed, int count)
+    {
+        var random = new Random(seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < count; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        AssertGraphIntegrity(index);
+
+        var removeCount = count / 10;
+        for (var i = 0; i < removeCount; i++)
+        {
+            Assert.True(index.Remove(vectors[i]), $"Remove failed at index {i}");
+            AssertGraphIntegrity(index);
+        }
+    }
+
+    [Theory]
+    [InlineData(48, 500)]
+    [InlineData(16, 500)]
+    public void Remove_ThenInsert_DoesNotAccessInvalidLayer(int seed, int count)
+    {
+        var random = new Random(seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < count; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        var removeCount = count / 10;
+        for (var i = 0; i < removeCount; i++)
+        {
+            index.Remove(vectors[i]);
+        }
+
+        output.WriteLine($"Seed: {seed}: LayerCount: {index.LayerCount}, EntryPoint.TargetLayer: {index.EntryPointVector?.TargetLayer}");
+        var maxLayer = 0;
+        for (var i = 0; i < index.VectorsInternal.Count; i++)
+        {
+            var node = index.VectorsInternal[i];
+            if (node != null && node.TargetLayer > maxLayer)
+            {
+                maxLayer = node.TargetLayer;
+            }
+        }
+        
+        output.WriteLine($"Actual max TargetLayer: {maxLayer}");
+
+        // This should not throw:
+        for (var i = 0; i < removeCount; i++)
+        {
+            try
+            {
+                index.Insert(GetTestVector(random, Dimension));
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                output.WriteLine($"Crashed on insert #{i}: {ex.Message}");
+                throw;
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(48, 500)]
+    [InlineData(16, 500)]
+    public void Remove_ThenInsert_EachStep_MaintainsGraphIntegrity(int seed, int count)
+    {
+        var random = new Random(seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < count; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        var removeCount = count / 10;
+        for (var i = 0; i < removeCount; i++)
+        {
+            index.Remove(vectors[i]);
+        }
+
+        for (var i = 0; i < removeCount; i++)
+        {
+            index.Insert(GetTestVector(random, Dimension));
+            AssertGraphIntegrity(index);
+        }
+    }
+
+    [Theory]
+    [InlineData(1, 500)]
+    [InlineData(2, 500)]
+    [InlineData(3, 500)]
+    [InlineData(4, 500)]
+    [InlineData(5, 500)]
+    [InlineData(6, 500)]
+    [InlineData(7, 500)]
+    [InlineData(8, 500)]
+    [InlineData(9, 500)]
+    [InlineData(10, 500)]
+    [InlineData(11, 500)]
+    [InlineData(12, 500)]
+    [InlineData(13, 500)]
+    [InlineData(14, 500)]
+    [InlineData(15, 500)]
+    [InlineData(16, 500)]
+    [InlineData(17, 500)]
+    [InlineData(18, 500)]
+    [InlineData(19, 500)]
+    [InlineData(20, 500)]
+    [InlineData(21, 500)]
+    [InlineData(22, 500)]
+    [InlineData(23, 500)]
+    [InlineData(24, 500)]
+    [InlineData(25, 500)]
+    [InlineData(26, 500)]
+    [InlineData(27, 500)]
+    [InlineData(28, 500)]
+    [InlineData(29, 500)]
+    [InlineData(30, 500)]
+    [InlineData(31, 500)]
+    [InlineData(32, 500)]
+    [InlineData(33, 500)]
+    [InlineData(34, 500)]
+    [InlineData(35, 500)]
+    [InlineData(36, 500)]
+    [InlineData(37, 500)]
+    [InlineData(38, 500)]
+    [InlineData(39, 500)]
+    [InlineData(40, 500)]
+    [InlineData(41, 500)]
+    [InlineData(42, 500)]
+    [InlineData(43, 500)]
+    [InlineData(44, 500)]
+    [InlineData(45, 500)]
+    [InlineData(46, 500)]
+    [InlineData(47, 500)]
+    [InlineData(48, 500)]
+    [InlineData(49, 500)]
+    [InlineData(50, 500)]
+    public void SaveLoad_RemoveThenInsert_ManySeeds_MaintainsGraphIntegrity(int seed, int count)
+    {
+        var random = new Random(seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: seed);
+
+        var vectors = new List<IStoredVector>();
+        for (var i = 0; i < count; i++)
+        {
+            vectors.Add(index.Insert(GetTestVector(random, Dimension)));
+        }
+
+        var removeCount = count / 10;
+        for (var i = 0; i < removeCount; i++)
+        {
+            index.Remove(vectors[i]);
+        }
+
+        using var stream = new MemoryStream();
+        index.SaveToFile(stream);
+        stream.Position = 0;
+        var loaded = MutableHnswIndex.Load(stream);
+
+        AssertGraphIntegrity(loaded);
+
+        for (var i = 0; i < removeCount; i++)
+        {
+            loaded.Insert(GetTestVector(random, Dimension));
+        }
+
+        AssertGraphIntegrity(loaded);
     }
 
     #endregion

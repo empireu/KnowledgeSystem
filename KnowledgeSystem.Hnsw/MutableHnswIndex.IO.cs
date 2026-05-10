@@ -22,7 +22,7 @@ public sealed partial class MutableHnswIndex
         writer.Write(MaxConnectionsDense);
         writer.Write(ExplorationFactorConstruction);
         writer.Write(LayerCount);
-        writer.Write(_entryPointVector?.Index ?? -1);
+        writer.Write(EntryPointVector?.Index ?? -1);
         writer.Write(VectorsInternal.Count);
 
         // Free slots:
@@ -195,7 +195,7 @@ public sealed partial class MutableHnswIndex
                 throw new InvalidDataException($"Entry point index {entryPointIndex} points to a null slot");
             }
 
-            index._entryPointVector = entryPoint;
+            index.EntryPointVector = entryPoint;
         }
 
         // Restore layer count:

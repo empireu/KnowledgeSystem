@@ -216,9 +216,9 @@ public sealed partial class MutableHnswIndex
 
         var vector = AllocateVector(data, out var increasedHeight);
 
-        if (_entryPointVector == null)
+        if (EntryPointVector == null)
         {
-            _entryPointVector = vector;
+            EntryPointVector = vector;
 
             return vector;
         }
@@ -229,7 +229,7 @@ public sealed partial class MutableHnswIndex
         var targetLayer = vector.TargetLayer;
         
         // Finds the closest vector to the inserted one, based on the edges from the layer just above the target layer.
-        var currentNode = _entryPointVector!;
+        var currentNode = EntryPointVector!;
         var currentScore = VectorObjective.AdjustedCosineSimilarity(vector, currentNode);
         var currentStructureHeight = increasedHeight ? targetLayer - 1 : LayerCount - 1;
         for (var layerIndex = currentStructureHeight; layerIndex > targetLayer; layerIndex--)
@@ -266,6 +266,8 @@ public sealed partial class MutableHnswIndex
         var retopologizeStart = Math.Min(targetLayer, currentStructureHeight);
         for (var layer = retopologizeStart; layer >= 0; layer--)
         {
+            _resultsBuffer.Clear();
+
             SearchLayer(_searchData, vector.VectorView, currentNode, layer, ExplorationFactorConstruction);
 
             // Results are in reverse order. We will pull them into a buffer and read it backward:
@@ -298,13 +300,11 @@ public sealed partial class MutableHnswIndex
 
             // Update the current node to the best one found on the layer by the extended search:
             currentNode = foundBest;
-
-            _resultsBuffer.Clear();
         }
 
         if (increasedHeight)
         {
-            _entryPointVector = vector;
+            EntryPointVector = vector;
         }
 
         return vector;
@@ -318,8 +318,8 @@ public sealed partial class MutableHnswIndex
 
     private sealed class TrimEdgesData
     {
-        public readonly List<TrimEdgesCandidate> Candidates = new();
-        public readonly List<TrimEdgesCandidate> KeptEdges = new();
+        public readonly List<TrimEdgesCandidate> Candidates = [];
+        public readonly List<TrimEdgesCandidate> KeptEdges = [];
 
         public void SortCandidates()
         {

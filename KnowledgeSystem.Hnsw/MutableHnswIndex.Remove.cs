@@ -124,7 +124,7 @@ public sealed partial class MutableHnswIndex
         }
 
         // If the vector was the entry point, we will replace it:
-        if (_entryPointVector == node)
+        if (EntryPointVector == node)
         {
             SelectNewEntryPoint(node);
         }
@@ -164,7 +164,7 @@ public sealed partial class MutableHnswIndex
             if (edges.Count > 0)
             {
                 var candidate = VectorsInternal[edges[0]]!;
-                _entryPointVector = candidate;
+                EntryPointVector = candidate;
                 LayerCount = candidate.TargetLayer + 1;
                 return;
             }
@@ -177,7 +177,7 @@ public sealed partial class MutableHnswIndex
         }
 
         // No neighbors in any layer, the index is empty:
-        _entryPointVector = null;
+        EntryPointVector = null;
         LayerCount = 1;
     }
 }

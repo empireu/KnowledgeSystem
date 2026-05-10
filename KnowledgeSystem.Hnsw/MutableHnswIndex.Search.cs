@@ -127,6 +127,7 @@ public sealed partial class MutableHnswIndex
     /// <param name="query">A vector matching the <see cref="Dimension"/>.</param>
     /// <param name="k">The maximum number of vectors to explore.</param>
     /// <param name="efSearch">The exploration factor.</param>
+    /// <param name="excludedIndices">Vectors excluded from the results.</param>
     /// <returns>The found vectors.</returns>
     /// <exception cref="ArgumentException">Thrown if the <see cref="query"/>'s dimension does not match <see cref="Dimension"/>.</exception>
     public VectorSearchResult[] Search(ReadOnlySpan<float> query, int k, int efSearch = 200, IReadOnlySet<int>? excludedIndices = null)
@@ -141,12 +142,12 @@ public sealed partial class MutableHnswIndex
             throw new ArgumentException("K cannot be negative");
         }
 
-        if (_entryPointVector == null || k == 0)
+        if (EntryPointVector == null || k == 0)
         {
             return [];
         }
         
-        var currentNode = _entryPointVector;
+        var currentNode = EntryPointVector;
         var currentScore = VectorObjective.AdjustedCosineSimilarity(query, currentNode.VectorView);
         for (var layerIndex = LayerCount - 1; layerIndex > 0; layerIndex--)
         {

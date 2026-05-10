@@ -45,7 +45,7 @@ public sealed partial class MutableHnswIndex
     /// </summary>
     public int LayerCount { get; private set; } = 1;
     
-    private StoredVectorImpl? _entryPointVector;
+    internal StoredVectorImpl? EntryPointVector;
 
     /// <summary>
     ///     Hierarchical navigable small world data structure (builder) for approximate K nearest vector lookup.
