@@ -156,13 +156,15 @@ while (true)
         
                         foreach (var s in query.Split('|'))
                         {
-                            var engineResults = await engine.SearchAsync(s, 5, excludedIndices: excludedIndices);
-                    
-                            foreach (var vectorSearchResult in engineResults.OrderByDescending(x => x.Score))
+                            var rawResults = await engine.SearchAsync(s, 50, excludedIndices: excludedIndices);
+                            var engineResults = await engine
+                                .FilterResultsByReRanking(userQuery, rawResults, 30, 0.8);
+                            
+                            foreach (var vectorSearchResult in engineResults)
                             {
-                                if (excludedIndices.Add(vectorSearchResult.Index))
+                                if (excludedIndices.Add(vectorSearchResult.VectorResult.Index))
                                 {
-                                    dbQueryResultChunks.Add(engine.GetChunkByHnswId(vectorSearchResult.Index));
+                                    dbQueryResultChunks.Add(engine.GetChunkByHnswId(vectorSearchResult.VectorResult.Index));
                                 }
                             }
                         }
