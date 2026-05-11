@@ -32,14 +32,6 @@ public static class ServiceCollectionExtensions
                 options.EmbeddingApiKey,
                 options.EmbeddingDimension
             ));
-
-        services.AddSingleton<IRerankingService>(sp => 
-            new RawRestRerankingService(
-                sp.GetRequiredService<ILogger<RawRestRerankingService>>(),
-                options.RerankinggEndpoint,
-                options.RerankingModel,
-                options.RerankingApiKey
-            ));
         
         services.AddSingleton<RagEngine>();
         

@@ -53,14 +53,4 @@ public class RagOptions
 
     [Range(64, 2048)]
     public int EfConstruction { get; set; } = 200;
-    
-    [Required]
-    public string RerankinggEndpoint { get; set; } = null!;
-    
-    [Required]
-    public string RerankingModel { get; set; } = null!;
-    
-    [Required]    
-    public string RerankingApiKey { get; set; } = null!;
-
 }

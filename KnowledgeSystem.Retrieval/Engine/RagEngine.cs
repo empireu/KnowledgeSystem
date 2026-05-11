@@ -20,7 +20,6 @@ public sealed class RagEngine
     private readonly ILogger<RagEngine> _logger;
     private readonly RagDbContext _db;
     private readonly IEmbeddingService _embeddingService;
-    private readonly IRerankingService _rerankingService;
     private readonly RagOptions _options;
     private readonly Chunker _chunker;
 
@@ -34,17 +33,11 @@ public sealed class RagEngine
     private readonly Dictionary<int, EmdChunk> _chunkByHnswId = new();
     private readonly Dictionary<EmdChunkHash, int> _hnswIdByChunkHash = new();
 
-    public RagEngine(
-        ILogger<RagEngine> logger,
-        RagDbContext db,
-        IEmbeddingService embeddingService,
-        IRerankingService rerankingService,
-        IOptions<RagOptions> options)
+    public RagEngine(ILogger<RagEngine> logger, RagDbContext db, IEmbeddingService embeddingService, IOptions<RagOptions> options)
     {
         _logger = logger;
         _db = db;
         _embeddingService = embeddingService;
-        _rerankingService = rerankingService;
         _options = options.Value;
         _chunker = new Chunker(_options.MaxChunkLength);
     }
@@ -448,60 +441,6 @@ public sealed class RagEngine
         // Synchronous, compute-heavy in this async?
         // We may want to fix that at some point.
         return queryVectors.Select(x => Hnsw.Search(x.Span, k, efSearch, excludedIndices)).ToArray();
-    }
-
-    /// <summary>
-    ///     Filters the given results relative to the best result. Returns at least one result.
-    /// </summary>
-    public async Task<RerankedVectorSearchResult[]> FilterResultsByReRanking(string rerankingQuery, VectorSearchResult[] rawVectorResults, int topResultsCount, double discardFactor)
-    {
-        var corpus = new List<string>(rawVectorResults.Length);
-
-        for (var index = 0; index < rawVectorResults.Length; index++)
-        {
-            var vectorSearchResult = rawVectorResults[index];
-            var chunk = _chunkByHnswId[vectorSearchResult.Index];
-            
-            corpus.Add(chunk.ChunkText); // P.S. What would the metadata do to the results?
-        }
-
-        var rerankResults = await _rerankingService.RerankAsync(rerankingQuery, corpus, topResultsCount);
-
-        if (rerankResults == null || rerankResults.Length == 0)
-        {
-            _logger.LogError("Reranking service failed. Falling back to just returning the results.");
-
-            return rawVectorResults
-                .OrderByDescending(x => x.Score)
-                .Take(topResultsCount)
-                .Select(x => new RerankedVectorSearchResult(x, 0.0))
-                .ToArray();
-        }
-        
-        var threshold = discardFactor * rerankResults[0].RelevanceScore;
-        
-        var countToKeep = 0;
-        while (countToKeep < rerankResults.Length && rerankResults[countToKeep].RelevanceScore >= threshold)
-        {
-            countToKeep++;
-        }
-        
-        var results = new  RerankedVectorSearchResult[countToKeep];
-
-        for (var i = 0; i < countToKeep; i++)
-        {
-            var reranked = rerankResults[i];
-
-            results[i] = new RerankedVectorSearchResult(rawVectorResults[i], reranked.RelevanceScore);
-        }
-
-        return results;
-    }
-
-    public readonly struct RerankedVectorSearchResult(VectorSearchResult vectorResult, double rerankingScore)
-    {
-        public readonly VectorSearchResult VectorResult = vectorResult;
-        public readonly double RerankingScore = rerankingScore;
     }
     
     #endregion

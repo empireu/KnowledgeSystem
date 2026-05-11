@@ -153,18 +153,23 @@ while (true)
                         Console.WriteLine($"[Tool] semantic_search(\"{query}\")");
 
                         var dbQueryResultChunks = new List<EmdChunk>();
-        
-                        foreach (var s in query.Split('|'))
-                        {
-                            var rawResults = await engine.SearchAsync(s, 50, excludedIndices: excludedIndices);
-                            var engineResults = await engine
-                                .FilterResultsByReRanking(userQuery, rawResults, 30, 0.8);
+
+                        var chars = 0;
+                        var engineResults = await engine.SearchAsync(query.Split('|'), 50, excludedIndices: excludedIndices);
                             
-                            foreach (var vectorSearchResult in engineResults)
+                        foreach (var vectorSearchResult in engineResults.SelectMany(x => x))
+                        {
+                            if (excludedIndices.Add(vectorSearchResult.Index))
                             {
-                                if (excludedIndices.Add(vectorSearchResult.VectorResult.Index))
+                                var chunk = engine.GetChunkByHnswId(vectorSearchResult.Index);
+                                
+                                dbQueryResultChunks.Add(chunk);
+
+                                chars += chunk.RawContent.Length;
+
+                                if (chars > 10000)
                                 {
-                                    dbQueryResultChunks.Add(engine.GetChunkByHnswId(vectorSearchResult.VectorResult.Index));
+                                    break;
                                 }
                             }
                         }
