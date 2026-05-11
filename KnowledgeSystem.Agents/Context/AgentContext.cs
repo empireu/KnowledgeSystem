@@ -3,7 +3,7 @@
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Retrieval.Agent.Context;
+namespace KnowledgeSystem.Agents.Context;
 
 public sealed class AgentContext
 {

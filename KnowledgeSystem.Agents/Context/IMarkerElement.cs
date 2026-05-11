@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Retrieval.Agent.Context;
+﻿namespace KnowledgeSystem.Agents.Context;
 
 public interface IMarkerElement : ITimelineElement
 {

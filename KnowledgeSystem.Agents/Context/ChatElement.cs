@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using OpenAI.Chat;
 
-namespace KnowledgeSystem.Retrieval.Agent.Context;
+namespace KnowledgeSystem.Agents.Context;
 
 /// <summary>
 ///     Wraps an OpenAI message, that gets sent to the LLM.
