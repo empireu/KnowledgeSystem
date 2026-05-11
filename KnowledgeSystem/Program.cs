@@ -42,6 +42,7 @@ var chat = client.GetChatClient( "google/gemma-4-e4b");
 var semanticSearchTool = new ToolBuilder("semantic_search")
     .WithDescription("Searches the knowledge base using a query and returns chunks of relevant information. NEVER returns the same results!")
     .WithRequiredStringArgument("query", "The search query. Use '|' to separate multiple queries.", out var queryArg)
+    .WithIntegerArgument("maxCount", "The maximum number of results per query. Defaults to 10.", out var topResArg)
     .Build();
 
 var repoFetchTool = new ToolBuilder("repo_fetch")
@@ -75,6 +76,7 @@ var discoveryRoundIndex = 1;
 var excludedIndices = new HashSet<int>();
 var discoveries = new StringBuilder();
 var round = 0;
+var fetchCallsThisRound = 0;
 
 while (true)
 {
@@ -86,9 +88,7 @@ while (true)
     {
         continue;
     }
-
-    history.Add(new UserChatMessage(userQuery));
-
+    
     while (true)
     {
         var chatOptions = new ChatCompletionOptions();
@@ -99,6 +99,7 @@ while (true)
 
         var completion = await chat.CompleteChatAsync(history, chatOptions);
 
+        var initialFetches = fetchCallsThisRound;
         if (completion.Value.FinishReason == ChatFinishReason.ToolCalls)
         {
             history.Add(new AssistantChatMessage(completion.Value));
@@ -117,17 +118,34 @@ while (true)
                     history.Add(new ToolChatMessage(toolCall.Id, $"Error: missing required arguments: {missing}"));
                     continue;
                 }
-
+                
                 if (tool == semanticSearchTool)
                 {
+                    ++fetchCallsThisRound;
                     var query = queryArg.GetValue(extraction);
-                    
-                    Console.WriteLine($"[Tool] semantic_search(\"{query}\")");
+                    var specified = false;
+                    if (!topResArg.TryGetValue(extraction, out var topK))
+                    {
+                        topK = 25;
+                    }
+                    else
+                    {
+                        specified = true;
+                    }
+
+                    if (specified)
+                    {
+                        Console.WriteLine($"[Tool] semantic_search(\"{query}\", {topK})");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[Tool] semantic_search(\"{query}\")");
+                    }
 
                     var dbQueryResultChunks = new List<EmdChunk>();
 
                     var chars = 0;
-                    var engineResults = await engine.SearchAsync(query.Split('|'), 50, excludedIndices: excludedIndices);
+                    var engineResults = await engine.SearchAsync(query.Split('|'), topK, excludedIndices: excludedIndices);
                             
                     foreach (var vectorSearchResult in engineResults.SelectMany(x => x))
                     {
@@ -162,6 +180,7 @@ while (true)
                 }
                 else if (tool == repoFetchTool)
                 {
+                    ++fetchCallsThisRound;
                      var reference = referenceArg.GetValue(extraction);
                     
                         Console.WriteLine($"[Tool] repo_fetch(\"{reference}\")");
@@ -228,6 +247,7 @@ while (true)
                 }
                 else if (tool == recordDiscoveryTool)
                 {
+                    fetchCallsThisRound = 0;
                     var discovery = discoveryArg.GetValue(extraction);
                     var memory = memoryArg.GetValue(extraction);
 
@@ -238,7 +258,7 @@ while (true)
                     Console.WriteLine($"record_discovery(...{discovery.Length}, ...{memory.Length}) -> Discoveries now {discoveries.Length}");
                     
                     history.RemoveRange(discoveryRoundIndex, history.Count - discoveryRoundIndex);
-                    history.Add(new SystemChatMessage($"Research round {round++}\nMEMORY: \n  {memory}"));
+                    history.Add(new AssistantChatMessage($"Research round {round++}\nMEMORY: \n  {memory}"));
                     discoveryRoundIndex = history.Count;
                 }
                 else if (tool == finishResearchTool)
@@ -247,6 +267,9 @@ while (true)
                     Console.WriteLine(discoveries.ToString());
                     Console.WriteLine("\n\n");
                     await File.WriteAllTextAsync("__research_result.md", discoveries.ToString());
+                    await File.WriteAllTextAsync("__research_history.md", string.Join("\n", history.SelectMany(x => x.Content.Select(x => x.Text))));
+                    await File.WriteAllTextAsync("__research_discoveries.md", discoveries.ToString());
+                    return;
                 }
                 else
                 {
@@ -265,6 +288,25 @@ while (true)
         {
             throw new Exception($"Unexpected finish reason: {completion.Value.FinishReason}");
         }
+
+        if (fetchCallsThisRound > initialFetches)
+        {
+            if (fetchCallsThisRound > 5)
+            {
+                history.Add(new SystemChatMessage(
+                    "WARNING! You have fetched too much information this round. " +
+                    "Consider recording your results if you still have relevant data/leads, or concluding the research if you think the data has dried up."));
+                Console.WriteLine($"WARN for {fetchCallsThisRound} fetches");
+            }
+            
+            if (history.Sum(x => x.Content.Sum(x => x.Text.Length)) > 16000)
+            {
+                //history.Add(new SystemChatMessage("WARNING! You have too much information to sift through. Consider recording your results now, and including key points in the summary."));
+                //Console.WriteLine($"WARN for too many chars");
+            }
+        }
+
+        
     }
 }
 
