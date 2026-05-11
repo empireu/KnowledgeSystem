@@ -1,13 +1,13 @@
 using System.ClientModel;
 using System.Text;
+using System.Text.Json;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Retrieval;
+using KnowledgeSystem.Retrieval.Engine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenAI;
 using OpenAI.Chat;
-using System.Text.Json;
-using KnowledgeSystem.Retrieval.Engine;
 using Serilog;
 
 var builder = Host.CreateDefaultBuilder(args)

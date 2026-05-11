@@ -40,7 +40,7 @@ public class RagOptions
     /// <summary>
     ///     String prepended to each request.
     /// </summary>
-    public string SystemPrompt { get; set; } = string.Empty;
+    public string EmbeddingSystemPrompt { get; set; } = string.Empty;
 
     [Range(1, 16)]
     public int MaxReadTasks { get; set; } = 8;
@@ -53,4 +53,14 @@ public class RagOptions
 
     [Range(64, 2048)]
     public int EfConstruction { get; set; } = 200;
+    
+    [Required]
+    public string RerankinggEndpoint { get; set; } = null!;
+    
+    [Required]
+    public string RerankingModel { get; set; } = null!;
+    
+    [Required]    
+    public string RerankingApiKey { get; set; } = null!;
+
 }

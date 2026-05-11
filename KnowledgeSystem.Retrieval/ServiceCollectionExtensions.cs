@@ -1,9 +1,11 @@
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Reranking;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace KnowledgeSystem.Retrieval;
 
@@ -18,7 +20,8 @@ public static class ServiceCollectionExtensions
             .BindConfiguration(RagOptions.Section)
             .ValidateOnStart();
  
-        var options = configuration.GetSection(RagOptions.Section).Get<RagOptions>() ?? throw new InvalidOperationException("RAG configuration is missing");
+        var options = configuration.GetSection(RagOptions.Section).Get<RagOptions>() 
+                      ?? throw new InvalidOperationException("RAG configuration is missing");
 
         services.AddDbContext<RagDbContext>(o => o.UseSqlite($"Data Source={options.DatabasePath}"));
 
@@ -30,8 +33,16 @@ public static class ServiceCollectionExtensions
                 options.EmbeddingDimension
             ));
 
+        services.AddSingleton<IRerankingService>(sp => 
+            new RawRestRerankingService(
+                sp.GetRequiredService<ILogger<RawRestRerankingService>>(),
+                options.RerankinggEndpoint,
+                options.RerankingModel,
+                options.RerankingApiKey
+            ));
+        
         services.AddSingleton<RagEngine>();
-
+        
         return services;
     }
 }
