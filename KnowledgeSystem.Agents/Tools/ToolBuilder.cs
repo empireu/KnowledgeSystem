@@ -1,0 +1,174 @@
+﻿using System.Text.Json;
+using OpenAI.Chat;
+
+// ReSharper disable UnusedMember.Global
+// ReSharper disable MemberCanBePrivate.Global
+
+namespace KnowledgeSystem.Agents.Tools;
+
+public sealed class ToolBuilder(string toolId)
+{
+    private string? _description;
+    private readonly List<ToolArgument> _arguments = [];
+    private readonly List<ToolArgument> _requiredArguments = [];
+    
+    #region API
+    
+    public ToolBuilder WithDescription(string description)
+    {
+        _description = description;
+        return this;
+    }
+
+    public ToolBuilder WithArgument(ToolArgument argument)
+    {
+        if (_arguments.Any(x => x.ArgumentName == argument.ArgumentName))
+        {
+            throw new InvalidOperationException($"Duplicate tool argument \"{argument.ArgumentName}\"");
+        }
+        
+        _arguments.Add(argument);
+        
+        return this;
+    }
+
+    public ToolBuilder WithStringArgument(string name, string description, out StringArgument argument)
+    {
+        argument = new StringArgument(name, description);
+        return WithArgument(argument);
+    }
+
+    public ToolBuilder WithIntegerArgument(string name, string description, out IntegerArgument argument)
+    {
+        argument = new IntegerArgument(name, description);
+        return WithArgument(argument);
+    }
+
+    public ToolBuilder WithNumberArgument(string name, string description, out NumberArgument argument)
+    {
+        argument = new NumberArgument(name, description);
+        return WithArgument(argument);
+    }
+
+    public ToolBuilder WithBooleanArgument(string name, string description, out BooleanArgument argument)
+    {
+        argument = new BooleanArgument(name, description);
+        return WithArgument(argument);
+    }
+
+    public ToolBuilder WithEnumArgument(string name, string description, string[] allowedValues, out EnumArgument argument)
+    {
+        argument = new EnumArgument(name, description, allowedValues);
+        return WithArgument(argument);
+    }
+
+    public ToolBuilder WithArrayArgument(string name, string description, out ArrayArgument argument)
+    {
+        argument = new ArrayArgument(name, description);
+        return WithArgument(argument);
+    }
+
+    public ToolBuilder WithRequiredArgument(ToolArgument argument)
+    {
+        WithArgument(argument);
+        _requiredArguments.Add(argument);
+        return this;
+    }
+
+    public ToolBuilder WithRequiredStringArgument(string name, string description, out StringArgument argument)
+    {
+        argument = new StringArgument(name, description); 
+        return WithRequiredArgument(argument);
+    }
+
+    public ToolBuilder WithRequiredIntegerArgument(string name, string description, out IntegerArgument argument)
+    {
+        argument = new IntegerArgument(name, description);
+        return WithRequiredArgument(argument);
+    }
+
+    public ToolBuilder WithRequiredNumberArgument(string name, string description, out NumberArgument argument)
+    {
+        argument = new NumberArgument(name, description);
+        return WithRequiredArgument(argument);
+    }
+
+    public ToolBuilder WithRequiredBooleanArgument(string name, string description, out BooleanArgument argument)
+    {
+        argument = new BooleanArgument(name, description);
+        return WithRequiredArgument(argument);
+    }
+
+    public ToolBuilder WithRequiredEnumArgument(string name, string description, string[] allowedValues, out EnumArgument argument)
+    {
+        argument = new EnumArgument(name, description, allowedValues); 
+        return WithRequiredArgument(argument);
+    }
+
+    public ToolBuilder WithRequiredArrayArgument(string name, string description, out ArrayArgument argument)
+    {
+        argument = new ArrayArgument(name, description);
+        return WithRequiredArgument(argument);
+    }
+    
+    #endregion
+
+    /// <summary>
+    ///     Builds the final tool definition.
+    /// </summary>
+    /// <param name="strict"></param>
+    /// <returns></returns>
+    public ToolDefinition Build(bool? strict = null)
+    {
+        BinaryData? functionParameters = null;
+
+        if (_arguments.Count > 0)
+        {
+            var properties = new Dictionary<string, Dictionary<string, object>>();
+            foreach (var arg in _arguments)
+            {
+                var propSchema = new Dictionary<string, object>
+                {
+                    ["type"] = arg.JsonTypeName,
+                    ["description"] = arg.ArgumentDescription
+                };
+                arg.AddSchemaProperties(propSchema);
+                properties[arg.ArgumentName] = propSchema;
+            }
+
+            var schema = new Dictionary<string, object>
+            {
+                ["type"] = "object",
+                ["properties"] = properties,
+            };
+
+            var requiredNames = strict == true
+                ? _arguments.Select(a => a.ArgumentName).ToArray()
+                : _requiredArguments.Select(a => a.ArgumentName).ToArray();
+
+            if (requiredNames.Length > 0)
+            {
+                schema["required"] = requiredNames;
+            }
+
+            if (strict == true)
+            {
+                schema["additionalProperties"] = false;
+            }
+
+            var json = JsonSerializer.Serialize(schema);
+            functionParameters = BinaryData.FromString(json);
+        }
+
+        var tool = ChatTool.CreateFunctionTool(toolId, _description, functionParameters, functionSchemaIsStrict: strict);
+
+        return new ToolDefinition
+        {
+            ToolId = toolId,
+            Description = _description,
+            Arguments = _arguments.ToArray(),
+            RequiredArguments = _requiredArguments.ToArray(),
+            Tool = tool
+        };
+    }
+}

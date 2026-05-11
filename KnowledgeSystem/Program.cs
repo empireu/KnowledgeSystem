@@ -1,6 +1,6 @@
 using System.ClientModel;
 using System.Text;
-using System.Text.Json;
+using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Retrieval;
 using KnowledgeSystem.Retrieval.Engine;
@@ -39,71 +39,33 @@ var credentials = new ApiKeyCredential("none");
 var client = new OpenAIClient(credentials, options);
 var chat = client.GetChatClient( "google/gemma-4-e4b");
 
-var tools = new List<ChatTool>
-{
-    ChatTool.CreateFunctionTool(
-        "semantic_search",
-        "Searches the knowledge base using a query and returns 5 chunks of relevant information. NEVER returns the same results!",
-        BinaryData.FromString("""
-        {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query. Use '|' to separate multiple queries."
-                }
-            },
-            "required": ["query"]
-        }
-        """)
-    ),
-    ChatTool.CreateFunctionTool(
-        "repo_fetch",
-        "Fetches the content of a specific repository reference (file, definition, directory, or offsets).",
-        BinaryData.FromString("""
-        {
-            "type": "object",
-            "properties": {
-                "reference": {
-                    "type": "string",
-                    "description": "The EmdReferencePath string to fetch."
-                }
-            },
-            "required": ["reference"]
-        }
-        """)
-    ),
-    ChatTool.CreateFunctionTool(
-        "record_discovery",
-        "Submits a discovery to the user. You must include the discovery itself, along with what to keep in your memory.",
-        BinaryData.FromString("""
-        {
-            "type": "object",
-            "properties": {
-                "discovery": {
-                    "type": "string",
-                    "description": "The fragment to submit. It must include ALL locations the data originates from!"
-                },
-                "memory": {
-                    "type": "string",
-                    "description": "The information to keep in your own memory. It must include ALL locations and the search keywords, along with a SUMMARY of what you found!"
-                }
-            },
-            "required": ["discovery", "memory"]
-        }
-        """)
-    ),
-    ChatTool.CreateFunctionTool(
-        "finish_research",
-        "Completes the research. Only call when you are 100% done.",
-        BinaryData.FromString("""
-        {
-            "type": "object",
-            "properties": {}
-        }
-        """)
-    )
-};
+var semanticSearchTool = new ToolBuilder("semantic_search")
+    .WithDescription("Searches the knowledge base using a query and returns chunks of relevant information. NEVER returns the same results!")
+    .WithRequiredStringArgument("query", "The search query. Use '|' to separate multiple queries.", out var queryArg)
+    .Build();
+
+var repoFetchTool = new ToolBuilder("repo_fetch")
+    .WithDescription("Fetches the content of a specific repository reference (file, definition, directory, or offsets).")
+    .WithRequiredStringArgument("reference", "The EmdReferencePath string to fetch.", out var referenceArg)
+    .Build();
+
+var recordDiscoveryTool = new ToolBuilder("record_discovery")
+    .WithDescription("Submits a discovery to the user. You must include the discovery itself, along with what to keep in your memory.")
+    .WithRequiredStringArgument("discovery", "The fragment to submit. It must include ALL locations the data originates from!", out var discoveryArg)
+    .WithRequiredStringArgument("memory", "The information to keep in your own memory. It must include ALL locations and the search keywords, along with a SUMMARY of what you found!", out var memoryArg)
+    .Build();
+
+var finishResearchTool = new ToolBuilder("finish_research")
+    .WithDescription("Completes the research. Only call when you are 100% done.")
+    .Build();
+
+var toolSet = new ToolSet();
+toolSet.AddTool(semanticSearchTool);
+toolSet.AddTool(repoFetchTool);
+toolSet.AddTool(recordDiscoveryTool);
+toolSet.AddTool(finishResearchTool);
+
+var tools = toolSet.Tools.Values.Select(t => t.Tool).ToList();
 
 var systemPrompt = await File.ReadAllTextAsync("system_prompt.md");
 var history = new List<ChatMessage>();
@@ -143,56 +105,64 @@ while (true)
 
             foreach (var toolCall in completion.Value.ToolCalls)
             {
-                switch (toolCall.FunctionName)
+                if (!toolSet.TryMatchTool(toolCall, out var tool))
                 {
-                    case "semantic_search":
-                    {
-                        using var jsonDoc = JsonDocument.Parse(toolCall.FunctionArguments);
-                        var query = jsonDoc.RootElement.GetProperty("query").GetString()!;
+                    throw new NotSupportedException($"Unsupported tool: {toolCall.FunctionName}");
+                }
+
+                var extraction = ToolSet.ExtractArguments(tool, toolCall.FunctionArguments);
+                if (extraction.Status == ArgumentExtractionResult.ExtractionStatus.IncompleteArguments)
+                {
+                    var missing = string.Join(", ", extraction.MissingArguments.Select(a => a.ArgumentName));
+                    history.Add(new ToolChatMessage(toolCall.Id, $"Error: missing required arguments: {missing}"));
+                    continue;
+                }
+
+                if (tool == semanticSearchTool)
+                {
+                    var query = queryArg.GetValue(extraction);
                     
-                        Console.WriteLine($"[Tool] semantic_search(\"{query}\")");
+                    Console.WriteLine($"[Tool] semantic_search(\"{query}\")");
 
-                        var dbQueryResultChunks = new List<EmdChunk>();
+                    var dbQueryResultChunks = new List<EmdChunk>();
 
-                        var chars = 0;
-                        var engineResults = await engine.SearchAsync(query.Split('|'), 50, excludedIndices: excludedIndices);
+                    var chars = 0;
+                    var engineResults = await engine.SearchAsync(query.Split('|'), 50, excludedIndices: excludedIndices);
                             
-                        foreach (var vectorSearchResult in engineResults.SelectMany(x => x))
-                        {
-                            if (excludedIndices.Add(vectorSearchResult.Index))
-                            {
-                                var chunk = engine.GetChunkByHnswId(vectorSearchResult.Index);
-                                
-                                dbQueryResultChunks.Add(chunk);
-
-                                chars += chunk.RawContent.Length;
-
-                                if (chars > 10000)
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        var dependencyChunks = engine.ResolveDependencies(dbQueryResultChunks);
-
-                        // Add dependency chunks to excluded set so they won't appear in future searches
-                        foreach (var depChunk in dependencyChunks)
-                        {
-                            if (engine.TryGetHnswId(depChunk, out var depHnswId))
-                            {
-                                excludedIndices.Add(depHnswId);
-                            }
-                        }
-
-                        var sb = ResolveDependenciesAndOrderChunks(dbQueryResultChunks, dependencyChunks);
-                        history.Add(new ToolChatMessage(toolCall.Id, sb.ToString()));
-                        break;
-                    }
-                    case "repo_fetch":
+                    foreach (var vectorSearchResult in engineResults.SelectMany(x => x))
                     {
-                        using var jsonDoc = JsonDocument.Parse(toolCall.FunctionArguments);
-                        var reference = jsonDoc.RootElement.GetProperty("reference").GetString()!;
+                        if (excludedIndices.Add(vectorSearchResult.Index))
+                        {
+                            var chunk = engine.GetChunkByHnswId(vectorSearchResult.Index);
+                                
+                            dbQueryResultChunks.Add(chunk);
+
+                            chars += chunk.RawContent.Length;
+
+                            if (chars > 10000)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                        
+                    var dependencyChunks = engine.ResolveDependencies(dbQueryResultChunks);
+
+                    // Add dependency chunks to excluded set so they won't appear in future searches
+                    foreach (var depChunk in dependencyChunks)
+                    {
+                        if (engine.TryGetHnswId(depChunk, out var depHnswId))
+                        {
+                            excludedIndices.Add(depHnswId);
+                        }
+                    }
+
+                    var sb = ResolveDependenciesAndOrderChunks(dbQueryResultChunks, dependencyChunks);
+                    history.Add(new ToolChatMessage(toolCall.Id, sb.ToString()));
+                }
+                else if (tool == repoFetchTool)
+                {
+                     var reference = referenceArg.GetValue(extraction);
                     
                         Console.WriteLine($"[Tool] repo_fetch(\"{reference}\")");
                     
@@ -255,33 +225,32 @@ while (true)
                         }
 
                         history.Add(new ToolChatMessage(toolCall.Id, fetchResult));
-                        break;
-                    }
-                    case "record_discovery":
-                    {
-                        using var jsonDoc = JsonDocument.Parse(toolCall.FunctionArguments);
-                        var discovery = jsonDoc.RootElement.GetProperty("discovery").GetString()!;
-                        var memory = jsonDoc.RootElement.GetProperty("memory").GetString()!;
+                }
+                else if (tool == recordDiscoveryTool)
+                {
+                    var discovery = discoveryArg.GetValue(extraction);
+                    var memory = memoryArg.GetValue(extraction);
 
-                        discoveries.AppendLine($"# ROUND {round}:");
-                        discoveries.Append(discovery);
-                        discoveries.AppendLine();
+                    discoveries.AppendLine($"# ROUND {round}:");
+                    discoveries.Append(discovery);
+                    discoveries.AppendLine();
                     
-                        Console.WriteLine($"record_discovery(...{discovery.Length}, ...{memory.Length}) -> Discoveries now {discoveries.Length}");
+                    Console.WriteLine($"record_discovery(...{discovery.Length}, ...{memory.Length}) -> Discoveries now {discoveries.Length}");
                     
-                        history.RemoveRange(discoveryRoundIndex, history.Count - discoveryRoundIndex);
-                        history.Add(new SystemChatMessage($"Research round {round++}\nMEMORY: \n  {memory}"));
-                        discoveryRoundIndex = history.Count;
-                        break;
-                    }
-                    case "finish_research":
-                        Console.WriteLine("\n--- RESEARCH COMPLETE ---\n");
-                        Console.WriteLine(discoveries.ToString());
-                        Console.WriteLine("\n\n");
-                        await File.WriteAllTextAsync("__research_result.md", discoveries.ToString());
-                        return;
-                    default:
-                        throw new NotSupportedException($"Unsupported tool: {toolCall.FunctionName}");
+                    history.RemoveRange(discoveryRoundIndex, history.Count - discoveryRoundIndex);
+                    history.Add(new SystemChatMessage($"Research round {round++}\nMEMORY: \n  {memory}"));
+                    discoveryRoundIndex = history.Count;
+                }
+                else if (tool == finishResearchTool)
+                {
+                    Console.WriteLine("\n--- RESEARCH COMPLETE ---\n");
+                    Console.WriteLine(discoveries.ToString());
+                    Console.WriteLine("\n\n");
+                    await File.WriteAllTextAsync("__research_result.md", discoveries.ToString());
+                }
+                else
+                {
+                    throw new Exception("Unimplemented tool handler");
                 }
             }
             
