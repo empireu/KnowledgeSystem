@@ -256,7 +256,7 @@ public sealed class Test
         }
 
         // Order across all results:
-        vectorSearchResults.Sort((a, b) => b.Score.CompareTo(a.Score));
+        vectorSearchResults.Sort((a, b) => a.Score.CompareTo(b.Score));
         
         _logger.LogInformation("Raw results: {c}", vectorSearchResults.Count);
         
