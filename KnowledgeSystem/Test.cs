@@ -43,7 +43,9 @@ public sealed class Test
     private readonly string _systemPrompt, _warningMessage;
     
     public readonly AgentContext Context = new();
-    public readonly StringBuilder Findings = new();
+    public readonly List<string> Discoveries = [];
+    public readonly StringBuilder DiscoveryString = new();
+    public readonly List<string> Memories = [];
     public readonly HashSet<int> ExcludedIndices = [];
 
     public Test(ILogger<Test> logger, RagEngine engine, Description description, string query)
@@ -91,7 +93,7 @@ public sealed class Test
         _systemPrompt = description.SystemPrompt;
         _warningMessage = description.WarningMessage;
     }
-
+    
     public async Task<bool> Execute()
     {
         var sw = Stopwatch.StartNew();
@@ -152,7 +154,7 @@ public sealed class Test
                     else if (tool == _finishResearchTool)
                     {
                         var timeTaken = sw.Elapsed.TotalSeconds;
-                        await File.WriteAllTextAsync("__research_result.md", Findings.ToString());
+                        await File.WriteAllTextAsync("__research_result.md", DiscoveryString.ToString());
 
                         var sb = new StringBuilder();
                         var compressSb = new StringBuilder();
@@ -533,11 +535,17 @@ public sealed class Test
             completeMarker.Elements.Count
         );
         
-        Findings.AppendLine($"# ROUND {startMarker.Round}:");
-        Findings.Append(discovery);
-        Findings.AppendLine();
+        Discoveries.Add(discovery);
+        Memories.Add(memory);
 
-        Context.InsertAssistant($"# Research round {startMarker.Round} memory:\n{memory}");
+        DiscoveryString.AppendLine($"# Round {startMarker.Round}:");
+        DiscoveryString.AppendLine(discovery);
+        DiscoveryString.AppendLine();
+
+        var systemPrompt = ((ChatElement)Context.MutableElements[0]).Message;
+        var adjustedSystemPrompt = new ChatElement(new SystemChatMessage($"{systemPrompt.Content[0].Text}\n# Round {startMarker.Round} memory:\n{memory}"));
+        
+        Context.MutableElements[0] = adjustedSystemPrompt;
         Context.InsertElement(new RoundStartMarker(startMarker.Round + 1));
     }
 
