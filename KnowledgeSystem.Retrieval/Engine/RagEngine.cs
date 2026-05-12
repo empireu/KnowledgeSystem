@@ -2,7 +2,6 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Hnsw;
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Retrieval.Embeddings;
-using KnowledgeSystem.Retrieval.Reranking;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -312,10 +311,15 @@ public sealed class RagEngine
     /// <summary>
     ///     Gets the <see cref="EmdChunk"/> corresponding to the given HNSW vector index.
     /// </summary>
-    public EmdChunk GetChunkByHnswId(int hnswId) =>
-        _chunkByHnswId.TryGetValue(hnswId, out var chunk)
-            ? chunk
-            : throw new KeyNotFoundException($"No chunk found for HNSW id {hnswId}");
+    public EmdChunk GetChunkByHnswId(int hnswId)
+    {
+        if (_chunkByHnswId.TryGetValue(hnswId, out var chunk))
+        {
+            return chunk;
+        }
+        
+        throw new KeyNotFoundException($"No chunk found for HNSW id {hnswId}");
+    }
 
     /// <summary>
     ///     Resolves the declared dependencies of the given chunks and returns the chunks belonging to the dependency target nodes, preserving the order in which dependencies were declared.

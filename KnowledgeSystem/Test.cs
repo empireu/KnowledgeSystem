@@ -196,7 +196,8 @@ public sealed class Test
             else
             {
                 _logger.LogError("Got LLM finish reason {r}", completion.FinishReason);
-                return false;
+                Context.InsertAssistant("The system instructions specifically told me to only use tools. If I meant to end the research phase, I need to use the `finish_research()` tool.");
+                continue;
             }
             
             var roundStartMarkerIndex = Context.MutableElements.FindLastIndex(x => x is RoundStartMarker);

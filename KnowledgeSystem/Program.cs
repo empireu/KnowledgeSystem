@@ -34,6 +34,8 @@ do
 var test = ActivatorUtilities.CreateInstance<Test>(host.Services, new Test.Description
 {
     Endpoint = "http://127.0.0.1:1234/v1",
+    //Endpoint = "https://openrouter.ai/api/v1",
+    //Credentials = File.ReadAllText("key.txt"),
     Credentials = "none",
     Model = "google/gemma-4-e4b",
     SystemPrompt = File.ReadAllText("system_prompt.md"),
