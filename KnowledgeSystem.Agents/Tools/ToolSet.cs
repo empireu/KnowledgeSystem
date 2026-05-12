@@ -36,16 +36,24 @@ public sealed class ArgumentExtractionResult
 
 public sealed class ToolSet
 {
-    public readonly Dictionary<string, ToolDefinition> Tools = [];
+    public readonly Dictionary<string, AgentTool> Tools = [];
 
+    public void AddToOptions(ChatCompletionOptions options)
+    {
+        foreach (var agentTool in Tools.Values)
+        {
+            options.Tools.Add(agentTool.Tool);
+        }
+    }
+    
     /// <summary>
     ///     Adds a tool to the set.
     /// </summary>
-    public void AddTool(ToolDefinition toolDefinition)
+    public void AddTool(AgentTool agentTool)
     {
-        if (!Tools.TryAdd(toolDefinition.ToolId, toolDefinition))
+        if (!Tools.TryAdd(agentTool.ToolId, agentTool))
         {
-            throw new InvalidOperationException($"Duplicate tool definition {toolDefinition.Tool}");
+            throw new InvalidOperationException($"Duplicate tool definition {agentTool.Tool}");
         }
     }
 
@@ -55,7 +63,7 @@ public sealed class ToolSet
     /// <param name="toolCall">The raw tool call, returned by the SDK.</param>
     /// <param name="tool">If true, the tool that was matched.</param>
     /// <returns>True if a tool was matched. Otherwise, false.</returns>
-    public bool TryMatchTool(ChatToolCall toolCall, [NotNullWhen(true)] out ToolDefinition? tool)
+    public bool TryMatchTool(ChatToolCall toolCall, [NotNullWhen(true)] out AgentTool? tool)
     {
         return Tools.TryGetValue(toolCall.FunctionName, out tool);
     }
@@ -63,10 +71,10 @@ public sealed class ToolSet
     /// <summary>
     ///     Extracts the arguments from a tool call.
     /// </summary>
-    /// <param name="tool">The tool to extract arguments from.</param>
+    /// <param name="agentTool">The tool to extract arguments from.</param>
     /// <param name="functionArguments">The raw argument data.</param>
     /// <returns></returns>
-    public static ArgumentExtractionResult ExtractArguments(ToolDefinition tool, BinaryData functionArguments)
+    public static ArgumentExtractionResult ExtractArguments(AgentTool agentTool, BinaryData functionArguments)
     {
         using var jsonDoc = JsonDocument.Parse(functionArguments);
         var root = jsonDoc.RootElement;
@@ -74,7 +82,7 @@ public sealed class ToolSet
         var arguments = new Dictionary<ToolArgument, string?>();
         var missing = new List<ToolArgument>();
 
-        foreach (var arg in tool.Arguments)
+        foreach (var arg in agentTool.Arguments)
         {
             if (root.TryGetProperty(arg.ArgumentName, out var valueElement))
             {
@@ -88,7 +96,7 @@ public sealed class ToolSet
             }
         }
 
-        foreach (var requiredArg in tool.RequiredArguments)
+        foreach (var requiredArg in agentTool.RequiredArguments)
         {
             if (arguments[requiredArg] == null)
             {

@@ -1,4 +1,5 @@
-﻿using OpenAI.Chat;
+﻿using KnowledgeSystem.Agents.Tools;
+using OpenAI.Chat;
 
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
@@ -97,6 +98,21 @@ public sealed class AgentContext
     
     public void InsertAssistant(string message, int? index = null) => InsertElement(
         new ChatElement(new AssistantChatMessage(message)),
+        index
+    );
+
+    public void InsertAssistant(ChatCompletion completion, int? index = null) => InsertElement(
+        new ChatElement(new AssistantChatMessage(completion)),
+        index
+    );
+
+    public void InsertTool(AgentTool tool, string output, int? index = null) => InsertElement(
+        new ChatElement(new ToolChatMessage(tool.ToolId, output)),
+        index
+    );
+
+    public void InsertChat(ChatMessage message, int? index = null) => InsertElement(
+        new ChatElement(message),
         index
     );
     

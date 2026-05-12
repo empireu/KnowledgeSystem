@@ -59,6 +59,16 @@ public sealed class RagEngine
     /// </summary>
     public bool TryGetHnswId(EmdChunk chunk, out int hnswId) => _hnswIdByChunkHash.TryGetValue(chunk.Hash, out hnswId);
 
+    public int GetHnswId(EmdChunk chunk)
+    {
+        if (!TryGetHnswId(chunk, out var id))
+        {
+            throw new KeyNotFoundException($"The chunk {chunk.Hash.ToHexString()} is not embedded in the HNSW");
+        }
+
+        return id;
+    }
+    
     #region Setup
     
     /// <summary>

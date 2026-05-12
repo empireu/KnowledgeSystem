@@ -7,7 +7,7 @@ namespace KnowledgeSystem.Agents.Tools;
 /// <summary>
 ///     Wraps an OpenAI tool.
 /// </summary>
-public sealed class ToolDefinition
+public sealed class AgentTool
 {
     public required string ToolId { get; init; }
     public required string? Description { get; init; }

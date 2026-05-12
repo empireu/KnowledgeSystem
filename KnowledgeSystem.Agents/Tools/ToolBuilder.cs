@@ -118,7 +118,7 @@ public sealed class ToolBuilder(string toolId)
     /// </summary>
     /// <param name="strict"></param>
     /// <returns></returns>
-    public ToolDefinition Build(bool? strict = null)
+    public AgentTool Build(bool? strict = null)
     {
         BinaryData? functionParameters = null;
 
@@ -162,7 +162,7 @@ public sealed class ToolBuilder(string toolId)
 
         var tool = ChatTool.CreateFunctionTool(toolId, _description, functionParameters, functionSchemaIsStrict: strict);
 
-        return new ToolDefinition
+        return new AgentTool
         {
             ToolId = toolId,
             Description = _description,
