@@ -20,8 +20,4 @@
       <ProjectReference Include="..\KnowledgeSystem.Hnsw\KnowledgeSystem.Hnsw.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Agent\" />
-    </ItemGroup>
-
 </Project>

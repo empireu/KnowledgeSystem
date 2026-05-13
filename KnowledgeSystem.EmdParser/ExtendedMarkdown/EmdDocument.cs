@@ -1,4 +1,5 @@
-﻿using KnowledgeSystem.EmdParser.MarkdownTree;
+﻿using System.Text;
+using KnowledgeSystem.EmdParser.MarkdownTree;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
@@ -311,6 +312,38 @@ public sealed class EmdDocument
                 }
                 
                 attachment.DeclaredDependencyRefs.Add(refPath);
+            }
+        }
+    }
+
+    public void ChunkTrace(StringBuilder sb)
+    {
+        var stack = new Stack<KeyValuePair<MarkdownNode, int>>();
+        stack.Push(new KeyValuePair<MarkdownNode, int>(RootNode.RawNode, 0));
+
+        while (stack.Count > 0)
+        {
+            var (node, depth) = stack.Pop();
+            var nodeEmd = AttachedNodes[node];
+
+            var content = new StringBuilder();
+            for (var chunkIndex = 0; chunkIndex < nodeEmd.Chunks.Count; chunkIndex++)
+            {
+                var nodeEmdChunk = nodeEmd.Chunks[chunkIndex];
+                content.AppendLine("-------------------------");
+                content.Append($"{{{chunkIndex}, {nodeEmdChunk.RawContent.Length}}} ");
+                content.AppendLine(nodeEmdChunk.RawContent);
+                content.AppendLine("-------------------------");
+            }
+
+            content.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", $"\n{new string(' ', depth * 4)}");
+            sb.Append(content);
+            content.Clear();
+
+            for (var index = node.Children.Count - 1; index >= 0; index--)
+            {
+                var child = node.Children[index];
+                stack.Push(new KeyValuePair<MarkdownNode, int>(child, depth + 1));
             }
         }
     }
