@@ -1,4 +1,3 @@
-using System.Text;
 using KnowledgeSystem;
 using KnowledgeSystem.Retrieval;
 using KnowledgeSystem.Retrieval.Engine;
@@ -32,47 +31,7 @@ do
     query = Console.ReadLine()!;
 } while (string.IsNullOrWhiteSpace(query));
 
-var foo = ActivatorUtilities.CreateInstance<Foo>(host.Services, query);
-
-var step = 0;
-while (true)
-{
-    var charCount = await foo.Step(10);
-    
-    var documents = foo.ReferencedDocuments.Values
-        .OrderBy(x => x.AverageScore)
-        .ToList();
-    
-    Console.WriteLine($"Step {++step} - {charCount} chars:");
-    for (var documentIndex = 0; documentIndex < documents.Count; documentIndex++)
-    {
-        var referencedDocument = documents[documentIndex];
-        
-        Console.WriteLine($"  {documentIndex}. {referencedDocument.Document.Path}: {referencedDocument.References.Count} refs, {referencedDocument.BoundingTreesSorted.Count} trees, {referencedDocument.AverageScore:F2} score");
-        for (var treeIndex = 0; treeIndex < referencedDocument.BoundingTreesSorted.Count; treeIndex++)
-        {
-            var boundingTree = referencedDocument.BoundingTreesSorted[treeIndex];
-            
-            Console.WriteLine($"    {treeIndex}. {boundingTree.Root.NodeType} - \"{boundingTree.Root.Text}\" - {boundingTree.ReferenceCount} refs, {boundingTree.AverageScore:F2} score, {boundingTree.Root.EndOffset - boundingTree.Root.StartOffset} chars");
-        }
-
-        Console.WriteLine();
-    }
-
-    var min = documents
-        .Min(document => document.References.Min(x => x.VectorResult.Score));
-    
-    var max = documents
-        .Max(document => document.References.Max(x => x.VectorResult.Score));
-
-    Console.Write($"\n\nMin: {min:F2}, max: {max:F2}");
-    
-    Console.ReadLine();
-}
-
-return;
-
-var test = ActivatorUtilities.CreateInstance<Test>(host.Services, new Test.Description
+var test = ActivatorUtilities.CreateInstance<Test2>(host.Services, new Test2.Description
 {
     Endpoint = "http://127.0.0.1:1234/v1",
     //Endpoint = "https://openrouter.ai/api/v1",

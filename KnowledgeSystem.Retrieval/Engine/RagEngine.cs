@@ -436,6 +436,15 @@ public sealed class RagEngine
         }
     }
     
+    
+    /// <summary>
+    ///     Searches for the <paramref name="k"/> chunks most similar, based on a known embedding.
+    /// </summary>
+    public VectorSearchResult[] Search(ReadOnlySpan<float> embedding, int k, int efSearch = 200, IReadOnlySet<int>? excludedIndices = null, CancellationToken cancellationToken = default)
+    {
+        return Hnsw.Search(embedding, k, efSearch, excludedIndices);
+    }
+    
     /// <summary>
     ///     Searches for the <paramref name="k"/> chunks most similar to the query text.
     /// </summary>
