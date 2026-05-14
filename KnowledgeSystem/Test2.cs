@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using KnowledgeSystem.Agents.Context;
+using KnowledgeSystem.Agents.Helper;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Retrieval.Engine;
@@ -519,29 +520,6 @@ public sealed class Test2
         public required string SystemPrompt { get; init; }
         public required string WarningMessage { get; init; }
     }
-
-#pragma warning disable OPENAI001
-    private sealed class ExtendedChatCompletionOptions : ChatCompletionOptions
-    {
-        public string? ProviderOnly { get; init; }
-        
-        protected override void JsonModelWriteCore(Utf8JsonWriter writer, ModelReaderWriterOptions options)
-        {
-            base.JsonModelWriteCore(writer, options);
-            
-            if (!string.IsNullOrEmpty(ProviderOnly))
-            {
-                writer.WritePropertyName("provider"u8);
-                writer.WriteStartObject();
-                writer.WritePropertyName("only"u8);
-                writer.WriteStartArray();
-                writer.WriteStringValue(ProviderOnly!);
-                writer.WriteEndArray();
-                writer.WriteEndObject();
-            }
-        }
-    }
-#pragma warning restore OPENAI001
 
     public sealed class RoundStartMarker(int round) : IMarkerElement
     {
