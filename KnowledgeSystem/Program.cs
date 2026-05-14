@@ -31,6 +31,7 @@ do
     query = Console.ReadLine()!;
 } while (string.IsNullOrWhiteSpace(query));
 
+/*
 var test = ActivatorUtilities.CreateInstance<Test2>(host.Services, new Test2.Description
 {
     //Endpoint = "http://127.0.0.1:1234/v1",
@@ -46,4 +47,4 @@ var test = ActivatorUtilities.CreateInstance<Test2>(host.Services, new Test2.Des
 
 var result = await test.Execute();
 Console.WriteLine("\n");
-Console.WriteLine(result ? "Search finished successfully." : "Search did not finish successfully.");
+Console.WriteLine(result ? "Search finished successfully." : "Search did not finish successfully.");*/

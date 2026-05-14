@@ -38,3 +38,10 @@ public interface IAgentObserver
     /// <returns></returns>
     Task OnErrorAsync(AgentExecutionError error, CancellationToken cancellationToken) => Task.CompletedTask;
 }
+
+public sealed class NullAgentObserver : IAgentObserver
+{
+    public static readonly  NullAgentObserver Instance = new();
+    
+    private NullAgentObserver() { }
+}

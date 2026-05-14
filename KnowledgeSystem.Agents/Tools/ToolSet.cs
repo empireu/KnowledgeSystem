@@ -1,61 +1,14 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using OpenAI.Chat;
 
 namespace KnowledgeSystem.Agents.Tools;
 
-public sealed class ArgumentExtractionResult
+public interface IReadOnlyToolSet
 {
-    public enum ExtractionStatus
-    {
-        /// <summary>
-        ///     All arguments were matched.
-        /// </summary>
-        Success,
-        /// <summary>
-        ///     The required arguments were not matched.
-        /// </summary>
-        IncompleteArguments
-    }
-    
     /// <summary>
-    ///     The status of the argument extraction.
+    ///     Tools by their tool ID.
     /// </summary>
-    public required ExtractionStatus Status { get; init; }
-    
-    /// <summary>
-    ///     The data extracted for each argument.
-    /// </summary>
-    public required Dictionary<ToolArgument, string?> Arguments { get; init; }
-    
-    /// <summary>
-    ///     The <b>required</b> arguments missing from the data.
-    /// </summary>
-    public required IReadOnlyList<ToolArgument> MissingArguments { get; init; }
-}
-
-public sealed class ToolSet
-{
-    public readonly Dictionary<string, AgentTool> Tools = [];
-
-    public void AddToOptions(ChatCompletionOptions options)
-    {
-        foreach (var agentTool in Tools.Values)
-        {
-            options.Tools.Add(agentTool.Tool);
-        }
-    }
-    
-    /// <summary>
-    ///     Adds a tool to the set.
-    /// </summary>
-    public void AddTool(AgentTool agentTool)
-    {
-        if (!Tools.TryAdd(agentTool.ToolId, agentTool))
-        {
-            throw new InvalidOperationException($"Duplicate tool definition {agentTool.Tool}");
-        }
-    }
+    public IReadOnlyDictionary<string, AgentTool> Tools { get; }
 
     /// <summary>
     ///     Tries to match a tool from the model's response.
@@ -63,54 +16,36 @@ public sealed class ToolSet
     /// <param name="toolCall">The raw tool call, returned by the SDK.</param>
     /// <param name="tool">If true, the tool that was matched.</param>
     /// <returns>True if a tool was matched. Otherwise, false.</returns>
+    public bool TryMatchTool(ChatToolCall toolCall, [NotNullWhen(true)] out AgentTool? tool);
+}
+
+public sealed class ToolSet : IReadOnlyToolSet
+{
+    private readonly Dictionary<string, AgentTool> _tools = [];
+
+    public IReadOnlyDictionary<string, AgentTool> Tools => _tools;
+
+    public void AddToOptions(ChatCompletionOptions options)
+    {
+        foreach (var agentTool in _tools.Values)
+        {
+            options.Tools.Add(agentTool.Tool);
+        }
+    }
+    
     public bool TryMatchTool(ChatToolCall toolCall, [NotNullWhen(true)] out AgentTool? tool)
     {
-        return Tools.TryGetValue(toolCall.FunctionName, out tool);
+        return _tools.TryGetValue(toolCall.FunctionName, out tool);
     }
-
+    
     /// <summary>
-    ///     Extracts the arguments from a tool call.
+    ///     Adds a tool to the set.
     /// </summary>
-    /// <param name="agentTool">The tool to extract arguments from.</param>
-    /// <param name="functionArguments">The raw argument data.</param>
-    /// <returns></returns>
-    public static ArgumentExtractionResult ExtractArguments(AgentTool agentTool, BinaryData functionArguments)
+    public void AddTool(AgentTool agentTool)
     {
-        using var jsonDoc = JsonDocument.Parse(functionArguments);
-        var root = jsonDoc.RootElement;
-
-        var arguments = new Dictionary<ToolArgument, string?>();
-        var missing = new List<ToolArgument>();
-
-        foreach (var arg in agentTool.Arguments)
+        if (!_tools.TryAdd(agentTool.ToolId, agentTool))
         {
-            if (root.TryGetProperty(arg.ArgumentName, out var valueElement))
-            {
-                arguments[arg] = valueElement.ValueKind == JsonValueKind.String
-                    ? valueElement.GetString()
-                    : valueElement.GetRawText();
-            }
-            else
-            {
-                arguments[arg] = null;
-            }
+            throw new InvalidOperationException($"Duplicate tool definition {agentTool.Tool}");
         }
-
-        foreach (var requiredArg in agentTool.RequiredArguments)
-        {
-            if (arguments[requiredArg] == null)
-            {
-                missing.Add(requiredArg);
-            }
-        }
-
-        return new ArgumentExtractionResult
-        {
-            Status = missing.Count == 0 
-                ? ArgumentExtractionResult.ExtractionStatus.Success
-                : ArgumentExtractionResult.ExtractionStatus.IncompleteArguments,
-            Arguments = arguments,
-            MissingArguments = missing
-        };
     }
 }
