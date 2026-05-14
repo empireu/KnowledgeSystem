@@ -33,11 +33,12 @@ do
 
 var test = ActivatorUtilities.CreateInstance<Test2>(host.Services, new Test2.Description
 {
-    Endpoint = "http://127.0.0.1:1234/v1",
-    //Endpoint = "https://openrouter.ai/api/v1",
-    //Credentials = File.ReadAllText("key.txt"),
-    Credentials = "none",
-    Model = "google/gemma-4-e4b",
+    //Endpoint = "http://127.0.0.1:1234/v1",
+    Endpoint = "https://openrouter.ai/api/v1",
+    Credentials = File.ReadAllText("key.txt"),
+    //Credentials = "none",
+    Model = "z-ai/glm-4.7-flash",
+    ProviderOnly = "deepinfra",
     SystemPrompt = File.ReadAllText("system_prompt.md"),
     WarningMessage = "**IMPORTANT:** I have done too much this round. " +
                      "I should record the findings and leave memory notes so I can continue next round!"

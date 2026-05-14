@@ -1,6 +1,8 @@
 ﻿using System.ClientModel;
+using System.ClientModel.Primitives;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
@@ -40,6 +42,7 @@ public sealed class Test2
     
     private readonly ToolSet _toolSet;
     
+    private readonly string? _providerOnly;
     private readonly string _systemPrompt, _warningMessage;
     
     public readonly AgentContext Context = new();
@@ -90,6 +93,7 @@ public sealed class Test2
         _toolSet.AddTool(_recordDiscoveryTool);
         _toolSet.AddTool(_finishResearchTool);
 
+        _providerOnly = description.ProviderOnly;
         _systemPrompt = description.SystemPrompt;
         _warningMessage = description.WarningMessage;
     }
@@ -103,7 +107,12 @@ public sealed class Test2
         
         while (true)
         {
-            var chatOptions = new ChatCompletionOptions();
+            var chatOptions = _providerOnly != null
+                ? new ExtendedChatCompletionOptions
+                {
+                    ProviderOnly = _providerOnly
+                }
+                : new ChatCompletionOptions();
             _toolSet.AddToOptions(chatOptions);
             
             var result = await _client.CompleteChatAsync(Context.ChatMessages, chatOptions);
@@ -506,9 +515,33 @@ public sealed class Test2
         public required string Endpoint { get; init; }
         public required string Credentials { get; init; }
         public required string Model { get; init; }
+        public string? ProviderOnly { get; init; }
         public required string SystemPrompt { get; init; }
         public required string WarningMessage { get; init; }
     }
+
+#pragma warning disable OPENAI001
+    private sealed class ExtendedChatCompletionOptions : ChatCompletionOptions
+    {
+        public string? ProviderOnly { get; init; }
+        
+        protected override void JsonModelWriteCore(Utf8JsonWriter writer, ModelReaderWriterOptions options)
+        {
+            base.JsonModelWriteCore(writer, options);
+            
+            if (!string.IsNullOrEmpty(ProviderOnly))
+            {
+                writer.WritePropertyName("provider"u8);
+                writer.WriteStartObject();
+                writer.WritePropertyName("only"u8);
+                writer.WriteStartArray();
+                writer.WriteStringValue(ProviderOnly!);
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+            }
+        }
+    }
+#pragma warning restore OPENAI001
 
     public sealed class RoundStartMarker(int round) : IMarkerElement
     {
