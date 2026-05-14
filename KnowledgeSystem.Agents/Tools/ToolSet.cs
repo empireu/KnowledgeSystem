@@ -6,6 +6,12 @@ namespace KnowledgeSystem.Agents.Tools;
 public interface IReadOnlyToolSet
 {
     /// <summary>
+    ///     Adds the tools to the completion options.
+    /// </summary>
+    /// <param name="options"></param>
+    void AddToOptions(ChatCompletionOptions options);
+    
+    /// <summary>
     ///     Tools by their tool ID.
     /// </summary>
     public IReadOnlyDictionary<string, AgentTool> Tools { get; }

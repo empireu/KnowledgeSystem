@@ -17,4 +17,11 @@ public abstract class ToolHandler<TContext>(AgentTool tool) : ToolHandler(tool) 
     ///     Errors should all be handled and reported in the <see cref="ToolExecutionResult"/>.
     /// </summary>
     public abstract Task<ToolExecutionResult> ExecuteAsync(ArgumentExtractionResult args, TContext runContext, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Called when the LLM calls this tool but omits required arguments.
+    ///     Return the message to insert as the tool result, or null to use the default
+    ///     ("Error: missing required arguments: X, Y").
+    /// </summary>
+    public virtual string? OnMissingArguments(ArgumentExtractionResult args) => null;
 }

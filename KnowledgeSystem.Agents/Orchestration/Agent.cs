@@ -23,7 +23,13 @@ public abstract class Agent<TContext, TResult>(string agentId) : ChatAgent(agent
     /// <summary>
     ///     Called when a completion arrives, that isn't a tool call.
     /// </summary>
-    public abstract Task<AgentCompletionResult<TResult>> CompleteAsync(ChatCompletion completion);
+    public abstract Task<AgentCompletionResult<TResult>> CompleteAsync(ChatCompletion completion, TContext context);
+
+    /// <summary>
+    ///     Called when the LLM calls a tool that doesn't exist.
+    ///     Return the message to insert as the tool result, or null to use the default ("Invalid tool!").
+    /// </summary>
+    public virtual string? OnHallucinatedTool(string toolName) => null;
 
     /// <summary>
     ///     Called after execution ended due to errors or when <see cref="CompleteAsync"/> reported finish.

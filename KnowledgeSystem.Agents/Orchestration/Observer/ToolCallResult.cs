@@ -20,5 +20,5 @@ public sealed class ToolCallResult
     /// <summary>
     ///     The raw content returned by the tool.
     /// </summary>
-    public required string Result { get; init; }
+    public required string Content { get; init; }
 }

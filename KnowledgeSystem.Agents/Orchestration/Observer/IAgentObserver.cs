@@ -6,11 +6,6 @@
 public interface IAgentObserver
 {
     /// <summary>
-    ///     Called when the agent outputs a thinking trace.
-    /// </summary>
-    Task OnThinkingAsync(string trace, CancellationToken cancellationToken) => Task.CompletedTask;
-
-    /// <summary>
     ///     Called when the agent runs tools. Multiple tools can be called per round.
     /// </summary>
     Task OnToolCallAsync(ToolCallInfo[] toolCalls, CancellationToken cancellationToken) => Task.CompletedTask;

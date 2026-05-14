@@ -1,8 +1,14 @@
+using System.ClientModel;
 using KnowledgeSystem;
+using KnowledgeSystem.Agent;
+using KnowledgeSystem.Agents.Context.TokenEstimation;
+using KnowledgeSystem.Agents.Orchestration;
+using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Retrieval;
 using KnowledgeSystem.Retrieval.Engine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using OpenAI;
 using Serilog;
 
 var builder = Host.CreateDefaultBuilder(args)
@@ -23,28 +29,30 @@ var host = builder.Build();
 var engine = host.Services.GetRequiredService<RagEngine>();
 await engine.InitializeAsync();
 
-Console.WriteLine("Ready for queries\n");
-string query;
-do
-{
-    Console.Write("\n> ");
-    query = Console.ReadLine()!;
-} while (string.IsNullOrWhiteSpace(query));
+var agent = new SimpleChatAgent("chat", host.Services);
+var context = new SimpleChatContext();
+context.ChatContext.InsertSystem(File.ReadAllText("sp.md"));
+var tokenizer = TokenizerHelper.Create(TokenizerInfo.Gemma("tokenizer/gemma-4"));
 
-/*
-var test = ActivatorUtilities.CreateInstance<Test2>(host.Services, new Test2.Description
-{
-    //Endpoint = "http://127.0.0.1:1234/v1",
-    Endpoint = "https://openrouter.ai/api/v1",
-    Credentials = File.ReadAllText("key.txt"),
-    //Credentials = "none",
-    Model = "z-ai/glm-4.7-flash",
-    ProviderOnly = "deepinfra",
-    SystemPrompt = File.ReadAllText("system_prompt.md"),
-    WarningMessage = "**IMPORTANT:** I have done too much this round. " +
-                     "I should record the findings and leave memory notes so I can continue next round!"
-}, query);
+var observer = new Observer(tokenizer);
 
-var result = await test.Execute();
-Console.WriteLine("\n");
-Console.WriteLine(result ? "Search finished successfully." : "Search did not finish successfully.");*/
+var key = File.Exists("key.txt") ? File.ReadAllText("key.txt").Trim() : "none";
+var client = new OpenAIClient(
+    new ApiKeyCredential(key),
+    new OpenAIClientOptions { Endpoint = new Uri("http://127.0.0.1:1234/v1") }
+).GetChatClient("google/gemma4-e4b");
+
+
+Console.WriteLine("Ready\n");
+
+while (true)
+{
+    Console.Write($"({tokenizer.CountTokens(context.ChatMessages)} tok) > ");
+    var input = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(input)) break;
+
+    context.ChatContext.InsertUser(input);
+
+    var runner = new AgentRunner<SimpleChatContext, AgentVoidResult>(agent, context, observer, client);
+    await runner.RunAsync();
+}
