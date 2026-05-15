@@ -8,7 +8,7 @@ using KnowledgeSystem.Retrieval.Engine;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem;
+namespace KnowledgeSystem.Retrieval;
 
 public sealed class FastContextRetrieval
 {

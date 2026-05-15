@@ -2,6 +2,7 @@ using System.Text;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Retrieval;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent;

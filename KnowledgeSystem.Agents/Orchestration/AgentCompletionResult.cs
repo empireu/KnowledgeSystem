@@ -1,6 +1,4 @@
-﻿using KnowledgeSystem.Agents.Orchestration.Observer;
-
-namespace KnowledgeSystem.Agents.Orchestration;
+﻿namespace KnowledgeSystem.Agents.Orchestration;
 
 public sealed class AgentCompletionResult(bool completesExecution, AgentExecutionError? error)
 {

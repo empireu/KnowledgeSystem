@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.Agents.Tools;
 
-namespace KnowledgeSystem.Agents.Orchestration.Observer;
+namespace KnowledgeSystem.Agents.Orchestration;
 
 /// <summary>
 ///     Base type for agent errors, which can include LLM-related errors, tool-call related errors or other internal errors.

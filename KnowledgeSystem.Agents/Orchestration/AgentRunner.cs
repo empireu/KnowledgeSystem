@@ -1,5 +1,4 @@
 ﻿using System.ClientModel;
-using System.Diagnostics;
 using KnowledgeSystem.Agents.Orchestration.Observer;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
@@ -7,102 +6,6 @@ using OpenAI.Chat;
 // ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Agents.Orchestration;
-
-/// <summary>
-///     Represents a frame in the call stack. The tool could be a simple tool or an agent.
-/// </summary>
-public abstract class AgentToolFrame
-{
-    /// <summary>
-    ///     Represents a tool call. The tool could be a simple tool or an agent.
-    ///     It tool ID could also be hallucinated. It will be kept in the frame stack so it's resolved in the correct order.
-    /// </summary>
-    /// <param name="toolId">The exact ID passed by the LLM, which could be hallucinated. This can be verified by the concrete type.</param>
-    private AgentToolFrame(string toolId)
-    {
-        ToolId = toolId;
-    }
-
-    public string ToolId { get; }
-
-    /// <summary>
-    ///     Represents a hallucinated tool.
-    /// </summary>
-    public sealed class Hallucination(string toolId, string errorMessage) : AgentToolFrame(toolId)
-    {
-        /// <summary>
-        ///     The message that gets reported to the LLM.
-        /// </summary>
-        public string ErrorMessage { get; } = errorMessage;
-    }
-
-    /// <summary>
-    ///     Represents a tool call that is missing some required arguments.
-    /// </summary>
-    /// <param name="toolId"></param>
-    /// <param name="errorMessage"></param>
-    public sealed class MissingArgs(string toolId, string errorMessage) : AgentToolFrame(toolId)
-    {
-        /// <summary>
-        ///     The message that gets reported to the LLM.
-        /// </summary>
-        public string ErrorMessage { get; } = errorMessage;
-    }
-
-    /// <summary>
-    ///     Interface for a resolved tool call.
-    /// </summary>
-    public abstract class RunningFrame : AgentToolFrame
-    {
-        /// <summary>
-        ///     Interface for a resolved tool call.
-        /// </summary>
-        internal RunningFrame(AgentTool tool, ArgumentExtractionResult args) : base(tool.ToolId)
-        {
-            Tool = tool;
-            Args = args;
-        }
-
-        /// <summary>
-        ///     The tool being called.
-        /// </summary>
-        public AgentTool Tool { get; }
-
-        /// <summary>
-        ///     The arguments for the call.
-        /// </summary>
-        public ArgumentExtractionResult Args { get; }
-        
-        /// <summary>
-        ///     The final result. Always non-null when the tool finished.
-        /// </summary>
-        public ToolExecutionResult? Result { get; internal set; }
-    }
-    
-    /// <summary>
-    ///     Represents a tool call that resolved to a registered tool successfully. This doesn't invoke any sub-agents and is simply a routine that will execute.
-    /// </summary>
-    public sealed class Plain(AgentTool tool, ArgumentExtractionResult args) : RunningFrame(tool, args)
-    {
-        /// <summary>
-        ///     The running task. Started and set on the next turn, after the frame is pushed.
-        /// </summary>
-        public Task<ToolExecutionResult>? StartedTask { get; internal set; }
-    }
-    
-    /// <summary>
-    ///     Tool call that runs a sub-agent.
-    /// </summary>
-    /// <param name="tool"></param>
-    /// <param name="args"></param>
-    public sealed class SubAgent(AgentTool tool, ArgumentExtractionResult args) : RunningFrame(tool, args)
-    {
-        /// <summary>
-        ///     The proxy holding the runner and the stepping routine. Set on the next turn.
-        /// </summary>
-        public ISubAgentProxy? Proxy { get; internal set; }
-    }
-}
 
 public abstract class AgentRunner
 {
@@ -216,6 +119,18 @@ public abstract class AgentRunner
     }
 }
 
+/// <summary>
+///     Constructs an agent execution engine.
+///     The engine is meant to execute a full turn, including all tool calls required for the turn.
+/// </summary>
+/// <param name="observer">Event sink.</param>
+/// <param name="client">The chat client.</param>
+/// <param name="agent">The agent being executed.</param>
+/// <param name="parent">The parent execution engine, if this is a sub-agent.</param>
+/// <param name="context">The specific execution context.</param>
+/// <param name="cancellationToken"><b>Cancellation token that is valid throughout the lifetime of the runner (stored in various places).</b></param>
+/// <param name="completionFactory">Optional factory to configure the completion options.</param>
+/// <typeparam name="TContext">Specific context class. Holds the chat history and specialized data for sub-agents.</typeparam>
 public sealed class AgentRunner<TContext>(
     IAgentObserver observer,
     ChatClient client,
@@ -224,13 +139,28 @@ public sealed class AgentRunner<TContext>(
     TContext context,
     CancellationToken cancellationToken,
     AgentRunner.ICompletionFactory? completionFactory = null
-) : AgentRunner(observer, client, parent, completionFactory)
-    where TContext : AgentExecutionContext
+) : AgentRunner(observer, client, parent, completionFactory) where TContext : AgentExecutionContext
 {
     public override Agent<TContext> Agent { get; } = agent;
 
     public TContext ExecutionContext { get; } = context;
+
+    /// <summary>
+    ///     Runs the agent to completion, looping <see cref="ExecuteTurn"/> until finished.
+    /// </summary>
+    public async Task RunAsync()
+    {
+        while (!IsFinished)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await ExecuteTurn();
+        }
+    }
     
+    /// <summary>
+    ///     Executes one "turn". This is somewhat finely-grained; has multiple stop points (all the values in <see cref="AgentRunner.TurnStatus"/>).
+    /// </summary>
+    /// <returns></returns>
     public async Task<TurnStatus> ExecuteTurn()
     {
         if (ToolCallsInternal.Count > 0)
@@ -258,7 +188,7 @@ public sealed class AgentRunner<TContext>(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            FinishError = new AgentExecutionError($"LLM request failed: {ex.Message}", true);
+            FinishError = new AgentExecutionError($"Chat request failed: {ex.Message}", true);
             IsFinished = true;
             
             await Observer.OnErrorAsync(this, FinishError, cancellationToken);
@@ -288,7 +218,15 @@ public sealed class AgentRunner<TContext>(
         }
 
         // Let the agent decide whether this finishes execution:
-        var completionResult = await Agent.HandleCompletion(completion, ExecutionContext);
+        AgentCompletionResult completionResult;
+        try
+        {
+            completionResult = await Agent.HandleCompletion(completion, ExecutionContext);
+        }
+        catch (Exception ex)
+        {
+            completionResult = new AgentCompletionResult(true, new AgentExecutionError($"Agent completion handler failed: {ex.Message}", true));
+        }
 
         if (!completionResult.CompletesExecution)
         {
@@ -307,6 +245,9 @@ public sealed class AgentRunner<TContext>(
 
     /// <summary>
     ///     Steps the current tools.
+    ///     For simple tools, this will await their execution.
+    ///     For sub-agents, this will execute one turn.
+    ///     Currently, the calls are executed sequentially. 
     /// </summary>
     /// <returns>True if more steps are needed. Otherwise, false.</returns>
     private async Task<bool> StepTools()
@@ -331,23 +272,41 @@ public sealed class AgentRunner<TContext>(
         {
             switch (pendingFrame)
             {
-                case AgentToolFrame.Plain plainFrame:
+                case AgentToolFrame.PlainRunningFrame plainFrame:
                 {
                     if (plainFrame.StartedTask == null)
                     {
                         var handler = (ToolHandler<TContext>.Plain) Agent.ToolRegistry.Handlers[plainFrame.Tool];
 
-                        plainFrame.StartedTask = handler.ExecuteAsync(
-                            this,
-                            plainFrame.Args,
-                            ExecutionContext,
-                            cancellationToken
-                        );
+                        try
+                        {
+                            plainFrame.StartedTask = handler.ExecuteAsync(
+                                this,
+                                plainFrame.Args,
+                                ExecutionContext,
+                                cancellationToken
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            var errorResult = new ToolExecutionResult(plainFrame.Tool, false, null, ex.Message, ex);
+                            await Observer.OnToolResultAsync(this, indexInCollection, plainFrame.Tool, errorResult, cancellationToken);
+                            plainFrame.Result = errorResult;
+                            return true;
+                        }
 
                         return true;
                     }
                     
-                    var result = await plainFrame.StartedTask;
+                    ToolExecutionResult result;
+                    try
+                    {
+                        result = await plainFrame.StartedTask;
+                    }
+                    catch (Exception ex)
+                    {
+                        result = new ToolExecutionResult(plainFrame.Tool, false, null, ex.Message, ex);
+                    }
                     
                     await Observer.OnToolResultAsync(
                         this,
@@ -361,23 +320,41 @@ public sealed class AgentRunner<TContext>(
                     
                     return true;
                 }
-                case AgentToolFrame.SubAgent subAgentFrame:
+                case AgentToolFrame.RunningSubAgent subAgentFrame:
                 {
                     if (subAgentFrame.Proxy == null)
                     {
                         var handler = (ToolHandler<TContext>.SubAgent) Agent.ToolRegistry.Handlers[subAgentFrame.Tool];
 
-                        subAgentFrame.Proxy = await handler.BeginSubAgentExecution(
-                            this, 
-                            subAgentFrame.Args,
-                            ExecutionContext,
-                            cancellationToken
-                        );
+                        try
+                        {
+                            subAgentFrame.Proxy = await handler.BeginSubAgentExecution(
+                                this, 
+                                subAgentFrame.Args,
+                                ExecutionContext,
+                                cancellationToken
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            var errorResult = new ToolExecutionResult(subAgentFrame.Tool, false, null, ex.Message, ex);
+                            await Observer.OnToolResultAsync(this, indexInCollection, subAgentFrame.Tool, errorResult, cancellationToken);
+                            subAgentFrame.Result = errorResult;
+                            return true;
+                        }
 
                         return true;
                     }
 
-                    var result = await subAgentFrame.Proxy.StepAsync();
+                    ToolExecutionResult? result;
+                    try
+                    {
+                        result = await subAgentFrame.Proxy.StepAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        result = new ToolExecutionResult(subAgentFrame.Tool, false, null, ex.Message, ex);
+                    }
 
                     if (result != null)
                     {
@@ -408,25 +385,23 @@ public sealed class AgentRunner<TContext>(
             switch (toolCall)
             {
                 case AgentToolFrame.Hallucination hallucination:
-                    ExecutionContext.InsertToolResult(hallucination.ToolId, hallucination.ErrorMessage);
+                    ExecutionContext.InsertToolResult(hallucination.CallId, hallucination.ErrorMessage);
                     continue;
                 case AgentToolFrame.MissingArgs missingArgs:
-                    ExecutionContext.InsertToolResult(missingArgs.ToolId,  missingArgs.ErrorMessage);
+                    ExecutionContext.InsertToolResult(missingArgs.CallId,  missingArgs.ErrorMessage);
                     continue;
                 case AgentToolFrame.RunningFrame running:
-                    result = running.Result;
+                    result = running.Result!;
                     break;
                 default:
-                    throw new Exception($"Invalid tool frame {pendingFrame}");
+                    throw new Exception($"Invalid tool frame {toolCall}");
             }
-            
-            Debug.Assert(result != null);
 
             var output = result.IsSuccessful
                 ? result.Output
                 : result.FormatError();
 
-            ExecutionContext.InsertToolResult(result.Tool.ToolId, output);
+            ExecutionContext.InsertToolResult(toolCall.CallId, output);
         }
         
         ToolCallsInternal.Clear();
@@ -434,9 +409,6 @@ public sealed class AgentRunner<TContext>(
         return false;
     }
     
-    /// <summary>
-    ///     Represents a tool that was resolved.
-    /// </summary>
     private readonly struct ToolCall
     {
         /// <summary>
@@ -444,10 +416,13 @@ public sealed class AgentRunner<TContext>(
         /// </summary>
         public required ChatToolCall Call { get; init; }
         
-        public string ToolId { get; init; }
+        /// <summary>
+        ///     The API call ID, used for writing back the history.
+        /// </summary>
+        public string CallId { get; init; }
         
         /// <summary>
-        ///     The resolved tool, if the tool ID wasn't hallucinated.
+        ///     The resolved tool, if the function name wasn't hallucinated.
         /// </summary>
         public required AgentTool? Tool { get; init; }
         
@@ -477,7 +452,7 @@ public sealed class AgentRunner<TContext>(
                 calls.Add(new ToolCall
                 {
                     Call = toolCall,
-                    ToolId = toolCall.Id,
+                    CallId = toolCall.Id,
                     Tool = tool,
                     OriginalIndex = callIndex,
                     Args = ArgumentExtractionResult.ExtractArguments(tool, toolCall.FunctionArguments)
@@ -488,7 +463,7 @@ public sealed class AgentRunner<TContext>(
                 calls.Add(new ToolCall
                 {
                     Call = toolCall,
-                    ToolId = toolCall.Id,
+                    CallId = toolCall.Id,
                     Tool = null,
                     OriginalIndex = callIndex,
                     Args = null
@@ -503,12 +478,13 @@ public sealed class AgentRunner<TContext>(
 
             if (toolCall.Tool == null)
             {
+                var functionName = toolCall.Call.FunctionName;
                 await Observer.OnErrorAsync(
                     this,
                     new AgentToolHallucinationError(
-                        $"Invalid tool \"{toolCall.ToolId}\"", 
+                        $"Invalid tool \"{functionName}\"", 
                         false,
-                        toolCall.ToolId, 
+                        functionName, 
                         callIndex
                     ),
                     cancellationToken
@@ -535,9 +511,9 @@ public sealed class AgentRunner<TContext>(
                     await Observer.OnErrorAsync(
                         this,
                         new AgentToolIncompleteArgumentsError(
-                            $"Missing arguments for \"{toolCall.ToolId}\"", 
+                            $"Missing arguments for \"{toolCall.Tool.ToolId}\"", 
                             false,
-                            toolCall.ToolId, 
+                            toolCall.Tool.ToolId, 
                             callIndex,
                             args
                         ),
@@ -555,10 +531,11 @@ public sealed class AgentRunner<TContext>(
 
             if (toolCall.Tool == null)
             {
-                var message = Agent.GetToolHallucinationError(toolCall.ToolId) ??
-                              GetDefaultToolHallucinationResult(toolCall.ToolId);
+                var functionName = toolCall.Call.FunctionName;
+                var message = Agent.GetToolHallucinationError(functionName) ??
+                              GetDefaultToolHallucinationResult(functionName);
               
-                ToolCallsInternal.Add(new AgentToolFrame.Hallucination(toolCall.ToolId, message));
+                ToolCallsInternal.Add(new AgentToolFrame.Hallucination(toolCall.CallId, functionName, message));
             }
             else
             {
@@ -571,10 +548,10 @@ public sealed class AgentRunner<TContext>(
                     switch (handler)
                     {
                         case ToolHandler<TContext>.Plain:
-                            ToolCallsInternal.Add(new AgentToolFrame.Plain(tool, args));
+                            ToolCallsInternal.Add(new AgentToolFrame.PlainRunningFrame(toolCall.CallId, tool, args));
                             break;
                         case ToolHandler<TContext>.SubAgent:
-                            ToolCallsInternal.Add(new AgentToolFrame.SubAgent(tool, args));
+                            ToolCallsInternal.Add(new AgentToolFrame.RunningSubAgent(toolCall.CallId, tool, args));
                             break;
                         default:
                             throw new Exception($"Invalid tool handler {handler}");
@@ -585,21 +562,21 @@ public sealed class AgentRunner<TContext>(
                     var error = handler.GetMissingArgumentError(args) ??
                                 GetDefaultMissingArgumentsError(args);
                     
-                    ToolCallsInternal.Add(new AgentToolFrame.MissingArgs(toolCall.ToolId, error));
+                    ToolCallsInternal.Add(new AgentToolFrame.MissingArgs(toolCall.CallId, error));
                 }
             }
         }
     }
 
-    private string GetDefaultToolHallucinationResult(string toolId)
+    private string GetDefaultToolHallucinationResult(string functionName)
     {
         // We will only mention the tool names to not blow up tokens:
         var toolList = string.Join(", ", Agent.ToolRegistry.ToolSet.Tools.Values.Select(x => x.ToolId));
 
-        return $"Invalid tool `{toolId}. Available tools are: {toolList}`";
+        return $"Invalid tool `{functionName}`. Available tools are: {toolList}";
     }
 
-    private string GetDefaultMissingArgumentsError(ArgumentExtractionResult args)
+    private static string GetDefaultMissingArgumentsError(ArgumentExtractionResult args)
     {
         var missing = string.Join(", ", args.MissingArguments.Select(a => a.ArgumentName));
 

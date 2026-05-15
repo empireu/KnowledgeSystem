@@ -48,9 +48,18 @@ public abstract class ToolHandler<TContext> : ToolHandler where TContext : Agent
     }
 }
 
+/// <summary>
+///     Proxy for stepping a sub-agent's execution.
+///     Implementations must not throw from <see cref="StepAsync"/>.
+///     Return a <see cref="ToolExecutionResult"/> with <c>IsSuccessful = false</c> instead.
+/// </summary>
 public interface ISubAgentProxy
 {
     AgentRunner AgentRunner { get; }
 
+    /// <summary>
+    ///     Steps the sub-agent. Returns null if the sub-agent is still running, or the final <see cref="ToolExecutionResult"/> when done.
+    ///     Must not throw; return an error result instead.
+    /// </summary>
     Task<ToolExecutionResult?> StepAsync();
 }
