@@ -16,6 +16,47 @@ public class AgentExecutionError(string message, bool isCritical)
     ///     If true, this error will finish the execution of the agent. Otherwise, the agent will try to handle it.
     /// </summary>
     public bool IsCritical { get; } = isCritical;
+
+    public override string ToString()
+    {
+        return Message;
+    }
+}
+
+public abstract class AgentToolError(string message, bool isCritical, string toolId, int index) : AgentExecutionError(message, isCritical)
+{
+    /// <summary>
+    ///     The hallucinated tool ID.
+    /// </summary>
+    public string ToolId { get; } = toolId;
+    
+    /// <summary>
+    ///     The index in the completion's tool calls.
+    /// </summary>
+    public int Index { get; } = index;
+}
+
+/// <summary>
+///     Error raised when the LLM tries to call a tool, but the tool ID doesn't resolve to the registered tools.
+/// </summary>
+public sealed class AgentToolHallucinationError(
+    string message,
+    bool isCritical,
+    string toolId,
+    int index
+) : AgentToolError(message, isCritical, toolId, index);
+
+/// <summary>
+///     Error raised when the LLM tries to call a tool, but it didn't set all required args.
+/// </summary>
+public sealed class AgentToolIncompleteArgumentsError(
+    string message,
+    bool isCritical,
+    string toolId,
+    int index,
+    ArgumentExtractionResult extractionResult) : AgentToolError(message, isCritical, toolId, index)
+{
+    public ArgumentExtractionResult ExtractionResult { get; } = extractionResult;
 }
 
 /// <summary>

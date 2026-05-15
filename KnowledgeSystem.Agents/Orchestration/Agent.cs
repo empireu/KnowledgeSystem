@@ -1,9 +1,11 @@
-﻿using KnowledgeSystem.Agents.Orchestration.Tools;
+﻿using System.Diagnostics;
+using KnowledgeSystem.Agents.Orchestration.Observer;
+using KnowledgeSystem.Agents.Orchestration.Tools;
 using OpenAI.Chat;
 
 namespace KnowledgeSystem.Agents.Orchestration;
 
-public abstract class ChatAgent(string agentId)
+public abstract class Agent(string agentId)
 {
     public string AgentId { get; } = agentId;
 }
@@ -13,29 +15,28 @@ public abstract class ChatAgent(string agentId)
 /// </summary>
 /// <param name="agentId"></param>
 /// <typeparam name="TContext">The context class for the agent.</typeparam>
-/// <typeparam name="TResult"></typeparam>
-public abstract class Agent<TContext, TResult>(string agentId) : ChatAgent(agentId), IDisposable
-    where TContext : AgentExecutionContext 
-    where TResult : class 
+public abstract class Agent<TContext>(string agentId) : Agent(agentId) where TContext : AgentExecutionContext 
 {
     public AgentToolRegistry<TContext> ToolRegistry { get; } = new();
-
+    
     /// <summary>
     ///     Called when a completion arrives, that isn't a tool call.
+    ///     Completion should be done on the runner if needed.
     /// </summary>
-    public abstract Task<AgentCompletionResult<TResult>> CompleteAsync(ChatCompletion completion, TContext context);
+    public abstract Task<AgentCompletionResult> HandleCompletion(ChatCompletion completion, TContext context);
 
     /// <summary>
     ///     Called when the LLM calls a tool that doesn't exist.
     ///     Return the message to insert as the tool result, or null to use the default ("Invalid tool!").
     /// </summary>
-    public virtual string? OnHallucinatedTool(string toolName) => null;
+    public virtual string? GetToolHallucinationError(string toolName) => null;
 
-    /// <summary>
-    ///     Called after execution ended due to errors or when <see cref="CompleteAsync"/> reported finish.
-    /// </summary>
-    public void Dispose()
+    protected AgentCompletionResult Finish() => new(true, null);
+
+    protected AgentCompletionResult Error(AgentExecutionError error)
     {
-        GC.SuppressFinalize(this);
-    }
+        Debug.Assert(error != null);
+        
+        return new AgentCompletionResult(true, error);
+    } 
 }

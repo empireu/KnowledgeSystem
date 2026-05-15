@@ -1,11 +1,12 @@
 using System.Text;
+using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent;
 
-public sealed class FastContextToolHandler(AgentTool tool, StringArgument queryArgument, IServiceProvider serviceProvider) : ToolHandler<SimpleChatContext>(tool)
+public sealed class FastContextToolHandler(AgentTool tool, StringArgument queryArgument, IServiceProvider serviceProvider) : ToolHandler<SimpleChatContext>.Plain(tool)
 {
     public static void Register(AgentToolRegistry<SimpleChatContext> registry, IServiceProvider serviceProvider)
     {
@@ -19,13 +20,14 @@ public sealed class FastContextToolHandler(AgentTool tool, StringArgument queryA
         registry.RegisterTool(searchTool, handler);
     }
 
-    public override async Task<ToolExecutionResult> ExecuteAsync(ArgumentExtractionResult args, SimpleChatContext runContext, CancellationToken cancellationToken)
+    public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<SimpleChatContext> runner, ArgumentExtractionResult args, SimpleChatContext runContext, CancellationToken cancellationToken)
     {
         var query = queryArgument.GetValue(args);
 
         var retrieval = ActivatorUtilities.CreateInstance<FastContextRetrieval>(serviceProvider, new FastContextRetrieval.Description
         {
-            Query = query
+            Query = query,
+            BootstrapCount = 15
         });
 
         await retrieval.PrepareForRun(cancellationToken);
@@ -53,6 +55,6 @@ public sealed class FastContextToolHandler(AgentTool tool, StringArgument queryA
             }
         }
 
-        return new ToolExecutionResult(Tool, ToolExecutionResult.Status.Success, sb.ToString(), null, null);
+        return Success(sb.ToString());
     }
 }

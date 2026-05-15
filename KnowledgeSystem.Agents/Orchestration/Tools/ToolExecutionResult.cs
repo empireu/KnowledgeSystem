@@ -10,50 +10,76 @@ public sealed class ToolExecutionResult
     /// <summary>
     ///     Result of executing a tool.
     /// </summary>
-    public ToolExecutionResult(AgentTool tool, Status status, string? result, string? errorMessage, Exception? thrownException)
+    public ToolExecutionResult(AgentTool tool, bool isSuccessful, string? output, string? errorMessage, Exception? thrownException)
     {
-        Result = result;
+        Tool = tool;
+        IsSuccessful = isSuccessful;
+        Output = output;
         ErrorMessage = errorMessage;
         ThrownException = thrownException;
-        Tool = tool;
-        ExecutionStatus = status;
     }
-
-    public enum Status
-    {
-        /// <summary>
-        ///     The tool executed successfully.
-        /// </summary>
-        Success,
-        /// <summary>
-        ///     The tool's logic produced an error, or the arguments were invalid.
-        /// </summary>
-        Error
-    }
-
+    
     public AgentTool Tool { get; }
     
     /// <summary>
     ///     The final status of the tool.
     /// </summary>
-    public Status ExecutionStatus { get; }
+    public bool IsSuccessful { get; }
     
-    public string Result => ExecutionStatus == Status.Success
+    /// <summary>
+    ///     The result reported to the LLM.
+    /// </summary>
+    /// <exception cref="InvalidOperationException"></exception>
+    public string Output => IsSuccessful
         ? field ?? string.Empty 
-        : throw new InvalidOperationException($"Cannot get tool result for {ExecutionStatus}"); 
+        : throw new InvalidOperationException($"Cannot get tool result for failed call"); 
     
     /// <summary>
     ///     The formatted error message, usually when the error is well-defined by the tool.
     /// </summary>
-    public string? ErrorMessage => ExecutionStatus == Status.Error
+    public string? ErrorMessage => !IsSuccessful
         ? field
-        : throw new InvalidOperationException($"Cannot get error message for {ExecutionStatus}");
-   
+        : throw new InvalidOperationException($"Cannot get error message for successful call");
+    
     /// <summary>
     ///     If the backend caught an exception during the execution of the agent, it will show up here.
     ///     Should never happen due to resource leaks that could happen.
     /// </summary>
-    public Exception? ThrownException => ExecutionStatus == Status.Error
+    public Exception? ThrownException => !IsSuccessful
         ? field
-        : throw new InvalidOperationException($"Cannot get exception for {ExecutionStatus}");
+        : throw new InvalidOperationException($"Cannot get exception for successful call");
+
+    public string FormatError()
+    {
+        if (IsSuccessful)
+        {
+            throw new InvalidOperationException($"Cannot format error for successful call");
+        }
+        
+        if (ErrorMessage == null && ThrownException == null)
+        {
+            return "Unspecified error";
+        }
+
+        if (ErrorMessage != null && ThrownException != null)
+        {
+            return $"{ErrorMessage}. Exception: {ThrownException.Message}";
+        }
+
+        if (ErrorMessage != null)
+        {
+            return ErrorMessage;
+        }
+
+        if (!string.IsNullOrEmpty(ThrownException!.Message))
+        {
+            return ThrownException.Message;
+        }
+
+        return ThrownException.ToString();
+    }
+
+    public override string ToString() => IsSuccessful 
+        ? Output 
+        : FormatError();
 }

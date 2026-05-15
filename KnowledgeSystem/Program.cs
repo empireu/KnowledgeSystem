@@ -3,7 +3,6 @@ using KnowledgeSystem;
 using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Retrieval;
 using KnowledgeSystem.Retrieval.Engine;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,20 +38,44 @@ var observer = new Observer(tokenizer);
 var key = File.Exists("key.txt") ? File.ReadAllText("key.txt").Trim() : "none";
 var client = new OpenAIClient(
     new ApiKeyCredential(key),
-    new OpenAIClientOptions { Endpoint = new Uri("http://127.0.0.1:1234/v1") }
+    new OpenAIClientOptions
+    {
+        Endpoint = new Uri("http://127.0.0.1:1234/v1")
+    } 
 ).GetChatClient("google/gemma4-e4b");
-
 
 Console.WriteLine("Ready\n");
 
 while (true)
 {
-    Console.Write($"({tokenizer.CountTokens(context.ChatMessages)} tok) > ");
+    Console.Write($"({tokenizer.CountTokens(context.ChatMessages)} tokens) > ");
     var input = Console.ReadLine();
-    if (string.IsNullOrWhiteSpace(input)) break;
+    
+    if (string.IsNullOrWhiteSpace(input))
+    {
+        break;
+    }
 
     context.ChatContext.InsertUser(input);
 
-    var runner = new AgentRunner<SimpleChatContext, AgentVoidResult>(agent, context, observer, client);
-    await runner.RunAsync();
+    var runner = new AgentRunner<SimpleChatContext>(
+        observer,
+        client,
+        agent,
+        null,
+        context,
+        CancellationToken.None
+    );
+
+    while (true)
+    {
+        var turnResult = await runner.ExecuteTurn();
+        
+        Console.WriteLine($"Turn: {turnResult}");
+
+        if (runner.IsFinished)
+        {
+            break;
+        }
+    }
 }
