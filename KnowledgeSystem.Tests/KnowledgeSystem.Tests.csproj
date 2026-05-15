@@ -20,6 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Hnsw\KnowledgeSystem.Hnsw.csproj" />
       <ProjectReference Include="..\KnowledgeSystem\KnowledgeSystem.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj" />

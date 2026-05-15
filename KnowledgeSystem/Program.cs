@@ -1,6 +1,7 @@
 using System.ClientModel;
 using KnowledgeSystem;
 using KnowledgeSystem.Agent;
+using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Retrieval;
@@ -44,6 +45,8 @@ var client = new OpenAIClient(
     } 
 ).GetChatClient("google/gemma4-e4b");
 
+var compactor = new ContextCompactor(tokenizer, client, maxContextTokens: 14000);
+
 Console.WriteLine("Ready\n");
 
 while (true)
@@ -78,4 +81,6 @@ while (true)
             break;
         }
     }
+
+    await compactor.CompactAsync(context.ChatContext);
 }
