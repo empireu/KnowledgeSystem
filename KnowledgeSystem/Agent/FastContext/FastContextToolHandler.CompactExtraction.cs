@@ -1,96 +1,19 @@
-using System.Text;
-using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Agents.Orchestration.Tools;
-using KnowledgeSystem.Agents.Tools;
+﻿using System.Text;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Retrieval;
-using Microsoft.Extensions.DependencyInjection;
-// ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Agent;
+namespace KnowledgeSystem.Agent.FastContext;
 
-public sealed class FastContextToolHandler(
-    AgentTool tool,
-    StringArgument queryArgument,
-    IServiceProvider serviceProvider,
-    int maxCharsForRawResult
-) : ToolHandler<ConversationalContext>.Plain(tool)
+public sealed partial class FastContextToolHandler
 {
-    private static readonly HashSet<string> BlacklistedWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "the", "and", "for", "are", "but", "not", "you", "all", "can", "had", 
-        "her", "was", "one", "our", "out", "day", "get", "has", "him", "his",
-        "how", "its", "may", "new", "now", "old", "see", "two", "who", "boy", 
-        "did", "she", "use", "way", "many", "sit", "set", "run", "ago", "off",
-        "too", "any", "say", "try", "ask", "end", "why", "let", "put", "own",
-        "tell", "very", "when", "much", "would", "there", "their", "what", "said",
-        "each", "which", "will", "about", "could", "other", "after", "first", 
-        "never", "these", "think", "where", "being", "every", "great", "might",
-        "shall", "still", "those", "while", "this", "that", "with", "have", "from",
-        "they", "know", "want", "been", "good", "some", "time", "than", "them", "well", "were"
-    };
-
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, int maxChars)
-    {
-        var searchTool = new ToolBuilder("fast_context")
-            .WithDescription("Searches the knowledge base for all information related to the topic. Provide a rich sentence to maximize recall!")
-            .WithRequiredStringArgument("query", "The search query.", out var queryArg)
-            .Build();
-        
-        var handler = new FastContextToolHandler(searchTool, queryArg, serviceProvider, maxChars);
-        
-        registry.RegisterTool(searchTool, handler);
-    }
-
-    public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, ConversationalContext runContext, CancellationToken cancellationToken)
-    {
-        var query = queryArgument.GetValue(args);
-
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return Error("fast_context: Empty query argument!");
-        }
-
-        var retrieval = ActivatorUtilities.CreateInstance<FastContextRetrieval>(serviceProvider, new FastContextRetrieval.Description
-        {
-            Query = query,
-            BootstrapCount = 15
-        });
-
-        await retrieval.PrepareForRun(cancellationToken);
-
-        int chars;
-        do
-        {
-            chars = retrieval.Step(10);
-        } while (!retrieval.IsExhausted && chars < maxCharsForRawResult);
-
-        var results = retrieval.ReferencedDocuments.Values.ToList();
-        results.Sort((a, b) => a.AverageScore.CompareTo(b.AverageScore));
-
-        var sb = new StringBuilder();
-
-        if (chars > maxCharsForRawResult)
-        {
-            CompactExtraction(sb, query, results);
-        }
-        else
-        {
-            DirectExtraction(sb, results);
-        }
-       
-
-        return Success(sb.ToString());
-    }
-
     /// <summary>
     ///     Pulls and formats references so the content can be inspected with other tools.
     /// </summary>
-    private static void CompactExtraction(StringBuilder sb, string query, List<FastContextRetrieval.ReferencedDocument> results)
+    private void CompactExtraction(StringBuilder sb, string query, List<FastContextRetrieval.ReferencedDocument> results)
     {
-        sb.AppendLine("fast_context: Too much content found. Here are the paths, offsets `a,b`, sections `@XXX` (if they exist), and snippets `'…and the query is…':x,y` of the most relevant results for targeted inspection:");
+        sb.AppendLine("fast_context: Too much content found. Here are the paths, offsets `a,b`, sections written as `@XXX` (if they exist), and snippets with their offsets `'…and the query is…':x,y` of the most relevant results for targeted inspection:");
 
-        var tokens = TokenizeQuery(query);
+        var tokens = TokenizeQuery(query, config.TokenizerBlacklist);
 
         string? currentDir = null;
         foreach (var referencedDocument in results)
@@ -127,15 +50,16 @@ public sealed class FastContextToolHandler(
                 }
 
                 var nodeText = content[start..end];
-                AppendSnippets(sb, nodeText, start, tokens);
+
+                AppendSnippets(sb, nodeText, start, tokens, config.SnippetContext, config.MaxWindows, config.DesiredSnippets);
             }
         }
     }
 
     /// <summary>
-    ///     Tokenizes the query into specific words (excludes the <see cref="BlacklistedWords"/>). The result includes the query itself.
+    ///     Tokenizes the query into specific words (excludes the <see cref="DefaultBlacklistedWords"/>). The result includes the query itself.
     /// </summary>
-    internal static string[] TokenizeQuery(string query)
+    internal static string[] TokenizeQuery(string query, HashSet<string>? blacklist = null)
     {
         query = query.Trim();
 
@@ -143,7 +67,9 @@ public sealed class FastContextToolHandler(
         {
             return [];
         }
-        
+
+        blacklist ??= DefaultBlacklistedWords;
+
         var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             // Always include the full query string for exact matches:
@@ -170,7 +96,7 @@ public sealed class FastContextToolHandler(
                 {
                     var word = query[wordStart..queryTextIndex];
 
-                    if (!BlacklistedWords.Contains(word))
+                    if (!blacklist.Contains(word))
                     {
                         tokens.Add(word);
                     }
@@ -182,14 +108,21 @@ public sealed class FastContextToolHandler(
 
         return tokens.ToArray();
     }
-    
+
     /// <summary>
     ///     Searches <paramref name="nodeText"/> line-by-line for occurrences of <paramref name="tokens"/>.
     ///     For each match, captures a small window of surrounding text.
     ///     Overlapping windows on the same line are merged, then snippets are printed with their document offsets.
     ///     Regions are selected greedily to maximize token coverage so each token gets at least one representation where possible.
     /// </summary>
-    internal static void AppendSnippets(StringBuilder sb, string nodeText, int nodeStartOffset, IReadOnlyList<string> tokens)
+    internal static void AppendSnippets(
+        StringBuilder sb,
+        string nodeText,
+        int nodeStartOffset,
+        IReadOnlyList<string> tokens,
+        int snippetLength,
+        int maxWindows,
+        int desiredSnippets)
     {
         if (nodeText.Length == 0 || tokens.Count == 0)
         {
@@ -200,14 +133,7 @@ public sealed class FastContextToolHandler(
         var searchIndices = new int[tokens.Count];
         var exhausted = new bool[tokens.Count];
 
-        // Characters of context on each side of a match:
-        const int snippetLength = 35;
-        
-        // Hard cap on total match windows across all lines:
-        const int maxWindows = 10;
-
-        // Scale snippet budget with query tokens, capped to keep output compact:
-        var maxSnippets = Math.Min(tokens.Count, 4);
+        var maxSnippets = Math.Max(tokens.Count, desiredSnippets);
 
         var windows = new List<(int Start, int End, int TokenIndex)>();
 
@@ -312,7 +238,8 @@ public sealed class FastContextToolHandler(
         windows.Sort((a, b) => a.Start.CompareTo(b.Start));
 
         var merged = new List<(int Start, int End, HashSet<int> TokenIndices)>();
-        var (matchStart, matchEnd, matchTokens) = (windows[0].Start, windows[0].End, new HashSet<int> { windows[0].TokenIndex });
+        var (matchStart, matchEnd, matchTokens) =
+            (windows[0].Start, windows[0].End, new HashSet<int> { windows[0].TokenIndex });
         for (var windowIndex = 1; windowIndex < windows.Count; windowIndex++)
         {
             var (windowStart, windowEnd, windowToken) = windows[windowIndex];
@@ -410,26 +337,6 @@ public sealed class FastContextToolHandler(
 
             coveredTokens.UnionWith(region.TokenIndices);
             merged.RemoveAt(bestIndex);
-        }
-    }
-    
-    /// <summary>
-    ///     Formats the content directly in raw form.
-    /// </summary>
-    private static void DirectExtraction(StringBuilder sb, List<FastContextRetrieval.ReferencedDocument> results)
-    {
-        sb.AppendLine($"# fast_context: {results.Count} documents found. Extracted {results.Sum(x => x.BoundingTreesSorted.Count)} sections:");
-        foreach (var referencedDocument in results)
-        {
-            sb.AppendLine($"# Document: {referencedDocument.Document.Path} - {referencedDocument.BoundingTreesSorted.Count} sections");
-
-            foreach (var boundingTree in referencedDocument.BoundingTreesSorted)
-            {
-                var start = boundingTree.Root.StartOffset;
-                var length = boundingTree.Root.EndOffset - start;
-                sb.AppendLine(referencedDocument.Document.Content.Substring(start, length));
-                sb.AppendLine();
-            }
         }
     }
 }

@@ -1,3 +1,4 @@
+using KnowledgeSystem.Agent.FastContext;
 using KnowledgeSystem.Agents.Orchestration;
 using OpenAI.Chat;
 
@@ -7,7 +8,7 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 {
     public ConversationalAgent(string agentId, IServiceProvider serviceProvider) : base(agentId)
     {
-        FastContextToolHandler.Register(ToolRegistry, serviceProvider, 16384);
+        FastContextToolHandler.Register(ToolRegistry, serviceProvider, new FastContextToolConfig());
         RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, 16384);
         TreeToolHandler.Register(ToolRegistry, serviceProvider);
     }

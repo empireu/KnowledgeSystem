@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using KnowledgeSystem.Agent;
+using KnowledgeSystem.Agent.FastContext;
 
 namespace KnowledgeSystem.Tests;
 
@@ -92,7 +93,7 @@ public class FastContextTests
         var sb = new StringBuilder();
         var tokens = new[] { "nonexistent" };
 
-        FastContextToolHandler.AppendSnippets(sb, "some text here", 100, tokens);
+        FastContextToolHandler.AppendSnippets(sb, "some text here", 100, tokens, 35, 10, 4);
 
         Assert.Equal(string.Empty, sb.ToString());
     }
@@ -103,7 +104,7 @@ public class FastContextTests
         var sb = new StringBuilder();
         var tokens = new[] { "target" };
 
-        FastContextToolHandler.AppendSnippets(sb, "prefix target suffix", 50, tokens);
+        FastContextToolHandler.AppendSnippets(sb, "prefix target suffix", 50, tokens, 35, 10, 4);
         var result = sb.ToString();
 
         Assert.Contains("target", result);
@@ -117,7 +118,7 @@ public class FastContextTests
         var tokens = new[] { "match" };
         const int nodeStartOffset = 100;
 
-        FastContextToolHandler.AppendSnippets(sb, "some match here", nodeStartOffset, tokens);
+        FastContextToolHandler.AppendSnippets(sb, "some match here", nodeStartOffset, tokens, 35, 10, 4);
         var result = sb.ToString();
         
         Assert.Contains(":100,115", result);
@@ -129,7 +130,7 @@ public class FastContextTests
         var sb = new StringBuilder();
         var tokens = new[] { "TARGET" };
 
-        FastContextToolHandler.AppendSnippets(sb, "prefix target suffix", 0, tokens);
+        FastContextToolHandler.AppendSnippets(sb, "prefix target suffix", 0, tokens, 35, 10, 4);
         var result = sb.ToString();
 
         Assert.Contains("target", result);
@@ -142,7 +143,7 @@ public class FastContextTests
         var tokens = new[] { "alpha", "bravo" };
         var text = "first alpha second\nthird bravo fourth";
 
-        FastContextToolHandler.AppendSnippets(sb, text, 0, tokens);
+        FastContextToolHandler.AppendSnippets(sb, text, 0, tokens, 35, 10, 4);
         var result = sb.ToString();
 
         Assert.Contains("alpha", result);
@@ -156,7 +157,7 @@ public class FastContextTests
         var tokens = new[] { "hit" };
         const string text = "hit one two three four hit";
 
-        FastContextToolHandler.AppendSnippets(sb, text, 0, tokens);
+        FastContextToolHandler.AppendSnippets(sb, text, 0, tokens, 35, 10, 4);
         var result = sb.ToString();
 
         var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -170,7 +171,7 @@ public class FastContextTests
         var tokens = new[] { "target" };
         const string text = "prefix\ntarget\nsuffix";
 
-        FastContextToolHandler.AppendSnippets(sb, text, 0, tokens);
+        FastContextToolHandler.AppendSnippets(sb, text, 0, tokens, 35, 10, 4);
         var result = sb.ToString();
 
         Assert.Contains("target", result);
@@ -185,7 +186,7 @@ public class FastContextTests
         var tokens = new[] { "lit" };
         const string text = "little majesty";
 
-        FastContextToolHandler.AppendSnippets(sb, text, 0, tokens);
+        FastContextToolHandler.AppendSnippets(sb, text, 0, tokens, 35, 10, 4);
         var result = sb.ToString();
 
         Assert.Contains("little", result);
@@ -197,7 +198,7 @@ public class FastContextTests
         var sb = new StringBuilder();
         var tokens = new[] { "anything" };
 
-        FastContextToolHandler.AppendSnippets(sb, "", 0, tokens);
+        FastContextToolHandler.AppendSnippets(sb, "", 0, tokens, 35, 10, 4);
 
         Assert.Equal(string.Empty, sb.ToString());
     }
@@ -207,7 +208,7 @@ public class FastContextTests
     {
         var sb = new StringBuilder();
 
-        FastContextToolHandler.AppendSnippets(sb, "some text", 0, Array.Empty<string>());
+        FastContextToolHandler.AppendSnippets(sb, "some text", 0, Array.Empty<string>(), 35, 10, 4);
 
         Assert.Equal(string.Empty, sb.ToString());
     }
@@ -219,7 +220,7 @@ public class FastContextTests
         var tokens = new[] { "middle" };
         const string text = "alpha beta gamma middle delta epsilon zeta";
 
-        FastContextToolHandler.AppendSnippets(sb, text, 10, tokens);
+        FastContextToolHandler.AppendSnippets(sb, text, 10, tokens, 35, 10, 4);
         var result = sb.ToString();
 
         Assert.Contains("middle", result);
