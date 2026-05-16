@@ -48,4 +48,7 @@ await engine.InitializeAsync();
 
 host.AddApplicationCommandModule<MqrModule>();
 
+var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(MqrModule.CancelAllActiveRuns);
+
 await host.RunAsync();

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using KnowledgeSystem.Discord.Conversation;
 using Microsoft.Extensions.Logging;
 using NetCord;
@@ -14,6 +15,17 @@ public class MqrModule(
     DiscordObserverFactory factory
 ) : ApplicationCommandModule<ApplicationCommandContext>
 {
+    private static readonly ConcurrentDictionary<ulong, CancellationTokenSource> ActiveRuns = new();
+    private static readonly TimeSpan AgentTimeout = TimeSpan.FromMinutes(14);
+
+    public static void CancelAllActiveRuns()
+    {
+        foreach (var kvp in ActiveRuns)
+        {
+            kvp.Value.Cancel();
+        }
+    }
+
     [SlashCommand("ask", "Ask MQR a single question")]
     public async Task AskAsync([SlashCommandParameter] string message)
     {
@@ -22,27 +34,15 @@ public class MqrModule(
         var target = new InteractionMessageTarget(Context.Interaction);
         var observer = factory.Create(target);
 
-        // The observer handles all message updates. TODO this is sort of a crappy pattern
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await conversationManager.AskAsync(message, observer, CancellationToken.None);
-            }
-            catch (Exception conversationError)
-            {
-                logger.LogError(conversationError, "Background agent execution failed in /mqr ask");
-                
-                try
-                {
-                    await target.UpdateContentAsync($"An error occurred: {conversationError.Message}");
-                }
-                catch(Exception exD)
-                {
-                    logger.LogError(exD, "Discord error occurred");
-                }
-            }
-        });
+        var cts = new CancellationTokenSource(AgentTimeout);
+        ActiveRuns[Context.Interaction.Id] = cts;
+
+        _ = RunAgentSafely(
+            conversationManager.AskAsync(message, observer, cts.Token),
+            target,
+            "Agent execution failed in /mqr ask",
+            Context.Interaction.Id
+        );
     }
 
     [SlashCommand("unleash", "Start a persistent AI conversation thread")]
@@ -81,28 +81,16 @@ public class MqrModule(
 
             var target = new ChannelMessageTarget(Context.Client.Rest, thread.Id, statusMessage.Id);
             var observer = factory.Create(target);
-            
-            // TODO this is sort of a crappy pattern
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await conversation.RunToCompletionAsync(message, observer, CancellationToken.None);
-                }
-                catch (Exception agentError)
-                {
-                    logger.LogError(agentError, "Background agent execution failed in thread {thread}", thread.Id);
-                 
-                    try
-                    {
-                        await target.UpdateContentAsync($"An error occurred: {agentError.Message}");
-                    }
-                    catch(Exception exD)
-                    {
-                        logger.LogError(exD, "Discord communication error");
-                    }
-                }
-            });
+
+            var cts = new CancellationTokenSource(AgentTimeout);
+            ActiveRuns[thread.Id] = cts;
+
+            _ = RunAgentSafely(
+                conversation.RunToCompletionAsync(message, observer, cts.Token),
+                target,
+                "Agent execution failed in thread {threadId}",
+                thread.Id
+            );
         }
         catch (Exception ex)
         {
@@ -115,6 +103,35 @@ public class MqrModule(
             {
                 // Interaction may have already been updated
             }
+        }
+    }
+
+    private async Task RunAgentSafely(Task agentTask, IDiscordMessageTarget target, string logMessage, ulong runKey)
+    {
+        try
+        {
+            await agentTask;
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogInformation("Agent task was cancelled for run {RunKey}", runKey);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, logMessage, runKey);
+
+            try
+            {
+                await target.UpdateContentAsync($"An error occurred: {ex.Message}");
+            }
+            catch (Exception discordEx)
+            {
+                logger.LogError(discordEx, "Discord communication error for run {RunKey}", runKey);
+            }
+        }
+        finally
+        {
+            ActiveRuns.TryRemove(runKey, out _);
         }
     }
 }
