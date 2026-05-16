@@ -26,4 +26,6 @@ public class ChatOptions
 
     [Required] 
     public string TokenizerDir { get; set; } = null!;
+    
+    public bool Verbose { get; set; } = false;
 }

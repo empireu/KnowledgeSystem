@@ -6,6 +6,7 @@ using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Discord.Conversation;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NetCord;
 using NetCord.Rest;
 
@@ -15,22 +16,19 @@ namespace KnowledgeSystem.Discord;
 ///     Observes agent execution and updates a single Discord message in-place.
 ///     Tool calls/results are shown as blockquote status lines during processing; the final assistant message replaces everything with a rich embed.
 /// </summary>
-public sealed class DiscordObserver : IAgentObserver
+public sealed class DiscordObserver(
+    ILogger<DiscordObserver> logger,
+    IConversationManager conversationManager,
+    IDiscordMessageTarget target,
+    IOptions<ChatOptions> options
+) : IAgentObserver
 {
-    private readonly ILogger<DiscordObserver> _logger;
-    private readonly IConversationManager _conversationManager;
-    private readonly IDiscordMessageTarget _target;
+    private const bool IncludeToolCallsInFinalOutput = false;
+
     private readonly List<ToolStatusEntry> _toolStatus = [];
     private string? _finalResponse;
     private int? _finalConversationTokenCount;
     private bool _hasError;
-
-    public DiscordObserver(ILogger<DiscordObserver> logger, IConversationManager conversationManager, IDiscordMessageTarget target)
-    {
-        _target = target;
-        _logger = logger;
-        _conversationManager = conversationManager;
-    }
 
     private string BuildStatusContent()
     {
@@ -90,7 +88,7 @@ public sealed class DiscordObserver : IAgentObserver
         if (runner is AgentRunner<ConversationalContext> chatRunner)
         {
             var messages = chatRunner.ExecutionContext.ChatMessages;
-            _finalConversationTokenCount = _conversationManager.TokenEstimator.CountTokens(messages);
+            _finalConversationTokenCount = conversationManager.TokenEstimator.CountTokens(messages);
         }
         
         await UpdateMessageAsync(cancellationToken);
@@ -117,11 +115,11 @@ public sealed class DiscordObserver : IAgentObserver
 
             try
             {
-                await _target.SetEmbedAsync(embed, cancellationToken);
+                await target.SetEmbedAsync(embed, cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to update Discord message with error embed");
+                logger.LogWarning(ex, "Failed to update Discord message with error embed");
             }
         }
     }
@@ -143,7 +141,7 @@ public sealed class DiscordObserver : IAgentObserver
                     .WithTimestamp(DateTimeOffset.UtcNow)
                     .WithFooter(new EmbedFooterProperties { Text = "MQR Agent" });
 
-                if (_toolStatus.Count > 0)
+                if (options.Value.Verbose && _toolStatus.Count > 0)
                 {
                     var toolSummary = string.Join("\n", _toolStatus.Select(e => e.ToCompactMarkdown()));
                    
@@ -163,17 +161,17 @@ public sealed class DiscordObserver : IAgentObserver
                     );
                 }
 
-                await _target.SetEmbedAsync(embed, cancellationToken);
+                await target.SetEmbedAsync(embed, cancellationToken);
             }
             else
             {
                 // Still processing — update content with status
-                await _target.UpdateContentAsync(BuildStatusContent(), cancellationToken);
+                await target.UpdateContentAsync(BuildStatusContent(), cancellationToken);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to update Discord message");
+            logger.LogWarning(ex, "Failed to update Discord message");
         }
     }
 
@@ -198,18 +196,18 @@ public sealed class DiscordObserver : IAgentObserver
 
         public string ToMarkdown() => State switch
         {
-            ToolState.Running => $"◌ **`{ToolId}`**({Arguments})",
-            ToolState.Completed => $"✓ **`{ToolId}`**({Arguments})",
-            ToolState.Failed => $"✗ **`{ToolId}`**({Arguments}) — {Error}",
-            _ => $"**`{ToolId}`**({Arguments})"
+            ToolState.Running => $"◌ *{ToolId}*({Arguments})",
+            ToolState.Completed => $"✓ *{ToolId}*({Arguments})",
+            ToolState.Failed => $"✗ *{ToolId}*({Arguments}) — {Error}",
+            _ => $"*{ToolId}*({Arguments})"
         };
 
         public string ToCompactMarkdown() => State switch
         {
-            ToolState.Running => $"◌ `{ToolId}`",
-            ToolState.Completed => $"✓ `{ToolId}`",
-            ToolState.Failed => $"✗ `{ToolId}` — {Error}",
-            _ => $"`{ToolId}`"
+            ToolState.Running => $"◌ *{ToolId}*",
+            ToolState.Completed => $"✓ *{ToolId}*",
+            ToolState.Failed => $"✗ *{ToolId}* — {Error}",
+            _ => $"*{ToolId}*"
         };
     }
 }
