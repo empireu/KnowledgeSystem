@@ -45,7 +45,7 @@ public class MqrModule(
         );
     }
 
-    [SlashCommand("unleash", "Start a persistent AI conversation thread")]
+    [SlashCommand("unleash", "Start a persistent MQR conversation thread")]
     public async Task UnleashAsync([SlashCommandParameter] string message)
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
