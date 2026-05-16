@@ -12,6 +12,7 @@ namespace KnowledgeSystem.Agent.FastContext;
 public sealed partial class FastContextToolHandler(
     AgentTool tool,
     StringArgument queryArgument,
+    StringArgument pathFilterArgument,
     IServiceProvider serviceProvider,
     FastContextToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
@@ -19,11 +20,12 @@ public sealed partial class FastContextToolHandler(
     public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, FastContextToolConfig config)
     {
         var searchTool = new ToolBuilder("fast_context")
-            .WithDescription("Searches the knowledge base for all information related to the topic. Provide a rich sentence to maximize recall!")
-            .WithRequiredStringArgument("query", "The search query.", out var queryArg)
+            .WithDescription("Searches the knowledge base for all information related to the topic. Provide a rich sentence to maximize recall! Optionally filter by file path.")
+            .WithRequiredStringArgument("query", "A rich, descriptive sentence describing the information needed. More detail improves recall.", out var queryArg)
+            .WithStringArgument("pathFilter", "Optional case-insensitive regex that filters which file paths to include (e.g., 'docs' or '\\.md$'). Only use when the query targets specific files or directories.", out var filterArg)
             .Build();
         
-        var handler = new FastContextToolHandler(searchTool, queryArg, serviceProvider, config);
+        var handler = new FastContextToolHandler(searchTool, queryArg, filterArg, serviceProvider, config);
         
         registry.RegisterTool(searchTool, handler);
     }
@@ -31,18 +33,29 @@ public sealed partial class FastContextToolHandler(
     public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, ConversationalContext runContext, CancellationToken cancellationToken)
     {
         var query = queryArgument.GetValue(args);
-
+        var pathFilter = pathFilterArgument.GetValueOrNull(args);
+        
         if (string.IsNullOrWhiteSpace(query))
         {
             return Error("fast_context: Empty query argument!");
         }
 
-        var retrieval = ActivatorUtilities.CreateInstance<FastContextRetrieval>(serviceProvider, new FastContextRetrieval.Description
+        FastContextRetrieval retrieval;
+        
+        try
         {
-            Query = query,
-            BootstrapCount = config.BootstrapCount,
-            Parameter = config.Parameter
-        });
+            retrieval = ActivatorUtilities.CreateInstance<FastContextRetrieval>(serviceProvider, new FastContextRetrieval.Description
+            {
+                Query = query,
+                BootstrapCount = config.BootstrapCount,
+                Parameter = config.Parameter,
+                FilePathPattern = pathFilter
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return Error($"fast_context: Failed to construct regex: {ex.Message}");
+        }
 
         await retrieval.PrepareForRun(cancellationToken);
 

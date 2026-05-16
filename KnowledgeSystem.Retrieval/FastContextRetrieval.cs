@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Numerics.Tensors;
+using System.Text.RegularExpressions;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Hnsw;
@@ -17,6 +18,7 @@ public sealed class FastContextRetrieval
     private readonly string _query;
     private readonly int _bootstrapCount;
     private readonly float _parameter;
+    private readonly FileFilter? _filePathFilter;
 
     private float[] _embedding = [];
     private bool _preparedForRun;
@@ -48,6 +50,18 @@ public sealed class FastContextRetrieval
         _query = description.Query;
         _bootstrapCount = description.BootstrapCount;
         _parameter = description.Parameter;
+        
+        // P.S. If we ever use this in some other place, we need to change the error handling.
+        if (!string.IsNullOrWhiteSpace(description.FilePathPattern))
+        {
+            var regex = new Regex(
+                description.FilePathPattern, 
+                RegexOptions.Compiled | RegexOptions.IgnoreCase,
+                TimeSpan.FromSeconds(1.0)
+            );
+            
+            _filePathFilter = new FileFilter(regex);
+        }
     }
 
     /// <summary>
@@ -67,6 +81,30 @@ public sealed class FastContextRetrieval
         _embedding = results.ToArray();
         _preparedForRun = true;
     }
+
+    private bool Predicate(int vector)
+    {
+        if (VisitedVectors.Contains(vector))
+        {
+            return false;
+        }
+
+        var filter = _filePathFilter;
+        if (filter == null)
+        {
+            return true;
+        }
+
+        if (!filter.MemoizedResults.TryGetValue(vector, out var result))
+        {
+            var chunk = _engine.ChunkByHnswId[vector];
+            var path = chunk.Node.Document.Path;
+            result = filter.Matcher.IsMatch(path);
+            filter.MemoizedResults.Add(vector, result);
+        }
+
+        return result;
+    }
     
     /// <summary>
     ///     Fetches more results for the query and updates the bounding tree of the results.
@@ -80,11 +118,9 @@ public sealed class FastContextRetrieval
         {
             throw new InvalidOperationException("Not prepared for step!");
         }
-
-        var skipExcludedPredicate = new Predicate<int>(i => !VisitedVectors.Contains(i));
         
         var fetchCount = _centroidBootstrapped ? count : _bootstrapCount;
-        var vectorResults = _engine.Search(_embedding, fetchCount, predicate: skipExcludedPredicate);
+        var vectorResults = _engine.Search(_embedding, fetchCount, predicate: Predicate);
 
         if (vectorResults.Length == 0)
         {
@@ -259,8 +295,20 @@ public sealed class FastContextRetrieval
         ///     Suggested range: [5, 8].
         /// </summary>
         public float Parameter { get; init; } = 5;
+        
+        /// <summary>
+        ///     Regex filter applied to the file paths.
+        /// </summary>
+        public string? FilePathPattern { get; init; }
     }
 
+    private sealed class FileFilter(Regex matcher)
+    {
+        public readonly Regex Matcher = matcher;
+
+        public readonly Dictionary<int, bool> MemoizedResults = [];
+    }
+    
     public sealed class ReferencedDocument(EmdDocument document)
     {
         public readonly EmdDocument Document = document;

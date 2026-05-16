@@ -52,8 +52,10 @@ public sealed class StringArgument(string argumentName, string argumentDescripti
             throw new InvalidOperationException($"Argument \"{ArgumentName}\" was not provided.");
         }
         
-        return value!;
+        return value;
     }
+    
+    public string? GetValueOrNull(ArgumentExtractionResult result) => TryGetValue(result, out var value) ? value : null;
 }
 
 public sealed class IntegerArgument(string argumentName, string argumentDescription) : ToolArgument(argumentName, argumentDescription)
