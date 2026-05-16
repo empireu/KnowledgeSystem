@@ -69,7 +69,7 @@ public sealed partial class MutableHnswIndex
                     }
 
                     // Search from the neighbor's own position to find its best candidates:
-                    SearchLayer(searchData, neighbor.VectorView, neighbor, layer, ExplorationFactorConstruction);
+                    SearchLayer(searchData, neighbor.VectorView, neighbor, layer, ExplorationFactorConstruction, null);
 
                     var resultsQueue = searchData.ResultsQueue;
                     resultsBuffer.Clear();

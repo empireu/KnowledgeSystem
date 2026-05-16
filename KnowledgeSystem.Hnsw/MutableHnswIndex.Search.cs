@@ -6,7 +6,7 @@ public sealed partial class MutableHnswIndex
     ///     Greedy best-first search within a single HNSW layer, expanding up to <see cref="explorationFactor"/> candidates.
     ///     Corresponds to Algorithm 2.
     /// </summary>
-    private void SearchLayer(SearchData data, ReadOnlySpan<float> query, StoredVectorImpl entry, int layer, int explorationFactor, IReadOnlySet<int>? excludedIndices = null)
+    private void SearchLayer(SearchData data, ReadOnlySpan<float> query, StoredVectorImpl entry, int layer, int explorationFactor, Predicate<int>? predicate)
     {
         data.Clear();
         data.EnsureCapacity(VectorsInternal.Count);
@@ -25,7 +25,7 @@ public sealed partial class MutableHnswIndex
         candidates.Enqueue(entry.Index, initialScore);
  
         // Entry point is added to candidates for traversal, but only to results if not excluded:
-        if (excludedIndices == null || !excludedIndices.Contains(entry.Index))
+        if (predicate == null || predicate(entry.Index))
         {
             resultsQueue.Enqueue(entry.Index, -initialScore);
         }
@@ -58,7 +58,7 @@ public sealed partial class MutableHnswIndex
  
                 visited[neighbor] = generation;
  
-                var neighborExcluded = excludedIndices != null && excludedIndices.Contains(neighbor);
+                var neighborExcluded = predicate != null && !predicate(neighbor);
  
                 if (neighborExcluded)
                 {
@@ -79,7 +79,7 @@ public sealed partial class MutableHnswIndex
                         visited[twoHopNeighbor] = generation;
  
                         var twoHopScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[twoHopNeighbor]!.VectorView);
-                        var twoHopExcluded = excludedIndices!.Contains(twoHopNeighbor);
+                        var twoHopExcluded = !predicate!(twoHopNeighbor);
  
                         // Always add to candidates for traversal, even if excluded, to maintain connectivity:
                         candidates.Enqueue(twoHopNeighbor, twoHopScore);
@@ -127,10 +127,10 @@ public sealed partial class MutableHnswIndex
     /// <param name="query">A vector matching the <see cref="Dimension"/>.</param>
     /// <param name="k">The maximum number of vectors to explore.</param>
     /// <param name="efSearch">The exploration factor.</param>
-    /// <param name="excludedIndices">Vectors excluded from the results.</param>
+    /// <param name="predicate">Filter.</param>
     /// <returns>The found vectors.</returns>
     /// <exception cref="ArgumentException">Thrown if the <see cref="query"/>'s dimension does not match <see cref="Dimension"/>.</exception>
-    public VectorSearchResult[] Search(ReadOnlySpan<float> query, int k, int efSearch = 200, IReadOnlySet<int>? excludedIndices = null)
+    public VectorSearchResult[] Search(ReadOnlySpan<float> query, int k, int efSearch = 200, Predicate<int>? predicate = null)
     {
         if (query.Length != Dimension)
         {
@@ -180,7 +180,7 @@ public sealed partial class MutableHnswIndex
 
         try
         {
-            SearchLayer(searchData, query, currentNode, 0, Math.Max(k, efSearch), excludedIndices);
+            SearchLayer(searchData, query, currentNode, 0, Math.Max(k, efSearch), predicate);
 
             var queue = searchData.ResultsQueue;
             var count = Math.Min(k, queue.Count);

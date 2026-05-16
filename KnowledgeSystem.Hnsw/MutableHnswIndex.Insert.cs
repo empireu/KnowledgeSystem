@@ -272,7 +272,7 @@ public sealed partial class MutableHnswIndex
              {
                  _resultsBuffer.Clear();
 
-                 SearchLayer(searchData, vector.VectorView, currentNode, layer, ExplorationFactorConstruction);
+                 SearchLayer(searchData, vector.VectorView, currentNode, layer, ExplorationFactorConstruction, null);
 
                  // Results are in reverse order. We will pull them into a buffer and read it backward:
                  var resultsQueue = searchData.ResultsQueue;

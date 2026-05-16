@@ -397,7 +397,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
             normalResults[2].Index
         };
         
-        var excludedResults = index.Search(query, 10, efSearch: 200, excludedIndices: excluded);
+        var excludedResults = index.Search(query, 10, efSearch: 200, predicate: i => !excluded.Contains(i));
 
         Assert.DoesNotContain(excludedResults, r => excluded.Contains(r.Index));
         Assert.Equal(10, excludedResults.Length);
@@ -412,7 +412,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
         var query = GetTestVector(random, Dimension);
         var normalResults = index.Search(query, 10, efSearch: 200);
-        var nullExcludedResults = index.Search(query, 10, efSearch: 200, excludedIndices: null);
+        var nullExcludedResults = index.Search(query, 10, efSearch: 200, predicate: null);
 
         Assert.Equal(normalResults.Length, nullExcludedResults.Length);
         for (var i = 0; i < normalResults.Length; i++)
@@ -432,13 +432,13 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
         var page1 = index.Search(query, 5, efSearch: 200);
         var excluded = new HashSet<int>(page1.Select(r => r.Index));
-        var page2 = index.Search(query, 5, efSearch: 200, excludedIndices: excluded);
+        var page2 = index.Search(query, 5, efSearch: 200, predicate: i => !excluded.Contains(i));
 
         foreach (var r in page2)
         {
             excluded.Add(r.Index);
         }
-        var page3 = index.Search(query, 5, efSearch: 200, excludedIndices: excluded);
+        var page3 = index.Search(query, 5, efSearch: 200, predicate: i => !excluded.Contains(i));
 
         // All results across pages should be distinct:
         var allIndices = page1.Select(r => r.Index)

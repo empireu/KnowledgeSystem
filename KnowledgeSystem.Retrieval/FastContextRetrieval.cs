@@ -80,9 +80,11 @@ public sealed class FastContextRetrieval
         {
             throw new InvalidOperationException("Not prepared for step!");
         }
+
+        var skipExcludedPredicate = new Predicate<int>(i => !VisitedVectors.Contains(i));
         
         var fetchCount = _centroidBootstrapped ? count : _bootstrapCount;
-        var vectorResults = _engine.Search(_embedding, fetchCount, excludedIndices: VisitedVectors);
+        var vectorResults = _engine.Search(_embedding, fetchCount, predicate: skipExcludedPredicate);
 
         if (vectorResults.Length == 0)
         {
