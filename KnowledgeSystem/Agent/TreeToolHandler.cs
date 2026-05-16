@@ -20,7 +20,7 @@ public sealed class TreeToolHandler(
         var treeTool = new ToolBuilder("tree")
             .WithDescription("Lists the document tree of the knowledge repository. Use this to explore what documents exist before searching.")
             .WithRequiredStringArgument("path", "The directory path prefix to list (e.g. 'docs/' or '' for root).", out var pathArg)
-            .WithBooleanArgument("detailed", "If true, the results will also display the headings inside each document. Don't use it unless your path is very targeted.", out var detailedArg)
+            .WithBooleanArgument("detailed", "If true, displays the headings inside each document. Use these heading names with repo_fetch('file.md@Heading'). Don't use unless your path is very targeted.", out var detailedArg)
             .Build();
 
         var handler = new TreeToolHandler(treeTool, pathArg, detailedArg, serviceProvider);

@@ -20,7 +20,7 @@ public sealed class RepoFetchToolHandler(
     {
         var fetchTool = new ToolBuilder("repo_fetch")
             .WithDescription("Fetches the content of a specific repository reference (file, definition, directory, or offsets).")
-            .WithRequiredStringArgument("reference", "The EmdReferencePath string to fetch.", out var referenceArg)
+            .WithRequiredStringArgument("reference", "The reference to fetch. Formats: 'path/to/file.md@Heading' (section under heading), 'path/to/file.md:100,200' (slice between offsets), or 'path/to/dir/' (directory listing).", out var referenceArg)
             .Build();
         
         var handler = new RepoFetchToolHandler(fetchTool, referenceArg, serviceProvider.GetRequiredService<RagEngine>(), maxChars);
@@ -69,7 +69,7 @@ public sealed class RepoFetchToolHandler(
     {
         var directory = refPath.RepositoryRelativePath;
         var documents = engine.Repo.Documents
-            .Where(x => x.Key.RepositoryRelativePath.StartsWith(directory, StringComparison.InvariantCulture))
+            .Where(x => x.Key.RepositoryRelativePath.StartsWith(directory, StringComparison.OrdinalIgnoreCase))
             .Select(x => x.Value)
             .OrderBy(x => x.Content.Length)
             .ToList();
@@ -100,10 +100,11 @@ public sealed class RepoFetchToolHandler(
 
         if (document.Content.Length > maxChars)
         {
-            return Error("repo_fetch: document too long. Please explore it in sections or by offsets!");
+            return Error($"repo_fetch: document too long ({document.Content.Length} chars, limit {maxChars}). " +
+                         $"Fetch by offsets, e.g. 0,{maxChars}");
         }
 
-        return Success(document.Content);
+        return Success($"# Document: {document.Path}\n\n{document.Content}");
     }
     
     private ToolExecutionResult RepoFetchDefinition(EmdReferencePath refPath)
@@ -121,18 +122,20 @@ public sealed class RepoFetchToolHandler(
             
             if (node == null)
             {
-                var headings = string.Join("\n",
-                    document.AttachedNodes.Values.Where(x => x.RawNode.NodeType.IsHeading())
-                        .Select(x => x.RawNode.Text));
-                return Error("repo_fetch: definition not found in target file!");
+                var headings = string.Join("\n", document.AttachedNodes.Values.Where(x => x.RawNode.NodeType.IsHeading()).Select(x => x.RawNode.Text));
+                return Error($"repo_fetch: definition not found in target file! Available headings:\n{headings}");
             }
         }
 
         var length = node.RawNode.EndOffset - node.RawNode.StartOffset;
 
-        return length > maxChars 
-            ? Error($"repo_fetch: definition too long. Please explore it in offset slices. Offsets of the requested section are: {node.RawNode.StartOffset},{node.RawNode.EndOffset}") 
-            : Success(document.Content.Substring(node.RawNode.StartOffset, node.RawNode.EndOffset - node.RawNode.StartOffset));
+        if (length > maxChars)
+        {
+            return Error($"repo_fetch: definition too long. Please explore it in offset slices. Offsets of the requested section are: {node.RawNode.StartOffset},{node.RawNode.EndOffset}");
+        }
+
+        var sectionContent = document.Content.Substring(node.RawNode.StartOffset, node.RawNode.EndOffset - node.RawNode.StartOffset);
+        return Success($"# Document: {document.Path}\n\n{sectionContent}");
     }
     
     private ToolExecutionResult RepoFetchOffsets(EmdReferencePath refPath)
@@ -164,6 +167,6 @@ public sealed class RepoFetchToolHandler(
         
         var content = document.Content.Substring(refPath.StartOffset, length);
 
-        return Success(content);
+        return Success($"# Document: {document.Path}\n\n{content}");
     }
 }
