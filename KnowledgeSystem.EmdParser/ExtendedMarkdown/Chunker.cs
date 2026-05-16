@@ -229,6 +229,13 @@ public sealed class Chunker(int maxChunkLength)
         {
             sb.AppendLine($"[Document: {node.Document.Path}]");
         }
+
+        // Heading path. Will make retrieval work when a heading is used as the main identifier for a piece of information:
+        var headingPath = BuildHeadingPath(node.RawNode);
+        if (!string.IsNullOrEmpty(headingPath))
+        {
+            sb.AppendLine($"[Headings: {headingPath}]");
+        }
         
         // Offsets:
         sb.AppendLine($"[Offsets: {node.RawNode.StartOffset}, {node.RawNode.EndOffset}]");
@@ -317,5 +324,29 @@ public sealed class Chunker(int maxChunkLength)
         }
 
         return sb.ToString();
+    }
+
+    private static string BuildHeadingPath(MarkdownNode node)
+    {
+        var headings = new List<string>();
+        var current = node.Parent;
+        while (current != null)
+        {
+            if (current.NodeType.IsHeading() && !string.IsNullOrWhiteSpace(current.Text))
+            {
+                headings.Add(current.Text);
+            }
+
+            current = current.Parent;
+        }
+
+        if (headings.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        headings.Reverse();
+        
+        return string.Join(" > ",  headings);
     }
 }

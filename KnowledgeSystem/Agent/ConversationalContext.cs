@@ -4,7 +4,7 @@ using OpenAI.Chat;
 
 namespace KnowledgeSystem.Agent;
 
-public sealed class SimpleChatContext : AgentExecutionContext
+public sealed class ConversationalContext : AgentExecutionContext
 {
     public AgentContext ChatContext { get; } = new();
 

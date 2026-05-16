@@ -32,8 +32,4 @@
       <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Agent\" />
-    </ItemGroup>
-
 </Project>

@@ -7,7 +7,7 @@ namespace KnowledgeSystem.Agents.Helper;
 #pragma warning disable OPENAI001
 public sealed class ExtendedChatCompletionOptions : ChatCompletionOptions
 {
-    public string? ProviderOnly { get; init; }
+    public string? ProviderOnly { get; set; }
         
     protected override void JsonModelWriteCore(Utf8JsonWriter writer, ModelReaderWriterOptions options)
     {

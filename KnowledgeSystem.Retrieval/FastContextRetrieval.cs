@@ -332,12 +332,8 @@ public sealed class FastContextRetrieval
 
                 if (topParent == null)
                 {
-                    throw new Exception(
-                        $"Failed to isolate logical parent for " +
-                        $"{front.Chunk.Node.Document.Path}:" +
-                        $"{front.Chunk.Node.RawNode.StartOffset}," +
-                        $"{front.Chunk.Node.RawNode.EndOffset}"
-                    );
+                    // Possible when the top parent would be the document.
+                    topParent = front.Chunk.Node.RawNode;
                 }
 
                 if (!_boundingTreesByRoot.TryGetValue(topParent, out var boundingTree))

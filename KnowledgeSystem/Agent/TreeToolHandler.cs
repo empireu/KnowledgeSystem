@@ -13,9 +13,9 @@ public sealed class TreeToolHandler(
     StringArgument pathArgument,
     BooleanArgument detailedArgument,
     IServiceProvider serviceProvider
-) : ToolHandler<SimpleChatContext>.Plain(tool) 
+) : ToolHandler<ConversationalContext>.Plain(tool) 
 {
-    public static void Register(AgentToolRegistry<SimpleChatContext> registry, IServiceProvider serviceProvider)
+    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider)
     {
         var treeTool = new ToolBuilder("tree")
             .WithDescription("Lists the document tree of the knowledge repository. Use this to explore what documents exist before searching.")
@@ -28,10 +28,14 @@ public sealed class TreeToolHandler(
         registry.RegisterTool(treeTool, handler);
     }
 
-    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<SimpleChatContext> runner, ArgumentExtractionResult args, SimpleChatContext runContext, CancellationToken cancellationToken)
+    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, ConversationalContext runContext, CancellationToken cancellationToken)
     {
         var path = pathArgument.GetValue(args).Trim('/');
-        var detailed = detailedArgument.GetValue(args);
+        
+        if(!detailedArgument.TryGetValue(args, out var detailed))
+        {
+            detailed = false;
+        }
         
         var engine = serviceProvider.GetRequiredService<RagEngine>();
         var repo = engine.Repo;

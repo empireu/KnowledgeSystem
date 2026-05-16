@@ -148,22 +148,22 @@ public sealed class RagEngine
 
         _logger.LogInformation("Freezing DB. Vectors: {vec}", _hnsw?.Vectors.Sum(x => x == null ? 0 : 1));
         
+        await _db.SaveChangesAsync(cancellationToken);
+        _hnsw?.Save(_options.HnswIndexPath);
+        
         _chunkByHnswId.Clear();
         _hnswIdByChunkHash.Clear();
         var allChunkRecords = await _db.Chunks.ToListAsync(cancellationToken);
         foreach (var record in allChunkRecords)
         {
             var fileKey = EmdReferencePath.CreateFile(record.DocumentPath);
-            if (_repo.Documents.TryGetValue(fileKey, out var doc) &&
-                doc.ChunksByHexHash.TryGetValue(record.HashHex, out var chunk))
+        
+            if (_repo.Documents.TryGetValue(fileKey, out var doc) && doc.ChunksByHexHash.TryGetValue(record.HashHex, out var chunk))
             {
                 _chunkByHnswId[record.HnswId] = chunk;
                 _hnswIdByChunkHash[chunk.Hash] = record.HnswId;
             }
         }
-
-        await _db.SaveChangesAsync(cancellationToken);
-        _hnsw?.Save(_options.HnswIndexPath);
     }
     
     private async Task RemoveDeletedFilesAsync(List<string> deletedPaths, CancellationToken cancellationToken)
