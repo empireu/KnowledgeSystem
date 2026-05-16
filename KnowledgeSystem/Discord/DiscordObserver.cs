@@ -30,6 +30,10 @@ public sealed class DiscordObserver(
     private int? _finalConversationTokenCount;
     private bool _hasError;
 
+    private Task? _pendingUpdate;
+    private readonly SemaphoreSlim _updateLock = new(1, 1);
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(600);
+
     private string BuildStatusContent()
     {
         if (_toolStatus.Count == 0)
@@ -126,12 +130,56 @@ public sealed class DiscordObserver(
 
     private async Task UpdateMessageAsync(CancellationToken cancellationToken)
     {
+        if (_finalResponse != null)
+        {
+            // Final response is always sent immediately
+            await SendUpdateAsync(cancellationToken);
+            return;
+        }
+
+        // Debounce intermediate status updates to avoid Discord rate limits
+        if (_pendingUpdate != null)
+        {
+            return;
+        }
+
+        _pendingUpdate = DebouncedUpdateAsync(cancellationToken);
+        await _pendingUpdate;
+    }
+
+    private async Task DebouncedUpdateAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(DebounceDelay, cancellationToken);
+            await _updateLock.WaitAsync(cancellationToken);
+            try
+            {
+                await SendUpdateAsync(cancellationToken);
+            }
+            finally
+            {
+                _updateLock.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected if superseded by a final-response update
+        }
+        finally
+        {
+            _pendingUpdate = null;
+        }
+    }
+
+    private async Task SendUpdateAsync(CancellationToken cancellationToken)
+    {
         try
         {
             if (_finalResponse != null)
             {
                 // Final response. Use a rich embed:
-                var color = _hasError 
+                var color = _hasError
                     ? new Color(0xFEE75C)
                     : new Color(0x57F287);
 
@@ -144,7 +192,7 @@ public sealed class DiscordObserver(
                 if (options.Value.Verbose && _toolStatus.Count > 0)
                 {
                     var toolSummary = string.Join("\n", _toolStatus.Select(e => e.ToCompactMarkdown()));
-                   
+
                     embed = embed.AddFields(new EmbedFieldProperties()
                         .WithName($"Tools Used ({_toolStatus.Count})")
                         .WithValue(Truncate(toolSummary, 1024))
