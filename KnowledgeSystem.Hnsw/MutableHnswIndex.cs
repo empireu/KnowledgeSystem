@@ -19,11 +19,12 @@ public sealed partial class MutableHnswIndex
     
     internal readonly List<StoredVectorImpl?> VectorsInternal = [];
     private readonly Stack<int> _freeSlots = new();
-    private readonly List<ScoredResult> _resultsBuffer = new(200);
-    private readonly TrimEdgesData _trimEdgesData = new();
-    private readonly List<int> _neighborSnapshotBuffer = [];
+
+    private readonly object _allocationLock = new();
+    private readonly object _graphLock = new();
 
     private readonly ObjectPool<SearchData> _searchDataPool = new DefaultObjectPool<SearchData>(new SearchDataPoolPolicy(), 128);
+    private readonly ObjectPool<InsertContext> _insertContextPool = new DefaultObjectPool<InsertContext>(new InsertContextPoolPolicy(), 128);
 
     private sealed class SearchDataPoolPolicy : IPooledObjectPolicy<SearchData>
     {
@@ -33,6 +34,20 @@ public sealed partial class MutableHnswIndex
         }
 
         public bool Return(SearchData obj)
+        {
+            obj.Clear();
+            return true;
+        }
+    }
+
+    private sealed class InsertContextPoolPolicy : IPooledObjectPolicy<InsertContext>
+    {
+        public InsertContext Create()
+        {
+            return new InsertContext();
+        }
+
+        public bool Return(InsertContext obj)
         {
             obj.Clear();
             return true;
@@ -157,6 +172,26 @@ public sealed partial class MutableHnswIndex
         }
 
         /// <summary>
+        ///     Tries to add an element to the edge list.
+        ///     Returns false if the list is already full.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryAdd(int edge)
+        {
+            var count = Count;
+
+            if (count == EdgeCapacity)
+            {
+                return false;
+            }
+
+            var span = Storage.Block.Span;
+            span[1 + count] = edge;
+            span[0] = count + 1;
+            return true;
+        }
+
+        /// <summary>
         ///     Removes the first occurrence of <paramref name="edge"/> by swapping the last element into its position.
         /// </summary>
         /// <returns>True if the element was found and removed. Otherwise, false.</returns>
@@ -249,6 +284,20 @@ public sealed partial class MutableHnswIndex
             }
 
             return SparseGraphs.Value.Block.Span[index - 1];
+        }
+    }
+    
+    private sealed class InsertContext
+    {
+        public readonly List<ScoredResult> ResultsBuffer = new(200);
+        public readonly TrimEdgesData TrimEdgesData = new();
+        public readonly List<int> NeighborSnapshotBuffer = [];
+
+        public void Clear()
+        {
+            ResultsBuffer.Clear();
+            TrimEdgesData.Clear();
+            NeighborSnapshotBuffer.Clear();
         }
     }
 }

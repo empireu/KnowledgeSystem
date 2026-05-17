@@ -1,4 +1,8 @@
-﻿namespace KnowledgeSystem.Hnsw;
+﻿using System.Runtime.CompilerServices;
+
+// ReSharper disable ForCanBeConvertedToForeach
+
+namespace KnowledgeSystem.Hnsw;
 
 public sealed partial class MutableHnswIndex
 {
@@ -11,9 +15,6 @@ public sealed partial class MutableHnswIndex
         data.Clear();
         data.EnsureCapacity(VectorsInternal.Count);
 
-        var visited = data.Visited;
-        var generation = data.VisitedGeneration;
-
         // Priority is in score order.
         var candidates = data.CandidatesQueue;
 
@@ -21,7 +22,7 @@ public sealed partial class MutableHnswIndex
         var resultsQueue = data.ResultsQueue;
 
         var initialScore = VectorObjective.AdjustedCosineSimilarity(query, entry.VectorView);
-        visited[entry.Index] = generation;
+        data.MarkVisited(entry.Index);
         candidates.Enqueue(entry.Index, initialScore);
  
         // Entry point is added to candidates for traversal, but only to results if not excluded:
@@ -33,6 +34,11 @@ public sealed partial class MutableHnswIndex
         // ReSharper disable once InlineTemporaryVariable
         var vectors = VectorsInternal;
 
+        // Ensure scratch buffers are large enough for edge snapshots.
+        // Max edge count is bounded by EdgeCapacity (MaxConnectionsDense + 1 or MaxConnectionsLane + 1).
+        // Use the larger of the two to cover any layer:
+        data.EnsureScratchCapacity(Math.Max(MaxConnectionsDense, MaxConnectionsLane) + 1);
+
         while (candidates.TryDequeue(out var currentCandidate, out var currentScore))
         {
             // Bounds for the search:
@@ -43,20 +49,32 @@ public sealed partial class MutableHnswIndex
             {
                 break;
             }
+            
+            if (layer > 0 && vectors[currentCandidate]!.TargetLayer < layer)
+            {
+                continue;
+            }
 
             var edges = vectors[currentCandidate]!.GetEdgesInLayer(layer);
+            var edgeCount = edges.Count;
+            data.EnsureScratchCapacity(edgeCount);
+            var edgeSnapshot = data.EdgeScratch.AsSpan(0, edgeCount);
+            for (var e = 0; e < edgeCount; e++)
+            {
+                edgeSnapshot[e] = edges[e];
+            }
 
             // Expand the neighbors of the candidate:
-             for (var i = 0; i < edges.Count; i++)
+            for (var i = 0; i < edgeSnapshot.Length; i++)
             {
-                var neighbor = edges[i];
+                var neighbor = edgeSnapshot[i];
  
-                if (visited[neighbor] == generation)
+                if (data.IsVisited(neighbor))
                 {
                     continue;
                 }
  
-                visited[neighbor] = generation;
+                data.MarkVisited(neighbor);
  
                 var neighborExcluded = predicate != null && !predicate(neighbor);
  
@@ -65,18 +83,32 @@ public sealed partial class MutableHnswIndex
                     // Traverse through excluded nodes but don't add them to results.
                     // Conditional two-hop: expand the excluded node's neighbors to maintain graph connectivity:
                     candidates.Enqueue(neighbor, VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor]!.VectorView));
- 
-                    var twoHopEdges = vectors[neighbor]!.GetEdgesInLayer(layer);
-                    for (var j = 0; j < twoHopEdges.Count; j++)
+
+                    // Skip two-hop expansion if the neighbor doesn't exist at this layer:
+                    if (vectors[neighbor]!.TargetLayer < layer)
                     {
-                        var twoHopNeighbor = twoHopEdges[j];
+                        continue;
+                    }
+
+                    var twoHopEdges = vectors[neighbor]!.GetEdgesInLayer(layer);
+                    var twoHopCount = twoHopEdges.Count;
+                    data.EnsureScratchCapacity(twoHopCount);
+                    var twoHopSnapshot = data.TwoHopScratch.AsSpan(0, twoHopCount);
+                    for (var e = 0; e < twoHopCount; e++)
+                    {
+                        twoHopSnapshot[e] = twoHopEdges[e];
+                    }
+
+                    for (var j = 0; j < twoHopSnapshot.Length; j++)
+                    {
+                        var twoHopNeighbor = twoHopSnapshot[j];
  
-                        if (visited[twoHopNeighbor] == generation)
+                        if (data.IsVisited(twoHopNeighbor))
                         {
                             continue;
                         }
  
-                        visited[twoHopNeighbor] = generation;
+                        data.MarkVisited(twoHopNeighbor);
  
                         var twoHopScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[twoHopNeighbor]!.VectorView);
                         var twoHopExcluded = !predicate!(twoHopNeighbor);
@@ -102,7 +134,7 @@ public sealed partial class MutableHnswIndex
  
                     continue;
                 }
- 
+
                 var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor]!.VectorView);
  
                 resultsQueue.TryPeek(out _, out var currentInverseWorstScore);
@@ -142,44 +174,68 @@ public sealed partial class MutableHnswIndex
             throw new ArgumentException("K cannot be negative");
         }
 
-        if (EntryPointVector == null || k == 0)
+        if (k == 0)
         {
             return [];
         }
-        
-        var currentNode = EntryPointVector;
-        var currentScore = VectorObjective.AdjustedCosineSimilarity(query, currentNode.VectorView);
-        for (var layerIndex = LayerCount - 1; layerIndex > 0; layerIndex--)
+
+        // Snapshot the entry point under _graphLock to ensure we see the highest-layer node and establish a happens-before edge with the first insertion's publication:
+        StoredVectorImpl entryPoint;
+        lock (_graphLock)
         {
-            while (true)
+            if (EntryPointVector == null)
             {
-                var currentNodeEdges = currentNode.GetEdgesInLayer(layerIndex);
-                var minimumChanged = false;
-
-                for (var i = 0; i < currentNodeEdges.Count; i++)
-                {
-                    var neighborNode = VectorsInternal[currentNodeEdges[i]]!;
-                    var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, neighborNode.VectorView);
-
-                    if (neighborScore < currentScore)
-                    {
-                        currentNode = neighborNode;
-                        currentScore = neighborScore;
-                        minimumChanged = true;
-                    }
-                }
-
-                if (!minimumChanged)
-                {
-                    break;
-                }
+                return [];
             }
+
+            entryPoint = EntryPointVector;
         }
-        
+
         var searchData = _searchDataPool.Get();
 
         try
         {
+            // Ensure scratch buffers are sized for edge snapshots during greedy descent:
+            searchData.EnsureScratchCapacity(Math.Max(MaxConnectionsDense, MaxConnectionsLane) + 1);
+
+            var currentNode = entryPoint;
+
+            var currentScore = VectorObjective.AdjustedCosineSimilarity(query, currentNode.VectorView);
+            for (var layerIndex = currentNode.TargetLayer; layerIndex > 0; layerIndex--)
+            {
+                while (true)
+                {
+                    var currentNodeEdges = currentNode.GetEdgesInLayer(layerIndex);
+                    var edgeCount = currentNodeEdges.Count;
+                    searchData.EnsureScratchCapacity(edgeCount);
+                    var edgeSnapshot = searchData.EdgeScratch.AsSpan(0, edgeCount);
+                    for (var e = 0; e < edgeCount; e++)
+                    {
+                        edgeSnapshot[e] = currentNodeEdges[e];
+                    }
+
+                    var minimumChanged = false;
+
+                    for (var i = 0; i < edgeSnapshot.Length; i++)
+                    {
+                        var neighborNode = VectorsInternal[edgeSnapshot[i]]!;
+                        var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, neighborNode.VectorView);
+
+                        if (neighborScore < currentScore && neighborNode.TargetLayer >= layerIndex)
+                        {
+                            currentNode = neighborNode;
+                            currentScore = neighborScore;
+                            minimumChanged = true;
+                        }
+                    }
+
+                    if (!minimumChanged)
+                    {
+                        break;
+                    }
+                }
+            }
+
             SearchLayer(searchData, query, currentNode, 0, Math.Max(k, efSearch), predicate);
 
             var queue = searchData.ResultsQueue;
@@ -214,6 +270,18 @@ public sealed partial class MutableHnswIndex
         public readonly PriorityQueue<int, float> CandidatesQueue = new();
         public readonly PriorityQueue<int, float> ResultsQueue = new();
 
+        /// <summary>
+        ///     Scratch buffer for edge snapshots in <see cref="SearchLayer"/>.
+        ///     Owned by the pooled SearchData, so no per-call allocation.
+        /// </summary>
+        public int[] EdgeScratch = [];
+
+        /// <summary>
+        ///     Scratch buffer for two-hop edge snapshots in <see cref="SearchLayer"/>.
+        ///     Separate from <see cref="EdgeScratch"/> because both can be live simultaneously.
+        /// </summary>
+        public int[] TwoHopScratch = [];
+
         public void Clear()
         {
             VisitedGeneration++;
@@ -225,9 +293,67 @@ public sealed partial class MutableHnswIndex
         {
             if (Visited.Length < capacity)
             {
-                Visited = new int[capacity];
+                Visited = new int[Math.Max(capacity, Visited.Length * 2)];
                 VisitedGeneration = 1;
             }
+        }
+
+        /// <summary>
+        ///     Ensures the scratch buffers are at least <paramref name="capacity"/> in length.
+        ///     Called once at the start of <see cref="SearchLayer"/>, outside the loop.
+        /// </summary>
+        public void EnsureScratchCapacity(int capacity)
+        {
+            if (EdgeScratch.Length < capacity)
+            {
+                EdgeScratch = new int[Math.Max(capacity, EdgeScratch.Length * 2)];
+            }
+
+            if (TwoHopScratch.Length < capacity)
+            {
+                TwoHopScratch = new int[Math.Max(capacity, TwoHopScratch.Length * 2)];
+            }
+        }
+
+        /// <summary>
+        ///     Checks if the given index has been visited in the current generation.
+        ///     If the index is beyond the current capacity (due to concurrent insertion), returns false
+        ///     and grows the visited array to accommodate it.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsVisited(int index)
+        {
+            if (index >= Visited.Length)
+            {
+                GrowVisited(index + 1);
+                return false;
+            }
+
+            return Visited[index] == VisitedGeneration;
+        }
+
+        /// <summary>
+        ///     Marks the given index as visited in the current generation.
+        ///     If the index is beyond the current capacity (due to concurrent insertion), grows the array first.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void MarkVisited(int index)
+        {
+            if (index >= Visited.Length)
+            {
+                GrowVisited(index + 1);
+            }
+
+            Visited[index] = VisitedGeneration;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void GrowVisited(int requiredCapacity)
+        {
+            var newCapacity = Math.Max(requiredCapacity, Visited.Length * 2);
+            var newVisited = new int[newCapacity];
+            Array.Copy(Visited, newVisited, Visited.Length);
+            Visited = newVisited;
         }
     }
 }

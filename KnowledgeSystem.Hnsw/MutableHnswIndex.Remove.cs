@@ -7,6 +7,7 @@ public sealed partial class MutableHnswIndex
 {
     /// <summary>
     ///     Removes a vector from the index, deallocates its storage, and repairs the graph by re-searching from affected neighbors.
+    ///     NOT thread-safe. Must not be called concurrently with <see cref="Insert"/> or other <see cref="Remove"/> calls.
     /// </summary>
     /// <param name="vector">The vector to remove. Must be a vector previously returned by <see cref="Insert"/>.</param>
     /// <returns>True if the vector was found and removed. False if it was already removed or not part of this index.</returns>
@@ -25,13 +26,14 @@ public sealed partial class MutableHnswIndex
         }
         
         var searchData = _searchDataPool.Get();
+        var insertCtx = _insertContextPool.Get();
         
         try
         {
             // ReSharper disable InlineTemporaryVariable
             var vectors = VectorsInternal;
-            var neighborSnapshotBuffer = _neighborSnapshotBuffer;
-            var resultsBuffer = _resultsBuffer;
+            var neighborSnapshotBuffer = insertCtx.NeighborSnapshotBuffer;
+            var resultsBuffer = insertCtx.ResultsBuffer;
             // ReSharper restore InlineTemporaryVariable
         
             // For each layer the node participates in, remove reverse edges and search-repair neighbors:
@@ -111,7 +113,7 @@ public sealed partial class MutableHnswIndex
 
                         if (candidateEdges.Count > maxConnections)
                         {
-                            TrimEdges(_trimEdgesData, candidateNode, layer, maxConnections);
+                            TrimEdges(insertCtx.TrimEdgesData, candidateNode, layer, maxConnections);
                         }
 
                         if (neighborEdges.Count >= maxConnections)
@@ -122,7 +124,7 @@ public sealed partial class MutableHnswIndex
 
                     if (neighborEdges.Count > maxConnections)
                     {
-                        TrimEdges(_trimEdgesData, neighbor, layer, maxConnections);
+                        TrimEdges(insertCtx.TrimEdgesData, neighbor, layer, maxConnections);
                     }
                 }
             }
@@ -157,6 +159,7 @@ public sealed partial class MutableHnswIndex
         finally
         {
             _searchDataPool.Return(searchData);
+            _insertContextPool.Return(insertCtx);
         }
     }
 

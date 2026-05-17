@@ -1,8 +1,9 @@
-﻿using System.Diagnostics;
-using System.Numerics.Tensors;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using KnowledgeSystem.Hnsw;
 using Xunit.Abstractions;
 using MutableHnswIndex = KnowledgeSystem.Hnsw.MutableHnswIndex;
+// ReSharper disable LoopCanBeConvertedToQuery
 
 // ReSharper disable ForCanBeConvertedToForeach
 
@@ -80,6 +81,99 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         }
         
         return (corpus, index);
+    }
+
+    /// <summary>
+    ///     Builds a random orthonormal basis of size <paramref name="intrinsicDim"/> via Gram-Schmidt.
+    /// </summary>
+    private static float[][] BuildOrthonormalBasis(int intrinsicDim, int seed = Seed)
+    {
+        var random = new Random(seed);
+
+        var basis = new float[intrinsicDim][];
+        for (var b = 0; b < intrinsicDim; b++)
+        {
+            basis[b] = GetTestVector(random, Dimension);
+        }
+
+        for (var i = 1; i < intrinsicDim; i++)
+        {
+            for (var j = 0; j < i; j++)
+            {
+                var dot = 0.0f;
+                for (var d = 0; d < Dimension; d++)
+                {
+                    dot += basis[i][d] * basis[j][d];
+                }
+
+                for (var d = 0; d < Dimension; d++)
+                {
+                    basis[i][d] -= dot * basis[j][d];
+                }
+            }
+
+            var normSqr = 0.0f;
+            for (var d = 0; d < Dimension; d++)
+            {
+                normSqr += basis[i][d] * basis[i][d];
+            }
+
+            var recipNorm = 1.0f / MathF.Sqrt(normSqr);
+            for (var d = 0; d < Dimension; d++)
+            {
+                basis[i][d] *= recipNorm;
+            }
+        }
+
+        return basis;
+    }
+
+    /// <summary>
+    ///     Generates normal vectors as random linear combinations of the given orthonormal basis.
+    /// </summary>
+    private static float[][] BuildClusteredCorpusArray(int count, int intrinsicDim, int seed = Seed)
+    {
+        var basis = BuildOrthonormalBasis(intrinsicDim, seed);
+        return BuildClusteredCorpusArray(count, basis, seed + 1);
+    }
+
+    private static float[][] BuildClusteredCorpusArray(int count, float[][] basis, int seed = Seed)
+    {
+        var random = new Random(seed);
+        var intrinsicDim = basis.Length;
+
+        var corpus = new float[count][];
+        for (var i = 0; i < count; i++)
+        {
+            var vector = new float[Dimension];
+            for (var b = 0; b < intrinsicDim; b++)
+            {
+                var coefficient = (float)(random.NextDouble() * 2 - 1);
+                for (var d = 0; d < Dimension; d++)
+                {
+                    vector[d] += coefficient * basis[b][d];
+                }
+            }
+
+            var normSqr = 0.0f;
+            for (var d = 0; d < Dimension; d++)
+            {
+                normSqr += vector[d] * vector[d];
+            }
+
+            if (normSqr > 1e-8f)
+            {
+                var k = 1.0f / MathF.Sqrt(normSqr);
+                for (var d = 0; d < Dimension; d++)
+                {
+                    vector[d] *= k;
+                }
+            }
+
+            corpus[i] = vector;
+        }
+
+        return corpus;
     }
 
     /// <summary>
@@ -254,6 +348,45 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
         var averageRecall = totalRecall / queryCount;
         Assert.True(averageRecall >= 0.95, $"Bad average recall {averageRecall:P1}");
+    }
+
+    /// <summary>
+    ///     Low dimensionality data.
+    ///     Should achieve high recall, unlike full random data.
+    /// </summary>
+    [Theory]
+    [InlineData(10000, 30, 10, 50)]
+    [InlineData(10000, 80, 10, 50)]
+    [InlineData(10000, 100, 10, 50)]
+    public void Search_ClusteredData_AchievesHighRecall(int vectorCount, int intrinsicDim, int k, int queryCount)
+    {
+        // Build a shared basis so corpus and queries lie on the same low-dimensional manifold:
+        var basis = BuildOrthonormalBasis(intrinsicDim);
+        var corpus = BuildClusteredCorpusArray(vectorCount, basis);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        for (var i = 0; i < vectorCount; i++)
+        {
+            index.Insert(corpus[i]);
+        }
+
+        // Generate queries from the same low-dimensional manifold:
+        var queryCorpus = BuildClusteredCorpusArray(queryCount, basis, seed: Seed + 77);
+        var totalRecall = 0.0;
+        for (var q = 0; q < queryCount; q++)
+        {
+            var query = queryCorpus[q];
+            var hnswResults = index.Search(query, k, efSearch: 200);
+            var bruteForceResults = BruteForceSearch(corpus, query, k);
+            var hnswIndices = new HashSet<int>(hnswResults.Select(r => r.Index));
+            var hits = bruteForceResults.Count(hnswIndices.Contains);
+
+            totalRecall += (double)hits / k;
+        }
+
+        var averageRecall = totalRecall / queryCount;
+        output.WriteLine($"LowD recall (intrinsicDim={intrinsicDim}): {averageRecall:P1}");
+        Assert.True(averageRecall >= 0.95, $"Bad clustered recall {averageRecall:P1}");
     }
 
     [Fact]
@@ -528,7 +661,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         var random = new Random(Seed);
 
         var totalRecall = 0.0;
-        for (var q = 0; q < 100; q++)
+        for (var q = 0; q < 10000; q++)
         {
             var query = GetTestVector(random, Dimension);
             var hnswResults = index.Search(query, 10, efSearch: 100);
@@ -538,11 +671,11 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
             totalRecall += (double)hits / 10;
         }
 
-        var averageRecall = totalRecall / 100.0;
+        var averageRecall = totalRecall / 10000.0;
         
-        const double baselineRecall = 0.937;
-        output.WriteLine($"Recall test: {averageRecall:P1} current, baseline: {baselineRecall:P1}");
-        Assert.True(averageRecall >= baselineRecall, $"Recall regressed from {baselineRecall:P1} to {averageRecall:P1}");
+        const double baselineRecall = 0.9507;
+        output.WriteLine($"Recall test: {averageRecall:P4} current, baseline: {baselineRecall:P4}");
+        Assert.True(averageRecall >= baselineRecall, $"Recall regressed from {baselineRecall:P4} to {averageRecall:P4}");
     }
 
     #endregion
@@ -553,9 +686,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     ///     Benchmarks insertion and search performance at various corpus sizes and efSearch values, and reports recall and timing.
     /// </summary>
     [Theory]
-    [InlineData(500, 10)]
-    [InlineData(1000, 10)]
-    [InlineData(2000, 10)]
+    [InlineData(2500, 10)]
     [InlineData(5000, 10)]
     public void Performance_Benchmark(int vectorCount, int k)
     {
@@ -2139,6 +2270,313 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         {
             File.Delete(path);
         }
+    }
+
+    #endregion
+
+    #region Concurrent Insert
+
+    [Theory]
+    [InlineData(500, 4)]
+    [InlineData(1000, 8)]
+    [InlineData(2000, 4)]
+    public void ConcurrentInsert_ProducesCorrectVectorCount(int vectorCount, int parallelism)
+    {
+        var corpus = BuildRandomCorpusArray(vectorCount);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        Parallel.For(0, vectorCount, new ParallelOptions { MaxDegreeOfParallelism = parallelism }, i =>
+        {
+            index.Insert(corpus[i]);
+        });
+
+        var liveCount = 0;
+        for (var i = 0; i < index.VectorsInternal.Count; i++)
+        {
+            if (index.VectorsInternal[i] != null)
+            {
+                liveCount++;
+            }
+        }
+
+        Assert.Equal(vectorCount, liveCount);
+    }
+
+    [Theory]
+    [InlineData(500, 4)]
+    [InlineData(1000, 8)]
+    public void ConcurrentInsert_GraphIntegrity(int vectorCount, int parallelism)
+    {
+        var corpus = BuildRandomCorpusArray(vectorCount);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        Parallel.For(0, vectorCount, new ParallelOptions { MaxDegreeOfParallelism = parallelism }, i =>
+        {
+            index.Insert(corpus[i]);
+        });
+
+        AssertGraphIntegrity(index);
+    }
+
+    [Fact]
+    public void ConcurrentInsert_RecallIsAcceptable()
+    {
+        for (var repeat = 0; repeat < 10; repeat++)
+        {
+            const int vectorCount = 1000;
+            const int k = 10;
+            const int queryCount = 500;
+
+            var corpus = BuildRandomCorpusArray(vectorCount);
+            var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+            // Track the actual stored vector index for each corpus entry:
+            var storedVectors = new IStoredVector[vectorCount];
+
+            Parallel.For(0, vectorCount, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i =>
+            {
+                storedVectors[i] = index.Insert(corpus[i]);
+            });
+            
+            AssertGraphIntegrity(index);
+
+            // Build a lookup from HNSW index to corpus data for brute-force comparison:
+            var indexToCorpus = new Dictionary<int, float[]>();
+            for (var i = 0; i < vectorCount; i++)
+            {
+                indexToCorpus[storedVectors[i].Index] = corpus[i];
+            }
+
+            var random = new Random(Seed + 99);
+            var totalRecall = 0.0;
+            for (var q = 0; q < queryCount; q++)
+            {
+                var query = GetTestVector(random, Dimension);
+                var hnswResults = index.Search(query, k, efSearch: 200);
+
+                // Brute-force: compute distance from query to every stored vector, sort, take k:
+                var bruteForceResults = indexToCorpus
+                    .Select(kv => (Index: kv.Key, Score: VectorObjective.AdjustedCosineSimilarity(kv.Value, query)))
+                    .OrderBy(x => x.Score)
+                    .Take(k)
+                    .Select(x => x.Index)
+                    .ToHashSet();
+
+                var hnswIndices = new HashSet<int>(hnswResults.Select(r => r.Index));
+                var hits = hnswIndices.Count(bruteForceResults.Contains);
+                totalRecall += (double)hits / k;
+            }
+
+            var averageRecall = totalRecall / queryCount;
+            output.WriteLine($"Concurrent insert recall: {averageRecall:P1}");
+
+            // Concurrent build may have slightly lower recall than sequential due to insertion order effects.
+            Assert.True(averageRecall >= 0.75, $"Bad average recall after concurrent insert: {averageRecall:P1}");   
+        }
+    }
+
+    [Fact]
+    public void ConcurrentInsert_NoDeadlock()
+    {
+        const int vectorCount = 3000;
+        var corpus = BuildRandomCorpusArray(vectorCount);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        var completed = false;
+        var task = Task.Run(() =>
+        {
+            Parallel.For(0, vectorCount, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
+            {
+                index.Insert(corpus[i]);
+            });
+            completed = true;
+        });
+
+        var finished = task.Wait(TimeSpan.FromSeconds(60));
+        Assert.True(finished, "Concurrent insert timed out, possible deadlock");
+        Assert.True(completed, "Concurrent insert did not complete");
+    }
+
+    [Fact]
+    public void ConcurrentInsert_WhileSearching_DoesNotCrash()
+    {
+        const int vectorCount = 1000;
+        var corpus = BuildRandomCorpusArray(vectorCount);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: Seed);
+
+        // Insert an initial batch so search has something to work with:
+        for (var i = 0; i < 50; i++)
+        {
+            index.Insert(corpus[i]);
+        }
+
+        var searchExceptions = new ConcurrentBag<Exception>();
+        var cts = new CancellationTokenSource();
+
+        // Start a background search loop:
+        var searchTask = Task.Run(() =>
+        {
+            var random = new Random(Seed + 42);
+            while (!cts.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    var query = GetTestVector(random, Dimension);
+                    index.Search(query, 5, efSearch: 50);
+                }
+                catch (Exception ex)
+                {
+                    searchExceptions.Add(ex);
+                }
+            }
+        });
+
+        // Insert remaining vectors in parallel:
+        Parallel.For(50, vectorCount, new ParallelOptions { MaxDegreeOfParallelism = 4 }, i =>
+        {
+            index.Insert(corpus[i]);
+        });
+
+        cts.Cancel();
+        searchTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.Empty(searchExceptions);
+    }
+
+    /// <summary>
+    ///     High-contention test: small MaxConnections forces frequent TrimEdges,
+    ///     widening the race window for stale snapshot reads.
+    /// </summary>
+    [Theory]
+    [InlineData(500, 4, 8)]
+    [InlineData(1000, 4, 12)]
+    public void ConcurrentInsert_SmallMaxConnections_NoCrash(int vectorCount, int laneConnections, int denseConnections)
+    {
+        var corpus = BuildRandomCorpusArray(vectorCount);
+        var index = new MutableHnswIndex(Dimension, laneConnections, denseConnections, efConstruction: 50, seed: Seed);
+
+        var searchExceptions = new ConcurrentBag<Exception>();
+        var cts = new CancellationTokenSource();
+
+        // Insert an initial batch so search has something to work with:
+        for (var i = 0; i < 20; i++)
+        {
+            index.Insert(corpus[i]);
+        }
+
+        // Start a background search loop with tiny efSearch to stress stale-edge sensitivity:
+        var searchTask = Task.Run(() =>
+        {
+            var random = new Random(Seed + 42);
+            while (!cts.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    var query = GetTestVector(random, Dimension);
+                    index.Search(query, 5, efSearch: 2);
+                }
+                catch (Exception ex)
+                {
+                    searchExceptions.Add(ex);
+                }
+            }
+        });
+
+        // Insert remaining vectors in parallel:
+        Parallel.For(20, vectorCount, new ParallelOptions { MaxDegreeOfParallelism = 4 }, i =>
+        {
+            index.Insert(corpus[i]);
+        });
+
+        cts.Cancel();
+        searchTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.Empty(searchExceptions);
+    }
+
+    /// <summary>
+    ///     Time-based stress test: runs concurrent insert + search for a fixed duration.
+    ///     Uses small MaxConnections to maximize TrimEdges frequency and Thread.Start
+    ///     for precise concurrent startup. More effective than iteration-based tests
+    ///     at surfacing rare sparse-layer races.
+    /// </summary>
+    [Fact]
+    public void ConcurrentInsert_WhileSearching_TimeBased_NoCrash()
+    {
+        const int durationSeconds = 10;
+        const int threadCount = 4;
+        var index = new MutableHnswIndex(Dimension, 4, 8, efConstruction: 50, seed: Seed);
+        var exceptions = new ConcurrentBag<Exception>();
+        var cts = new CancellationTokenSource();
+
+        // Seed the index with a few vectors so search has something to traverse:
+        var seedRandom = new Random(Seed);
+        for (var i = 0; i < 30; i++)
+        {
+            index.Insert(GetTestVector(seedRandom, Dimension));
+        }
+
+        // Insert threads: continuously insert new vectors:
+        var insertThreads = new Thread[threadCount];
+        for (var t = 0; t < threadCount; t++)
+        {
+            var random = new Random(Seed + t);
+            insertThreads[t] = new Thread(() =>
+            {
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        index.Insert(GetTestVector(random, Dimension));
+                    }
+                    catch (Exception ex)
+                    {
+                        exceptions.Add(ex);
+                    }
+                }
+            })
+            {
+                IsBackground = true
+            };
+        }
+
+        // Search threads: continuously search with tiny efSearch:
+        var searchThreads = new Thread[2];
+        for (var t = 0; t < searchThreads.Length; t++)
+        {
+            var random = new Random(Seed + 100 + t);
+            searchThreads[t] = new Thread(() =>
+            {
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var query = GetTestVector(random, Dimension);
+                        index.Search(query, 5, efSearch: 2);
+                    }
+                    catch (Exception ex)
+                    {
+                        exceptions.Add(ex);
+                    }
+                }
+            })
+            {
+                IsBackground = true
+            };
+        }
+
+        // Start all threads simultaneously:
+        foreach (var thread in insertThreads) thread.Start();
+        foreach (var thread in searchThreads) thread.Start();
+
+        // Let them hammer the index:
+        Thread.Sleep(TimeSpan.FromSeconds(durationSeconds));
+        cts.Cancel();
+
+        foreach (var thread in insertThreads) thread.Join(TimeSpan.FromSeconds(5));
+        foreach (var thread in searchThreads) thread.Join(TimeSpan.FromSeconds(5));
+
+        Assert.Empty(exceptions);
     }
 
     #endregion

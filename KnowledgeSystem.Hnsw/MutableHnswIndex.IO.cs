@@ -7,7 +7,11 @@ namespace KnowledgeSystem.Hnsw;
 public sealed partial class MutableHnswIndex
 {
     private const ushort CurrentFormatVersion = 1;
-    
+
+    /// <summary>
+    ///     Serializes the index to a stream.
+    ///     NOT thread-safe. Must not be called concurrently with <see cref="Insert"/>, <see cref="Remove"/>, or other IO operations.
+    /// </summary>
     public void SaveToFile(Stream stream)
     {
         using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);

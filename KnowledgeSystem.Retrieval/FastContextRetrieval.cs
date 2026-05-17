@@ -120,7 +120,7 @@ public sealed class FastContextRetrieval
         }
         
         var fetchCount = _centroidBootstrapped ? count : _bootstrapCount;
-        var vectorResults = _engine.Search(_embedding, fetchCount, predicate: Predicate);
+        var vectorResults = _engine.Search(_embedding, fetchCount, efSearch: 1000, predicate: Predicate);
 
         if (vectorResults.Length == 0)
         {
