@@ -75,6 +75,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         if (!string.IsNullOrWhiteSpace(_chatOptions.ProviderOnly))
         {
             result.ProviderOnly = _chatOptions.ProviderOnly;
+            result.Temperature = _chatOptions.Temperature;
         }
 
         return result;

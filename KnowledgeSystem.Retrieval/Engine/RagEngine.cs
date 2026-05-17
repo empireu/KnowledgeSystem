@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Threading.Channels;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Hnsw;
 using KnowledgeSystem.Retrieval.Data;
@@ -280,6 +282,15 @@ public sealed class RagEngine
         await EmbedAndAddChunksAsync(allChunks, document.Path, cancellationToken);
     }
 
+    #region Embedding Pipeline
+    
+    private readonly struct EmbeddingTransfer
+    {
+        public required EmdChunk Chunk { get; init; }
+        
+        public required ReadOnlyMemory<float> Embedding { get; init; }
+    }
+    
     private async Task EmbedAndAddChunksAsync(List<EmdChunk> chunks, string documentPath, CancellationToken cancellationToken)
     {
         if (chunks.Count == 0)
@@ -287,22 +298,94 @@ public sealed class RagEngine
             return;
         }
 
-        var texts = chunks.Select(c => c.ChunkText).ToList();
-        var embeddings = await _embeddingService.EmbedBatchAsync(texts, cancellationToken);
-
-        for (var i = 0; i < chunks.Count; i++)
+        var channel = Channel.CreateBounded<EmbeddingTransfer>(new BoundedChannelOptions(_options.ParallelInsert * (_options.EmbeddingBatchSize + 1))
         {
-            var vector = embeddings[i].Span.ToArray();
-            var storedVector = Hnsw.Insert(vector);
-            
-            _db.Chunks.Add(new ChunkRecord
-            {
-                HashHex = chunks[i].Hash.ToHexString(),
-                HnswId = storedVector.Index,
-                DocumentPath = documentPath,
-            });
+            SingleWriter = true,
+            SingleReader = _options.ParallelInsert == 1,
+            FullMode = BoundedChannelFullMode.Wait
+        });
+        
+        var dbChunkRecords = new ConcurrentBag<ChunkRecord>();
+
+        var producerTask = ProduceEmbeddingsTransfers(chunks, channel.Writer, cancellationToken);
+       
+        var consumerTasks = Enumerable
+            .Range(0, _options.ParallelInsert)
+            .Select(_ => ConsumeEmbeddingTransfers(channel.Reader, dbChunkRecords, documentPath, cancellationToken))
+            .ToArray();
+
+        await producerTask;
+        await Task.WhenAll(consumerTasks);
+
+        foreach (var record in dbChunkRecords)
+        {
+            _db.Chunks.Add(record);
         }
     }
+
+    private async Task ProduceEmbeddingsTransfers(List<EmdChunk> chunks, ChannelWriter<EmbeddingTransfer> writer, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var batchSize = _options.EmbeddingBatchSize;
+        
+            var queue = new Queue<EmdChunk>(chunks);
+            var batch = new List<EmdChunk>(batchSize);
+            var batchTexts = new List<string>(batchSize);
+        
+            while (queue.Count > 0)
+            {
+                while (queue.Count > 0 && batch.Count < batchSize)
+                {
+                    var front = queue.Dequeue();
+                    batch.Add(front);
+                    batchTexts.Add(front.ChunkText);
+                }
+            
+                var embeddings = await _embeddingService.EmbedBatchAsync(batchTexts, cancellationToken);
+
+                for (var index = 0; index < embeddings.Length; index++)
+                {
+                    var embedding = embeddings[index];
+                    var chunk = batch[index];
+                
+                    await writer.WriteAsync(new EmbeddingTransfer
+                    {
+                        Chunk = chunk,
+                        Embedding = embedding
+                    }, cancellationToken);
+                }
+            
+                batch.Clear();
+                batchTexts.Clear();
+            }
+        }
+        finally
+        {
+            writer.TryComplete();
+        }
+    }
+
+    private async Task ConsumeEmbeddingTransfers(ChannelReader<EmbeddingTransfer> reader, ConcurrentBag<ChunkRecord> databaseRecords, string documentPath, CancellationToken cancellationToken)
+    {
+        while (await reader.WaitToReadAsync(cancellationToken))
+        {
+            while (reader.TryRead(out var transfer))
+            {
+                var vector = transfer.Embedding.ToArray();
+                var storedVector = Hnsw.Insert(vector);
+
+                databaseRecords.Add(new ChunkRecord
+                {
+                    HashHex = transfer.Chunk.Hash.ToHexString(),
+                    HnswId = storedVector.Index,
+                    DocumentPath = documentPath
+                });
+            }   
+        }
+    }
+    
+    #endregion
     
     #endregion
 
@@ -435,7 +518,6 @@ public sealed class RagEngine
             CollectChunksDown(childEmd, result);
         }
     }
-    
     
     /// <summary>
     ///     Searches for the <paramref name="k"/> chunks most similar, based on a known embedding.

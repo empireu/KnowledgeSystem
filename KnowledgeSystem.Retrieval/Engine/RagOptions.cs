@@ -53,4 +53,10 @@ public class RagOptions
 
     [Range(64, 2048)]
     public int EfConstruction { get; set; } = 200;
+    
+    [Range(1, 10)]
+    public int ParallelInsert { get; set; } = 8;
+    
+    [Range(1, 100)]
+    public int EmbeddingBatchSize { get; set; } = 64;
 }

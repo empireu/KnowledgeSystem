@@ -18,6 +18,8 @@ public class ChatOptions
 
     public string? ProviderOnly { get; set; } = null;
 
+    public float? Temperature { get; set; } = 0.1f;
+    
     [Required]
     public string SystemPromptFile { get; set; } = null!;
     
