@@ -1,6 +1,6 @@
 ﻿using System.Text;
 using KnowledgeSystem.Agent;
-using KnowledgeSystem.Agent.FastContext;
+using FastContextToolHandler = KnowledgeSystem.Agent.Tools.FastContextToolHandler;
 
 namespace KnowledgeSystem.Tests;
 

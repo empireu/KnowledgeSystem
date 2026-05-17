@@ -6,7 +6,7 @@ using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Retrieval.Engine;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Agent;
+namespace KnowledgeSystem.Agent.Tools;
 
 public sealed class TreeToolHandler(
     AgentTool tool,

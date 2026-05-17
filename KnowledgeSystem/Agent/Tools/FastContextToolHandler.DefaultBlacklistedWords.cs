@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Agent.FastContext;
+﻿namespace KnowledgeSystem.Agent.Tools;
 
 public sealed partial class FastContextToolHandler
 {

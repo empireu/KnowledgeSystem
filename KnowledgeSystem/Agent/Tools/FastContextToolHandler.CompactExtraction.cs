@@ -2,7 +2,7 @@
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Retrieval;
 
-namespace KnowledgeSystem.Agent.FastContext;
+namespace KnowledgeSystem.Agent.Tools;
 
 public sealed partial class FastContextToolHandler
 {
@@ -57,7 +57,7 @@ public sealed partial class FastContextToolHandler
     }
 
     /// <summary>
-    ///     Tokenizes the query into specific words (excludes the <see cref="DefaultBlacklistedWords"/>). The result includes the query itself.
+    ///     Tokenizes the query into specific words (excludes the <see cref="Tools.FastContextToolHandler.DefaultBlacklistedWords"/>). The result includes the query itself.
     /// </summary>
     internal static string[] TokenizeQuery(string query, HashSet<string>? blacklist = null)
     {
@@ -68,7 +68,7 @@ public sealed partial class FastContextToolHandler
             return [];
         }
 
-        blacklist ??= DefaultBlacklistedWords;
+        blacklist ??= Tools.FastContextToolHandler.DefaultBlacklistedWords;
 
         var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {

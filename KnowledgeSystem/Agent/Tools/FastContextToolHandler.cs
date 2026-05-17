@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Agent.FastContext;
+namespace KnowledgeSystem.Agent.Tools;
 
 public sealed partial class FastContextToolHandler(
     AgentTool tool,

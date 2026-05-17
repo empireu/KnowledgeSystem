@@ -7,28 +7,21 @@ namespace KnowledgeSystem.Discord;
 ///     Message target that modifies an interaction response.
 ///     Used for /mqr ask where the response is a deferred interaction.
 /// </summary>
-public sealed class InteractionMessageTarget : IDiscordMessageTarget
+public sealed class InteractionMessageTarget(Interaction interaction) : IDiscordMessageTarget
 {
-    private readonly Interaction _interaction;
-
-    public InteractionMessageTarget(Interaction interaction)
-    {
-        _interaction = interaction;
-    }
-
     public async Task UpdateContentAsync(string content, CancellationToken cancellationToken = default)
     {
         if (content.Length > 2000)
         {
-            content = content[..1997] + "...";
+            content = content[..1999] + "…";
         }
 
-        await _interaction.ModifyResponseAsync(m => m.Content = content, cancellationToken: cancellationToken);
+        await interaction.ModifyResponseAsync(m => m.Content = content, cancellationToken: cancellationToken);
     }
 
     public async Task SetEmbedAsync(EmbedProperties embed, CancellationToken cancellationToken = default)
     {
-        await _interaction.ModifyResponseAsync(m =>
+        await interaction.ModifyResponseAsync(m =>
         {
             m.Content = "";
             m.Embeds = [embed];

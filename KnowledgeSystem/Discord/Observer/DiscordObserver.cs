@@ -10,21 +10,19 @@ using Microsoft.Extensions.Options;
 using NetCord;
 using NetCord.Rest;
 
-namespace KnowledgeSystem.Discord;
+namespace KnowledgeSystem.Discord.Observer;
 
 /// <summary>
 ///     Observes agent execution and updates a single Discord message in-place.
 ///     Tool calls/results are shown as blockquote status lines during processing; the final assistant message replaces everything with a rich embed.
 /// </summary>
-public sealed class DiscordObserver(
+public sealed partial class DiscordObserver(
     ILogger<DiscordObserver> logger,
     IConversationManager conversationManager,
     IDiscordMessageTarget target,
     IOptions<ChatOptions> options
 ) : IAgentObserver
 {
-    private const bool IncludeToolCallsInFinalOutput = false;
-
     private readonly List<ToolStatusEntry> _toolStatus = [];
     private string? _finalResponse;
     private int? _finalConversationTokenCount;
@@ -51,23 +49,36 @@ public sealed class DiscordObserver(
         // Check if any tool is still running (called but no result yet)
         var hasRunning = _toolStatus.Any(e => e.State == ToolState.Running);
 
-        if (hasRunning)
-        {
-            sb.AppendLine("> ");
-            sb.AppendLine("> ◌ *Working...*");
-        }
-        else
-        {
-            sb.AppendLine("> ");
-            sb.AppendLine("> ▸ *Typing...*");
-        }
+        sb.AppendLine("> ");
+
+        sb.AppendLine(hasRunning 
+            ? "> ◌ *Working...*" 
+            : "> ▸ *Typing...*"
+        );
 
         return sb.ToString();
     }
 
     public async Task OnToolCallAsync(AgentRunner runner, ToolCallInfo info, CancellationToken cancellationToken)
     {
-        var arguments = string.Join(", ", info.Args.Arguments.Select(kvp => $"`{kvp.Key.ArgumentName}`: {Truncate(kvp.Value ?? "null", 40)}"));
+        var args = info.Args.Arguments
+        .Select(kvp =>
+        {
+            // Value is wrapped in code because it can contain Markdown that breaks the rendering.
+            var representation = $"{kvp.Key.ArgumentName}: `{Truncate(kvp.Value ?? "null", 40)}`";
+           
+            // Escape newlines:
+            representation = EscapeNewlines(representation);
+
+            return kvp.Key switch
+            {
+                StringArgument => $"\"{representation}\"",
+                _ => representation
+            };
+        });
+        
+        var arguments = string.Join(", ", args);
+      
         _toolStatus.Add(new ToolStatusEntry(info.Tool.ToolId, arguments, ToolState.Running));
         await UpdateMessageAsync(cancellationToken);
     }
@@ -79,12 +90,12 @@ public sealed class DiscordObserver(
         if (entry != null)
         {
             entry.State = result.IsSuccessful ? ToolState.Completed : ToolState.Failed;
-            entry.Error = result.IsSuccessful ? null : Truncate(result.FormatError(), 80);
+            entry.Error = result.IsSuccessful ? null : Truncate(EscapeNewlines(result.FormatError()), 80);
         }
 
         await UpdateMessageAsync(cancellationToken);
     }
-
+    
     public async Task OnAssistantMessageAsync(AgentRunner runner, string message, CancellationToken cancellationToken)
     {
         _finalResponse = message;
@@ -98,18 +109,12 @@ public sealed class DiscordObserver(
         await UpdateMessageAsync(cancellationToken);
     }
 
-    public Task OnAgentCompletedAsync(AgentRunner runner, CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-
     public async Task OnErrorAsync(AgentRunner runner, AgentExecutionError error, CancellationToken cancellationToken)
     {
         _hasError = true;
 
         if (_finalResponse == null)
         {
-            // No response yet — show error embed
             var embed = new EmbedProperties()
                 .WithTitle("Error")
                 .WithDescription(error.Message)
@@ -213,7 +218,6 @@ public sealed class DiscordObserver(
             }
             else
             {
-                // Still processing — update content with status
                 await target.UpdateContentAsync(BuildStatusContent(), cancellationToken);
             }
         }
@@ -232,30 +236,11 @@ public sealed class DiscordObserver(
 
         return value[..(maxLength - 1)] + "…";
     }
-
-    private enum ToolState { Running, Completed, Failed }
-
-    private sealed class ToolStatusEntry(string toolId, string arguments, ToolState state)
+    
+    private static string EscapeNewlines(string str)
     {
-        public string ToolId { get; } = toolId;
-        public string Arguments { get; } = arguments;
-        public ToolState State { get; set; } = state;
-        public string? Error { get; set; }
-
-        public string ToMarkdown() => State switch
-        {
-            ToolState.Running => $"◌ *{ToolId}*({Arguments})",
-            ToolState.Completed => $"✓ *{ToolId}*({Arguments})",
-            ToolState.Failed => $"✗ *{ToolId}*({Arguments}) — {Error}",
-            _ => $"*{ToolId}*({Arguments})"
-        };
-
-        public string ToCompactMarkdown() => State switch
-        {
-            ToolState.Running => $"◌ *{ToolId}*",
-            ToolState.Completed => $"✓ *{ToolId}*",
-            ToolState.Failed => $"✗ *{ToolId}* — {Error}",
-            _ => $"*{ToolId}*"
-        };
+        str = str.Replace("\r", "\\r");
+        str = str.Replace("\n", "\\n");
+        return str;
     }
 }

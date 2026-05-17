@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using KnowledgeSystem.Discord.Observer;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Discord;
 
