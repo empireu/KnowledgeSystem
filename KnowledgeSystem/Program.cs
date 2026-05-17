@@ -33,12 +33,16 @@ var builder = Host.CreateDefaultBuilder(args)
         });
        
         services.AddApplicationCommands();
-        services.AddSingleton<IConversationManager, ConversationManager>();
+        services.AddSingleton<IConversationManager>(sp => sp.GetRequiredService<ConversationManager>());
+        services.AddSingleton<ConversationManager>();
+        services.AddHostedService(sp => sp.GetRequiredService<ConversationManager>());
         services.AddGatewayHandler<MessageHandler>();
     })
     .ConfigureServices(services =>
     {
         services.AddSingleton<DiscordObserverFactory>();
+        services.AddSingleton<ActiveRunTracker>();
+        services.AddHostedService<ActiveRunTracker>(sp => sp.GetRequiredService<ActiveRunTracker>());
     });
 
 var host = builder.Build();
@@ -47,8 +51,5 @@ var engine = host.Services.GetRequiredService<RagEngine>();
 await engine.InitializeAsync();
 
 host.AddApplicationCommandModule<MqrModule>();
-
-var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
-lifetime.ApplicationStopping.Register(MqrModule.CancelAllActiveRuns);
 
 await host.RunAsync();

@@ -21,14 +21,15 @@ public class MessageHandler(
             return;
         }
 
-        // Only handle messages in active conversation threads:
-        if (!conversationManager.HasConversation(message.ChannelId))
+        // Ignore empty messages:
+        if (string.IsNullOrWhiteSpace(message.Content))
         {
             return;
         }
 
-        // Ignore empty messages:
-        if (string.IsNullOrWhiteSpace(message.Content))
+        // Only handle messages in active conversation threads:
+        var conversation = conversationManager.TryGetConversation(message.ChannelId);
+        if (conversation == null)
         {
             return;
         }
@@ -42,6 +43,18 @@ public class MessageHandler(
 
         try
         {
+            conversationManager.TouchConversation(message.ChannelId);
+
+            if (conversation.IsRunning)
+            {
+                await restClient.SendMessageAsync(message.ChannelId, new MessageProperties
+                {
+                    Content = "> Another operation is in progress. Please wait for it to finish."
+                });
+                
+                return;
+            }
+
             // Send an initial status message that the observer will modify in-place
             var statusMessage = await restClient.SendMessageAsync(message.ChannelId, new MessageProperties
             {
@@ -50,7 +63,6 @@ public class MessageHandler(
 
             var target = new ChannelMessageTarget(restClient, message.ChannelId, statusMessage.Id);
             var observer = factory.Create(target);
-            var conversation = conversationManager.GetChannelConversation(message.ChannelId);
             await conversation.RunToCompletionAsync(message.Content, observer);
         }
         catch (Exception ex)

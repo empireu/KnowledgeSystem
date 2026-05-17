@@ -3,8 +3,8 @@ using System.Diagnostics;
 using KnowledgeSystem.Hnsw;
 using Xunit.Abstractions;
 using MutableHnswIndex = KnowledgeSystem.Hnsw.MutableHnswIndex;
-// ReSharper disable LoopCanBeConvertedToQuery
 
+// ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Tests;
@@ -126,15 +126,6 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         }
 
         return basis;
-    }
-
-    /// <summary>
-    ///     Generates normal vectors as random linear combinations of the given orthonormal basis.
-    /// </summary>
-    private static float[][] BuildClusteredCorpusArray(int count, int intrinsicDim, int seed = Seed)
-    {
-        var basis = BuildOrthonormalBasis(intrinsicDim, seed);
-        return BuildClusteredCorpusArray(count, basis, seed + 1);
     }
 
     private static float[][] BuildClusteredCorpusArray(int count, float[][] basis, int seed = Seed)
@@ -355,9 +346,9 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     ///     Should achieve high recall, unlike full random data.
     /// </summary>
     [Theory]
-    [InlineData(10000, 30, 10, 50)]
-    [InlineData(10000, 80, 10, 50)]
-    [InlineData(10000, 100, 10, 50)]
+    [InlineData(10000, 30, 10, 500)]
+    [InlineData(10000, 80, 10, 500)]
+    [InlineData(10000, 100, 10, 500)]
     public void Search_ClusteredData_AchievesHighRecall(int vectorCount, int intrinsicDim, int k, int queryCount)
     {
         // Build a shared basis so corpus and queries lie on the same low-dimensional manifold:
@@ -373,17 +364,23 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
         // Generate queries from the same low-dimensional manifold:
         var queryCorpus = BuildClusteredCorpusArray(queryCount, basis, seed: Seed + 77);
         var totalRecall = 0.0;
-        for (var q = 0; q < queryCount; q++)
+
+        var obj = new Lock();
+
+        Parallel.For(0, queryCount, q =>
         {
             var query = queryCorpus[q];
-            var hnswResults = index.Search(query, k, efSearch: 200);
+            var hnswResults = index.Search(query, k, efSearch: 150);
             var bruteForceResults = BruteForceSearch(corpus, query, k);
             var hnswIndices = new HashSet<int>(hnswResults.Select(r => r.Index));
             var hits = bruteForceResults.Count(hnswIndices.Contains);
 
-            totalRecall += (double)hits / k;
-        }
-
+            lock (obj)
+            {
+                totalRecall += (double)hits / k;
+            }
+        });
+        
         var averageRecall = totalRecall / queryCount;
         output.WriteLine($"LowD recall (intrinsicDim={intrinsicDim}): {averageRecall:P1}");
         Assert.True(averageRecall >= 0.95, $"Bad clustered recall {averageRecall:P1}");
@@ -2376,7 +2373,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void ConcurrentInsert_NoDeadlock()
+    public async Task ConcurrentInsert_NoDeadlock()
     {
         const int vectorCount = 3000;
         var corpus = BuildRandomCorpusArray(vectorCount);
@@ -2389,16 +2386,16 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
             {
                 index.Insert(corpus[i]);
             });
+            
             completed = true;
         });
 
-        var finished = task.Wait(TimeSpan.FromSeconds(60));
-        Assert.True(finished, "Concurrent insert timed out, possible deadlock");
+        await task.WaitAsync(TimeSpan.FromSeconds(60));
         Assert.True(completed, "Concurrent insert did not complete");
     }
 
     [Fact]
-    public void ConcurrentInsert_WhileSearching_DoesNotCrash()
+    public async Task ConcurrentInsert_WhileSearching_DoesNotCrash()
     {
         const int vectorCount = 1000;
         var corpus = BuildRandomCorpusArray(vectorCount);
@@ -2429,7 +2426,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
                     searchExceptions.Add(ex);
                 }
             }
-        });
+        }, cts.Token);
 
         // Insert remaining vectors in parallel:
         Parallel.For(50, vectorCount, new ParallelOptions { MaxDegreeOfParallelism = 4 }, i =>
@@ -2437,8 +2434,9 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
             index.Insert(corpus[i]);
         });
 
-        cts.Cancel();
-        searchTask.Wait(TimeSpan.FromSeconds(5));
+        await cts.CancelAsync();
+        // ReSharper disable once MethodSupportsCancellation
+        await searchTask.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Empty(searchExceptions);
     }
@@ -2450,7 +2448,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
     [Theory]
     [InlineData(500, 4, 8)]
     [InlineData(1000, 4, 12)]
-    public void ConcurrentInsert_SmallMaxConnections_NoCrash(int vectorCount, int laneConnections, int denseConnections)
+    public async Task ConcurrentInsert_SmallMaxConnections_NoCrash(int vectorCount, int laneConnections, int denseConnections)
     {
         var corpus = BuildRandomCorpusArray(vectorCount);
         var index = new MutableHnswIndex(Dimension, laneConnections, denseConnections, efConstruction: 50, seed: Seed);
@@ -2480,7 +2478,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
                     searchExceptions.Add(ex);
                 }
             }
-        });
+        }, cts.Token);
 
         // Insert remaining vectors in parallel:
         Parallel.For(20, vectorCount, new ParallelOptions { MaxDegreeOfParallelism = 4 }, i =>
@@ -2488,8 +2486,10 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
             index.Insert(corpus[i]);
         });
 
-        cts.Cancel();
-        searchTask.Wait(TimeSpan.FromSeconds(5));
+        await cts.CancelAsync();
+        
+        // ReSharper disable once MethodSupportsCancellation
+        await searchTask.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Empty(searchExceptions);
     }

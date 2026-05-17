@@ -27,27 +27,38 @@ public sealed partial class DiscordObserver(
     private string? _finalResponse;
     private int? _finalConversationTokenCount;
     private bool _hasError;
+    private bool _finalSent;
 
     private Task? _pendingUpdate;
+    private CancellationTokenSource? _debounceCts;
     private readonly SemaphoreSlim _updateLock = new(1, 1);
+    private readonly Lock _stateLock = new();
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(600);
 
-    private string BuildStatusContent()
+    private ToolStatusEntry[] SnapshotToolStatus()
     {
-        if (_toolStatus.Count == 0)
+        lock (_stateLock)
+        {
+            return _toolStatus.ToArray();
+        }
+    }
+
+    private static string BuildStatusContent(ToolStatusEntry[] snapshot)
+    {
+        if (snapshot.Length == 0)
         {
             return "> ▸ *Scheming...*";
         }
 
         var sb = new StringBuilder();
 
-        foreach (var entry in _toolStatus)
+        foreach (var entry in snapshot)
         {
             sb.AppendLine($"> {entry.ToMarkdown()}");
         }
 
         // Check if any tool is still running (called but no result yet)
-        var hasRunning = _toolStatus.Any(e => e.State == ToolState.Running);
+        var hasRunning = snapshot.Any(e => e.State == ToolState.Running);
 
         sb.AppendLine("> ");
 
@@ -64,33 +75,44 @@ public sealed partial class DiscordObserver(
         var args = info.Args.Arguments
         .Select(kvp =>
         {
-            // Value is wrapped in code because it can contain Markdown that breaks the rendering.
-            var representation = $"{kvp.Key.ArgumentName}: `{Truncate(kvp.Value ?? "null", 40)}`";
-           
+            var parameterPrintout = Truncate(kvp.Value ?? "null", 40);
+            
             // Escape newlines:
-            representation = EscapeNewlines(representation);
-
-            return kvp.Key switch
+            parameterPrintout = EscapeNewlines(parameterPrintout);
+            
+            // Value is wrapped in code because it can contain Markdown that breaks the rendering.
+            parameterPrintout = $"`{parameterPrintout}`";
+            
+            // Format for specific types:
+            parameterPrintout = kvp.Key switch
             {
-                StringArgument => $"\"{representation}\"",
-                _ => representation
+                StringArgument => $"\"{parameterPrintout}\"",
+                _ => parameterPrintout
             };
+            
+            return $"{kvp.Key.ArgumentName}: {parameterPrintout}";
         });
         
         var arguments = string.Join(", ", args);
       
-        _toolStatus.Add(new ToolStatusEntry(info.Tool.ToolId, arguments, ToolState.Running));
+        lock (_stateLock)
+        {
+            _toolStatus.Add(new ToolStatusEntry(info.Tool.ToolId, arguments, ToolState.Running));
+        }
         await UpdateMessageAsync(cancellationToken);
     }
 
     public async Task OnToolResultAsync(AgentRunner runner, int indexInCollection, AgentTool tool, ToolExecutionResult result, CancellationToken cancellationToken)
     {
-        var entry = _toolStatus.FindLast(e => e.ToolId == tool.ToolId && e.State == ToolState.Running);
-      
-        if (entry != null)
+        lock (_stateLock)
         {
-            entry.State = result.IsSuccessful ? ToolState.Completed : ToolState.Failed;
-            entry.Error = result.IsSuccessful ? null : Truncate(EscapeNewlines(result.FormatError()), 80);
+            var entry = _toolStatus.FindLast(e => e.ToolId == tool.ToolId && e.State == ToolState.Running);
+          
+            if (entry != null)
+            {
+                entry.State = result.IsSuccessful ? ToolState.Completed : ToolState.Failed;
+                entry.Error = result.IsSuccessful ? null : Truncate(EscapeNewlines(result.FormatError()), 80);
+            }
         }
 
         await UpdateMessageAsync(cancellationToken);
@@ -98,7 +120,10 @@ public sealed partial class DiscordObserver(
     
     public async Task OnAssistantMessageAsync(AgentRunner runner, string message, CancellationToken cancellationToken)
     {
-        _finalResponse = message;
+        lock (_stateLock)
+        {
+            _finalResponse = message;
+        }
 
         if (runner is AgentRunner<ConversationalContext> chatRunner)
         {
@@ -111,9 +136,14 @@ public sealed partial class DiscordObserver(
 
     public async Task OnErrorAsync(AgentRunner runner, AgentExecutionError error, CancellationToken cancellationToken)
     {
-        _hasError = true;
+        bool isFinal;
+        lock (_stateLock)
+        {
+            _hasError = true;
+            isFinal = _finalResponse != null;
+        }
 
-        if (_finalResponse == null)
+        if (!isFinal)
         {
             var embed = new EmbedProperties()
                 .WithTitle("Error")
@@ -135,32 +165,68 @@ public sealed partial class DiscordObserver(
 
     private async Task UpdateMessageAsync(CancellationToken cancellationToken)
     {
-        if (_finalResponse != null)
+        Task? pendingToAwait = null;
+        bool isFinal;
+
+        lock (_stateLock)
         {
-            // Final response is always sent immediately
-            await SendUpdateAsync(cancellationToken);
-            return;
+            isFinal = _finalResponse != null;
+
+            if (isFinal)
+            {
+                _debounceCts?.Cancel();
+                pendingToAwait = _pendingUpdate;
+            }
+            else if (_pendingUpdate != null)
+            {
+                return;
+            }
+            else
+            {
+                _debounceCts = new CancellationTokenSource();
+                _pendingUpdate = DebouncedUpdateAsync(_debounceCts.Token);
+            }
         }
 
-        // Debounce intermediate status updates to avoid Discord rate limits
-        if (_pendingUpdate != null)
+        if (isFinal)
         {
-            return;
-        }
+            if (pendingToAwait != null)
+            {
+                try
+                {
+                    await pendingToAwait;
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
 
-        _pendingUpdate = DebouncedUpdateAsync(cancellationToken);
-        await _pendingUpdate;
-    }
-
-    private async Task DebouncedUpdateAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(DebounceDelay, cancellationToken);
             await _updateLock.WaitAsync(cancellationToken);
             try
             {
                 await SendUpdateAsync(cancellationToken);
+            }
+            finally
+            {
+                _updateLock.Release();
+            }
+        }
+        else
+        {
+            await _pendingUpdate!;
+        }
+    }
+
+    private async Task DebouncedUpdateAsync(CancellationToken debounceToken)
+    {
+        try
+        {
+            await Task.Delay(DebounceDelay, debounceToken);
+            await _updateLock.WaitAsync(debounceToken);
+            try
+            {
+                await SendUpdateAsync(CancellationToken.None);
             }
             finally
             {
@@ -173,7 +239,11 @@ public sealed partial class DiscordObserver(
         }
         finally
         {
-            _pendingUpdate = null;
+            lock (_stateLock)
+            {
+                _pendingUpdate = null;
+                _debounceCts = null;
+            }
         }
     }
 
@@ -183,8 +253,25 @@ public sealed partial class DiscordObserver(
         {
             if (_finalResponse != null)
             {
+                lock (_stateLock)
+                {
+                    if (_finalSent)
+                    {
+                        return;
+                    }
+                    
+                    _finalSent = true;
+                }
+
                 // Final response. Use a rich embed:
-                var color = _hasError
+                var snapshot = SnapshotToolStatus();
+                bool hasError;
+                lock (_stateLock)
+                {
+                    hasError = _hasError;
+                }
+
+                var color = hasError
                     ? new Color(0xFEE75C)
                     : new Color(0x57F287);
 
@@ -194,12 +281,12 @@ public sealed partial class DiscordObserver(
                     .WithTimestamp(DateTimeOffset.UtcNow)
                     .WithFooter(new EmbedFooterProperties { Text = "MQR Agent" });
 
-                if (options.Value.Verbose && _toolStatus.Count > 0)
+                if (options.Value.Verbose && snapshot.Length > 0)
                 {
-                    var toolSummary = string.Join("\n", _toolStatus.Select(e => e.ToCompactMarkdown()));
+                    var toolSummary = string.Join("\n", snapshot.Select(e => e.ToCompactMarkdown()));
 
                     embed = embed.AddFields(new EmbedFieldProperties()
-                        .WithName($"Tools Used ({_toolStatus.Count})")
+                        .WithName($"Tools Used ({snapshot.Length})")
                         .WithValue(Truncate(toolSummary, 1024))
                         .WithInline()
                     );
@@ -218,7 +305,8 @@ public sealed partial class DiscordObserver(
             }
             else
             {
-                await target.UpdateContentAsync(BuildStatusContent(), cancellationToken);
+                var snapshot = SnapshotToolStatus();
+                await target.UpdateContentAsync(BuildStatusContent(snapshot), cancellationToken);
             }
         }
         catch (Exception ex)

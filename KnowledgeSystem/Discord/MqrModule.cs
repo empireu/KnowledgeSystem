@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using KnowledgeSystem.Discord.Conversation;
 using Microsoft.Extensions.Logging;
 using NetCord;
@@ -12,19 +11,11 @@ namespace KnowledgeSystem.Discord;
 public class MqrModule(
     ILogger<MqrModule> logger,
     IConversationManager conversationManager,
-    DiscordObserverFactory factory
+    DiscordObserverFactory factory,
+    ActiveRunTracker activeRunTracker
 ) : ApplicationCommandModule<ApplicationCommandContext>
 {
-    private static readonly ConcurrentDictionary<ulong, CancellationTokenSource> ActiveRuns = new();
     private static readonly TimeSpan AgentTimeout = TimeSpan.FromMinutes(14);
-
-    public static void CancelAllActiveRuns()
-    {
-        foreach (var kvp in ActiveRuns)
-        {
-            kvp.Value.Cancel();
-        }
-    }
 
     [SlashCommand("ask", "Ask MQR a single question")]
     public async Task AskAsync([SlashCommandParameter] string message)
@@ -35,8 +26,12 @@ public class MqrModule(
         var observer = factory.Create(target);
 
         var cts = new CancellationTokenSource(AgentTimeout);
-        ActiveRuns[Context.Interaction.Id] = cts;
-
+        activeRunTracker.Add(Context.Interaction.Id, new ActiveRunTracker.ActiveRunInfo
+        {
+            Cts = cts,
+            OnCloseAction = stopCts => target.UpdateContentAsync("Question was cancelled", stopCts)
+        });
+        
         _ = RunAgentSafely(
             conversationManager.AskAsync(message, observer, cts.Token),
             target,
@@ -83,7 +78,10 @@ public class MqrModule(
             var observer = factory.Create(target);
 
             var cts = new CancellationTokenSource(AgentTimeout);
-            ActiveRuns[thread.Id] = cts;
+            activeRunTracker.Add(thread.Id, new ActiveRunTracker.ActiveRunInfo
+            {
+                Cts = cts
+            });
 
             _ = RunAgentSafely(
                 conversation.RunToCompletionAsync(message, observer, cts.Token),
@@ -131,7 +129,7 @@ public class MqrModule(
         }
         finally
         {
-            ActiveRuns.TryRemove(runKey, out _);
+            activeRunTracker.Remove(runKey);
         }
     }
 }

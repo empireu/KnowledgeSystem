@@ -1,7 +1,6 @@
 ﻿using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Observer;
-using OpenAI.Chat;
 
 namespace KnowledgeSystem.Discord.Conversation;
 
@@ -38,7 +37,17 @@ public interface IConversationManager : AgentRunner.ICompletionFactory
     public void RemoveConversation(ulong channelId);
 
     /// <summary>
+    ///     Refreshes the timeout for the conversation on the given channel.
+    /// </summary>
+    public void TouchConversation(ulong channelId);
+
+    /// <summary>
+    ///     Closes all active conversations with the given reason message.
+    /// </summary>
+    public Task CloseAllAsync(string reason, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Asks a single question and returns the answer. Used for one-shot calls.
     /// </summary>
-    public Task<string> AskAsync(string message, IAgentObserver observer, CancellationToken cancellationToken = default);
+    public Task AskAsync(string message, IAgentObserver observer, CancellationToken cancellationToken = default);
 }
