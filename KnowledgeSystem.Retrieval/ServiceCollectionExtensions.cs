@@ -1,11 +1,9 @@
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Engine;
-using KnowledgeSystem.Retrieval.Reranking;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace KnowledgeSystem.Retrieval;
 
@@ -30,7 +28,8 @@ public static class ServiceCollectionExtensions
                 options.EmbeddingEndpoint,
                 options.EmbeddingModel,
                 options.EmbeddingApiKey,
-                options.EmbeddingDimension
+                options.EmbeddingDimension,
+                options.EmbeddingSystemPrompt
             ));
         
         services.AddSingleton<RagEngine>();

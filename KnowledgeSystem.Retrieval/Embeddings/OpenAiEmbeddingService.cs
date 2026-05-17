@@ -9,12 +9,14 @@ namespace KnowledgeSystem.Retrieval.Embeddings;
 /// </summary>
 public sealed class OpenAiEmbeddingService : IEmbeddingService
 {
+    private readonly string? _prompt;
     private readonly EmbeddingClient _embeddingClient;
 
     public int Dimension { get; }
 
-    public OpenAiEmbeddingService(string endpoint, string modelId, string apiKey, int dimension)
+    public OpenAiEmbeddingService(string endpoint, string modelId, string apiKey, int dimension, string? prompt)
     {
+        _prompt = prompt;
         ArgumentException.ThrowIfNullOrWhiteSpace(endpoint);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         ArgumentOutOfRangeException.ThrowIfLessThan(dimension, 1);
@@ -32,11 +34,21 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
         _embeddingClient = client.GetEmbeddingClient(modelId);
     }
 
+    private string ProcessQuery(string query)
+    {
+        if (string.IsNullOrWhiteSpace(_prompt))
+        {
+            return query;
+        }
+
+        return _prompt + query;
+    }
+    
     public async Task<ReadOnlyMemory<float>> EmbedAsync(string text, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
-        var response = await _embeddingClient.GenerateEmbeddingAsync(text, new EmbeddingGenerationOptions
+        var response = await _embeddingClient.GenerateEmbeddingAsync(ProcessQuery(text), new EmbeddingGenerationOptions
         {
             Dimensions = Dimension,
         }, cancellationToken);
@@ -53,7 +65,7 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
             return [];
         }
 
-        var response = await _embeddingClient.GenerateEmbeddingsAsync(texts, new EmbeddingGenerationOptions
+        var response = await _embeddingClient.GenerateEmbeddingsAsync(texts.Select(ProcessQuery), new EmbeddingGenerationOptions
         {
             Dimensions = Dimension,
         }, cancellationToken);
