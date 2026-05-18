@@ -76,6 +76,9 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         {
             result.ProviderOnly = _chatOptions.ProviderOnly;
             result.Temperature = _chatOptions.Temperature;
+#pragma warning disable OPENAI001
+            result.ReasoningEffortLevel = ChatReasoningEffortLevel.High;
+#pragma warning restore OPENAI001
         }
 
         return result;
