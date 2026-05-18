@@ -1,4 +1,6 @@
-﻿namespace KnowledgeSystem.Retrieval.Lexical;
+﻿// ReSharper disable ForCanBeConvertedToForeach
+
+namespace KnowledgeSystem.Retrieval.Lexical;
 
 public sealed partial class LexicalIndex
 {
@@ -23,7 +25,7 @@ public sealed partial class LexicalIndex
     {
         var frequencyTable = Tokenizer.TokenizeQueryFrequency(query, false);
 
-        if (frequencyTable.Count == 0 || TotalChunkCount == 0 || _averageDocumentLengthTokens == 0)
+        if (frequencyTable.Count == 0 || TotalChunkCount == 0 || _averageChunkLengthTokens == 0)
         {
             return [];
         }
@@ -31,22 +33,22 @@ public sealed partial class LexicalIndex
         var scores = new Dictionary<int, float>();
         foreach (var (term, frequency) in frequencyTable)
         {
-            if (!_invertedIndex.TryGetValue(term, out var postings))
+            if (!_invertedIndexForChunks.TryGetValue(term, out var postings))
             {
                 continue;
             }
 
-            var df = postings.Count;
-            var idf = MathF.Log((TotalChunkCount - df + 0.5f) / (df + 0.5f) + 1.0f);
-
+            var globalDf = _globalDocumentFrequencies.TryGetValue(term, out var df) 
+                ? df 
+                : 1;
+            
+            var idf = MathF.Log((TotalDocumentCount - globalDf + 0.5f) / (globalDf + 0.5f) + 1.0f);
             for (var i = 0; i < postings.Count; i++)
             {
                 var posting = postings[i];
-                var tfNorm = posting.TermFrequency * (K1 + 1.0f) / (posting.TermFrequency +
-                                                                    K1 * (1.0f - B + B * posting.DocumentLength /
-                                                                        _averageDocumentLengthTokens));
+                var tfNorm = posting.TermFrequency * (K1 + 1.0f) / (posting.TermFrequency + K1 * (1.0f - B + B * posting.DocumentLength / _averageChunkLengthTokens));
                 var score = idf * tfNorm * frequency;
-
+                
                 if (!scores.TryGetValue(posting.HnswId, out var existingScore))
                 {
                     scores[posting.HnswId] = score;

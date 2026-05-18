@@ -12,16 +12,22 @@ namespace KnowledgeSystem.Retrieval.Lexical;
 /// </summary>
 public sealed partial class LexicalIndex
 {
-    private readonly Dictionary<string, List<Entry>> _invertedIndex = [];
-    private float _averageDocumentLengthTokens;
+    private readonly Dictionary<string, List<ChunkEntry>> _invertedIndexForChunks = new(StringComparer.OrdinalIgnoreCase);
+    
+    // The number of EMD documents that contain each term:
+    private readonly Dictionary<string, int> _globalDocumentFrequencies = new(StringComparer.OrdinalIgnoreCase);    
+    
+    private float _averageChunkLengthTokens;
 
-    private readonly struct Entry(int hnswId, int termFrequency, int documentLength)
+    private readonly struct ChunkEntry(int hnswId, int termFrequency, int documentLength)
     {
         public readonly int HnswId = hnswId;
         public readonly int TermFrequency = termFrequency;
         public readonly int DocumentLength = documentLength;
     }
 
+    public int TotalDocumentCount { get; private set; }
+    
     /// <summary>
     ///     The total number of chunks in the index.
     /// </summary>
@@ -30,38 +36,58 @@ public sealed partial class LexicalIndex
     /// <summary>
     ///     Builds the inverted index from the given chunks.
     /// </summary>
-    public void Build(IReadOnlyDictionary<int, EmdChunk> chunksByHnswId)
+    public void Build(int documentCount, IReadOnlyDictionary<int, EmdChunk> chunksByHnswId)
     {
-        _invertedIndex.Clear();
-        TotalChunkCount = chunksByHnswId.Count;
+        _invertedIndexForChunks.Clear();
+        _globalDocumentFrequencies.Clear();
 
+        TotalDocumentCount = documentCount;
+        TotalChunkCount = chunksByHnswId.Count;
+        
         var totalDocumentLengthTokens = 0;
+        
+        var parentDocuments = new Dictionary<string, HashSet<EmdDocument>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (hnswId, chunk) in chunksByHnswId)
         {
             var frequencies = Tokenizer.TokenizeQueryFrequency(chunk.RawContent, false);
 
-            var documentLength = 0;
+            var chunkLength = 0;
             foreach (var frequency in frequencies.Values)
             {
-                documentLength += frequency;
+                chunkLength += frequency;
             }
             
-            totalDocumentLengthTokens += documentLength;
+            totalDocumentLengthTokens += chunkLength;
 
             foreach (var (term, frequency) in frequencies)
             {
-                if (!_invertedIndex.TryGetValue(term, out var postings))
+                // Local term frequency:
+                if (!_invertedIndexForChunks.TryGetValue(term, out var postings))
                 {
                     postings = [];
-                    _invertedIndex.Add(term, postings);
+                    _invertedIndexForChunks.Add(term, postings);
                 }
 
-                postings.Add(new Entry(hnswId, frequency, documentLength));
+                postings.Add(new ChunkEntry(hnswId, frequency, chunkLength));
+                
+                // Global document frequency:
+                if (!parentDocuments.TryGetValue(term, out var documentSet))
+                {
+                    documentSet = [];
+                    parentDocuments.Add(term, documentSet);
+                }
+                
+                documentSet.Add(chunk.Node.Document);
             }
         }
+        
+        foreach (var (term, documentSet) in parentDocuments)
+        {
+            _globalDocumentFrequencies[term] = documentSet.Count;
+        }
 
-        _averageDocumentLengthTokens = TotalChunkCount > 0 
+        _averageChunkLengthTokens = TotalChunkCount > 0 
             ? (float)totalDocumentLengthTokens / TotalChunkCount 
             : 0;
     }
@@ -71,7 +97,7 @@ public sealed partial class LexicalIndex
     /// </summary>
     public int GetChunkFrequency(string term)
     {
-        return _invertedIndex.TryGetValue(term.ToLowerInvariant(), out var postings) 
+        return _invertedIndexForChunks.TryGetValue(term.ToLowerInvariant(), out var postings) 
             ? postings.Count
             : 0;
     }

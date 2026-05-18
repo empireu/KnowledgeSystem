@@ -164,7 +164,7 @@ public sealed class RagEngine
         }
 
         _logger.LogInformation("Building lexical index from {count} chunks", _chunkByHnswId.Count);
-        LexicalIndex.Build(_chunkByHnswId);
+        LexicalIndex.Build(_repo.Documents.Count, _chunkByHnswId);
     }
     
     private async Task RemoveDeletedFilesAsync(List<string> deletedPaths, CancellationToken cancellationToken)
