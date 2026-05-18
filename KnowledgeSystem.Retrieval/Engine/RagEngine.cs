@@ -4,6 +4,7 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Hnsw;
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Retrieval.Embeddings;
+using KnowledgeSystem.Retrieval.Lexical;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -56,20 +57,15 @@ public sealed class RagEngine
     public IReadOnlyDictionary<int, EmdChunk> ChunkByHnswId => _chunkByHnswId;
 
     /// <summary>
+    ///     The lexical index for keyword search. Available after calling <see cref="SynchronizeAsync"/>.
+    /// </summary>
+    public LexicalIndex LexicalIndex { get; } = new();
+
+    /// <summary>
     ///     Attempts to get the HNSW vector index for a given chunk.
     /// </summary>
     public bool TryGetHnswId(EmdChunk chunk, out int hnswId) => _hnswIdByChunkHash.TryGetValue(chunk.Hash, out hnswId);
 
-    public int GetHnswId(EmdChunk chunk)
-    {
-        if (!TryGetHnswId(chunk, out var id))
-        {
-            throw new KeyNotFoundException($"The chunk {chunk.Hash.ToHexString()} is not embedded in the HNSW");
-        }
-
-        return id;
-    }
-    
     #region Setup
     
     /// <summary>
@@ -166,6 +162,9 @@ public sealed class RagEngine
                 _hnswIdByChunkHash[chunk.Hash] = record.HnswId;
             }
         }
+
+        _logger.LogInformation("Building lexical index from {count} chunks", _chunkByHnswId.Count);
+        LexicalIndex.Build(_chunkByHnswId);
     }
     
     private async Task RemoveDeletedFilesAsync(List<string> deletedPaths, CancellationToken cancellationToken)

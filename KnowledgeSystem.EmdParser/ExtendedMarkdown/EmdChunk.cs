@@ -18,20 +18,20 @@ public sealed class EmdChunk(EmdNode node, int startOffset, int length, string c
     public readonly int Length = length;
     
     /// <summary>
-    ///     The extracted text.
+    ///     The embedded text, with metadata attached to improve the search.
     /// </summary>
     public readonly string ChunkText = chunkText;
+    
+    /// <summary>
+    ///     The raw content text, without the metadata.
+    /// </summary>
+    public string RawContent => Node.RawNode.Text.Substring(StartOffset, Length);
     
     /// <summary>
     ///     The hash, computed for this chunk. It takes into account everything, including the on-disk path.
     ///     Set after the pointer tree has been initialized.
     /// </summary>
     public EmdChunkHash Hash { get; internal set; }
-
-    /// <summary>
-    ///     The raw content text, without the context prefix.
-    /// </summary>
-    public string RawContent => Node.RawNode.Text.Substring(StartOffset, Length);
 
     public bool Equals(EmdChunk? other)
     {

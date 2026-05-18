@@ -80,8 +80,7 @@ public sealed partial class FastContextToolHandler(
         {
             DirectExtraction(sb, results);
         }
-       
-
+        
         return Success(sb.ToString());
     }
 

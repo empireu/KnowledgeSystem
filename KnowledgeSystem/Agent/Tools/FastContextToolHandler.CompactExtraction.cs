@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Retrieval;
+using KnowledgeSystem.Retrieval.Lexical;
 
 namespace KnowledgeSystem.Agent.Tools;
 
@@ -13,7 +14,7 @@ public sealed partial class FastContextToolHandler
     {
         sb.AppendLine("fast_context: Too much content found. Here are the paths, offsets `a,b`, sections written as `@XXX` (if they exist), and snippets with their offsets `'…and the query is…':x,y` of the most relevant results for targeted inspection:");
 
-        var tokens = TokenizeQuery(query, config.TokenizerBlacklist);
+        var tokens = Tokenizer.TokenizeQuery(query, true);
 
         string? currentDir = null;
         foreach (var referencedDocument in results)
@@ -54,59 +55,6 @@ public sealed partial class FastContextToolHandler
                 AppendSnippets(sb, nodeText, start, tokens, config.SnippetContext, config.MaxWindows, config.DesiredSnippets);
             }
         }
-    }
-
-    /// <summary>
-    ///     Tokenizes the query into specific words (excludes the <see cref="Tools.FastContextToolHandler.DefaultBlacklistedWords"/>). The result includes the query itself.
-    /// </summary>
-    internal static string[] TokenizeQuery(string query, HashSet<string>? blacklist = null)
-    {
-        query = query.Trim();
-
-        if (query.Length == 0)
-        {
-            return [];
-        }
-
-        blacklist ??= Tools.FastContextToolHandler.DefaultBlacklistedWords;
-
-        var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            // Always include the full query string for exact matches:
-            query
-        };
-
-        // Scan character-by-character to extract individual words:
-        var wordStart = -1;
-        for (var queryTextIndex = 0; queryTextIndex <= query.Length; queryTextIndex++)
-        {
-            var isLetterOrDigit = queryTextIndex < query.Length && char.IsLetterOrDigit(query[queryTextIndex]);
-
-            // ReSharper disable once ConvertIfStatementToSwitchStatement
-            if (isLetterOrDigit && wordStart < 0)
-            {
-                // Start of a new word:
-                wordStart = queryTextIndex;
-            }
-            else if (!isLetterOrDigit && wordStart >= 0)
-            {
-                // End of the current word.
-                // Add it if it's long enough and not an blacklisted word:
-                if (queryTextIndex - wordStart >= 3)
-                {
-                    var word = query[wordStart..queryTextIndex];
-
-                    if (!blacklist.Contains(word))
-                    {
-                        tokens.Add(word);
-                    }
-                }
-
-                wordStart = -1;
-            }
-        }
-
-        return tokens.ToArray();
     }
 
     /// <summary>

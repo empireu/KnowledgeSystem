@@ -41,9 +41,4 @@ public sealed class FastContextToolConfig
     ///     Desired number of snippets total. If the number of tokens exceeds this, then one snippet per token will be included (exceeding this count).
     /// </summary>
     public int DesiredSnippets { get; set; } = 4;
-    
-    /// <summary>
-    ///     The blacklist for meaningless words. Default value is good.
-    /// </summary>
-    public HashSet<string>? TokenizerBlacklist { get; set; }
 }

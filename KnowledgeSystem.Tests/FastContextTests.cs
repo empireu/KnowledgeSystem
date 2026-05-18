@@ -1,90 +1,10 @@
 ﻿using System.Text;
-using KnowledgeSystem.Agent;
 using FastContextToolHandler = KnowledgeSystem.Agent.Tools.FastContextToolHandler;
 
 namespace KnowledgeSystem.Tests;
 
 public class FastContextTests
 {
-    #region TokenizeQuery
-
-    [Fact]
-    public void TokenizeQuery_IncludesFullQuery()
-    {
-        var tokens = FastContextToolHandler.TokenizeQuery("DX1 system config");
-
-        Assert.Contains("DX1 system config", tokens);
-    }
-
-    [Fact]
-    public void TokenizeQuery_FiltersBlacklistedWords()
-    {
-        var tokens = FastContextToolHandler.TokenizeQuery("the and for are but");
-
-        Assert.DoesNotContain("the", tokens);
-        Assert.DoesNotContain("and", tokens);
-        Assert.DoesNotContain("for", tokens);
-    }
-
-    [Fact]
-    public void TokenizeQuery_FiltersShortWords()
-    {
-        var tokens = FastContextToolHandler.TokenizeQuery("a bc de fgh");
-
-        Assert.DoesNotContain("a", tokens);
-        Assert.DoesNotContain("bc", tokens);
-        Assert.DoesNotContain("de", tokens);
-        Assert.Contains("fgh", tokens);
-    }
-
-    [Fact]
-    public void TokenizeQuery_IsCaseInsensitive()
-    {
-        var tokens = FastContextToolHandler.TokenizeQuery("DX1 dx1 Dx1");
-
-        Assert.Single(tokens, t => t.Equals("DX1", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void TokenizeQuery_HandlesPunctuation()
-    {
-        var tokens = FastContextToolHandler.TokenizeQuery("DX1, system-config (alpha)!");
-
-        Assert.Contains("DX1", tokens);
-        Assert.Contains("system", tokens);
-        Assert.Contains("config", tokens);
-        Assert.Contains("alpha", tokens);
-    }
-
-    [Fact]
-    public void TokenizeQuery_EmptyQuery_ReturnsEmpty()
-    {
-        var tokens = FastContextToolHandler.TokenizeQuery("");
-
-        Assert.Empty(tokens);
-    }
-
-    [Fact]
-    public void TokenizeQuery_ShortQuery_UnderThreeChars_ReturnsEmpty()
-    {
-        var tokens = FastContextToolHandler.TokenizeQuery("");
-
-        Assert.Empty(tokens);
-    }
-
-    [Fact]
-    public void TokenizeQuery_PreservesMeaningfulWords()
-    {
-        var tokens = FastContextToolHandler.TokenizeQuery("Quick Response Force deployment");
-
-        Assert.Contains("Quick", tokens);
-        Assert.Contains("Response", tokens);
-        Assert.Contains("Force", tokens);
-        Assert.Contains("deployment", tokens);
-    }
-
-    #endregion
-
     #region AppendSnippets
 
     [Fact]
