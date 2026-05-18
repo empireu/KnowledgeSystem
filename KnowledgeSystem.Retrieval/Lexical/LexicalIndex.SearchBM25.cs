@@ -23,7 +23,7 @@ public sealed partial class LexicalIndex
     /// </summary>
     public Bm25Result[] SearchBm25(string query)
     {
-        var frequencyTable = Tokenizer.TokenizeQueryFrequency(query, false);
+        var frequencyTable = Tokenizer.TokenizeWithFrequency(query, false);
 
         if (frequencyTable.Count == 0 || TotalChunkCount == 0 || _averageChunkLengthTokens == 0)
         {

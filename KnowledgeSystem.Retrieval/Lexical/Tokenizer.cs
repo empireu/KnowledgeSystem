@@ -26,7 +26,7 @@ public static class Tokenizer
     /// </summary>
     /// <param name="query">The search query.</param>
     /// <param name="includeFullQuery">If true, includes the exact literal string as a token with a frequency of 1. The dictionary will have <see cref="StringComparer.OrdinalIgnoreCase"/>.</param>
-    public static Dictionary<string, int> TokenizeQueryFrequency(string query, bool includeFullQuery)
+    public static Dictionary<string, int> TokenizeWithFrequency(string query, bool includeFullQuery)
     {
         var tokens = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
     
@@ -88,7 +88,7 @@ public static class Tokenizer
     /// </summary>
     public static string[] TokenizeQuery(string query, bool includeFullQuery)
     {
-        var frequencies = TokenizeQueryFrequency(query, includeFullQuery);
+        var frequencies = TokenizeWithFrequency(query, includeFullQuery);
         
         return frequencies.Keys.ToArray();
     }

@@ -49,6 +49,7 @@ public sealed partial class FastContextToolHandler(
                 Query = query,
                 BootstrapCount = config.BootstrapCount,
                 Parameter = config.Parameter,
+                Bm25Results = config.Bm25Results,
                 FilePathPattern = pathFilter
             });
         }
@@ -67,11 +68,31 @@ public sealed partial class FastContextToolHandler(
             ++turns;
         } while (!retrieval.IsExhausted && chars < config.MaxDirectCharCount && turns < config.MaxTurns);
 
+        retrieval.FuseScoresAndFinish();
+       
+        var sb = new StringBuilder();
+        
+        var gaps = retrieval.ExtractGapTokens();
+      
+        if (gaps.Count > 0)
+        {
+            gaps.Sort((a, b) => a.PValue.CompareTo(b.PValue));
+
+            sb.AppendLine("fast_context: Warning! Some terms are under-represented in the search results:");
+            for (var index = 0; index < gaps.Count; index++)
+            {
+                var gapToken = gaps[index];
+
+                sb.AppendLine($"{index}. \"{gapToken.Token}\" - appears {gapToken.InResults} times, exists {gapToken.InCorpus} times across all documents");
+            }
+
+            sb.AppendLine("If those are important tokens, consider doing a search with each token itself only.");
+        }
+        
         var results = retrieval.ReferencedDocuments.Values.ToList();
         results.Sort((a, b) => a.AverageScore.CompareTo(b.AverageScore));
-
-        var sb = new StringBuilder();
-
+        
+        
         if (chars > config.MaxDirectCharCount)
         {
             CompactExtraction(sb, query, results);

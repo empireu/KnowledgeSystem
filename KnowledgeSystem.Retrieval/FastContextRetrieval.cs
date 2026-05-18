@@ -1,12 +1,16 @@
 ﻿using System.Diagnostics;
 using System.Numerics.Tensors;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Hnsw;
 using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Lexical;
 
+// ReSharper disable ForeachCanBeConvertedToQueryUsingAnotherGetEnumerator
+// ReSharper disable ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
 // ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Retrieval;
@@ -18,6 +22,7 @@ public sealed class FastContextRetrieval
     private readonly string _query;
     private readonly int _bootstrapCount;
     private readonly float _parameter;
+    private readonly int _bm25Count;
     private readonly FileFilter? _filePathFilter;
 
     private float[] _embedding = [];
@@ -25,7 +30,7 @@ public sealed class FastContextRetrieval
     
     private float[] _centroid = [];
     private float _coherenceThreshold;
-    private bool _centroidBootstrapped;
+    private bool _firstStepDone;
 
     /// <summary>
     ///     Set to true when a Step fetches results but none pass the coherence filter, or when the search returns no results at all.
@@ -50,6 +55,7 @@ public sealed class FastContextRetrieval
         _query = description.Query;
         _bootstrapCount = description.BootstrapCount;
         _parameter = description.Parameter;
+        _bm25Count = description.Bm25Results;
         
         // P.S. If we ever use this in some other place, we need to change the error handling.
         if (!string.IsNullOrWhiteSpace(description.FilePathPattern))
@@ -105,6 +111,34 @@ public sealed class FastContextRetrieval
 
         return result;
     }
+
+    /// <summary>
+    ///     Gets the fixed number of results using BM25 ranking. Does not prevent vector search from finding the same results.
+    /// </summary>
+    private void Bm25()
+    {
+        var bm25Results = _engine.LexicalIndex.SearchBm25(_query);
+
+        for (var resultIndex = 0; resultIndex < Math.Min(bm25Results.Length, _bm25Count); resultIndex++)
+        {
+            var bm25Result = bm25Results[resultIndex];
+            var chunk = _engine.GetChunkByHnswId(bm25Result.HnswId);
+            
+            if (!ReferencedDocuments.TryGetValue(chunk.Node.Document, out var referencedDocument))
+            {
+                referencedDocument = new ReferencedDocument(chunk.Node.Document);
+                ReferencedDocuments.Add(chunk.Node.Document, referencedDocument);
+            }
+
+            referencedDocument.References.Add(bm25Result.HnswId, new ReferencedDocument.Reference
+            {
+                Chunk = chunk,
+                HnswId = bm25Result.HnswId,
+                HasBm25 = true,
+                Bm25Score = bm25Result.Score
+            });
+        }
+    }
     
     /// <summary>
     ///     Fetches more results for the query and updates the bounding tree of the results.
@@ -119,7 +153,7 @@ public sealed class FastContextRetrieval
             throw new InvalidOperationException("Not prepared for step!");
         }
         
-        var fetchCount = _centroidBootstrapped ? count : _bootstrapCount;
+        var fetchCount = _firstStepDone ? count : _bootstrapCount;
         var vectorResults = _engine.Search(_embedding, fetchCount, efSearch: 1000, predicate: Predicate);
 
         if (vectorResults.Length == 0)
@@ -128,9 +162,12 @@ public sealed class FastContextRetrieval
             return UpdateTreesAndGetChars();
         }
 
-        if (!_centroidBootstrapped)
+        if (!_firstStepDone)
         {
+            Bm25();
             Bootstrap(vectorResults);
+            
+            _firstStepDone = true;
         }
 
         // Apply coherence filter and add accepted results:
@@ -157,11 +194,23 @@ public sealed class FastContextRetrieval
                 ReferencedDocuments.Add(chunk.Node.Document, referencedDocument);
             }
             
-            referencedDocument.References.Add(new ReferencedDocument.Reference
+            // If BM25 already added this chunk, merge the vector score:
+            if (referencedDocument.References.TryGetValue(vectorSearchResult.Index, out var existing))
             {
-                VectorResult = vectorSearchResult,
-                Chunk = chunk
-            });
+                existing.HasVectorResult = true;
+                existing.VectorScore = vectorSearchResult.Score;
+                referencedDocument.References[vectorSearchResult.Index] = existing;
+            }
+            else
+            {
+                referencedDocument.References.Add(vectorSearchResult.Index, new ReferencedDocument.Reference
+                {
+                    Chunk = chunk,
+                    HnswId = vectorSearchResult.Index,
+                    HasVectorResult = true,
+                    VectorScore = vectorSearchResult.Score
+                });
+            }
 
             var rawNode = chunk.Node.RawNode;
             
@@ -178,12 +227,196 @@ public sealed class FastContextRetrieval
             }
         }
 
-        if (_centroidBootstrapped && accepted == 0)
+        if (_firstStepDone && accepted == 0)
         {
             IsExhausted = true;
         }
 
         return UpdateTreesAndGetChars();
+    }
+
+    /// <summary>
+    ///     Computes Reciprocal Rank Fusion scores for all references across BM25 and vector results, then recomputes bounding trees with the fused scores.
+    ///     Should be called after all <see cref="Step"/> calls are done (either exhausted or caller chose to stop).
+    /// </summary>
+    public int FuseScoresAndFinish(int k = 60)
+    {
+        // Collect all references globally, partitioned by search method:
+        var vectorRefs = new List<ReferencedDocument.Reference>();
+        var bm25Refs = new List<ReferencedDocument.Reference>();
+
+        foreach (var doc in ReferencedDocuments.Values)
+        {
+            foreach (var reference in doc.References.Values)
+            {
+                if (reference.HasVectorResult)
+                {
+                    vectorRefs.Add(reference);
+                }
+
+                if (reference.HasBm25)
+                {
+                    bm25Refs.Add(reference);
+                }
+            }
+        }
+
+        // Sort vector by score ascending (see VectorObjective), BM25 by score descending:
+        vectorRefs.Sort((a, b) => a.VectorScore.CompareTo(b.VectorScore));
+        bm25Refs.Sort((a, b) => b.Bm25Score.CompareTo(a.Bm25Score));
+
+        // Build rank maps:
+        var vectorRanks = new Dictionary<int, int>(vectorRefs.Count);
+        for (var i = 0; i < vectorRefs.Count; i++)
+        {
+            vectorRanks[vectorRefs[i].HnswId] = i + 1;
+        }
+
+        var bm25Ranks = new Dictionary<int, int>(bm25Refs.Count);
+        for (var i = 0; i < bm25Refs.Count; i++)
+        {
+            bm25Ranks[bm25Refs[i].HnswId] = i + 1;
+        }
+
+        // Compute RRF:
+        foreach (var document in ReferencedDocuments.Values)
+        {
+            var keys = document.References.Keys.ToArray();
+            for (var i = 0; i < keys.Length; i++)
+            {
+                var key = keys[i];
+                var reference = document.References[key];
+                var rrf = 0.0;
+
+                if (vectorRanks.TryGetValue(key, out var vectorRank))
+                {
+                    rrf += 1.0 / (k + vectorRank);
+                }
+
+                if (bm25Ranks.TryGetValue(key, out var bm25Rank))
+                {
+                    rrf += 1.0 / (k + bm25Rank);
+                }
+
+                reference.FusedScore = rrf;
+                document.References[key] = reference;
+            }
+        }
+
+        // Recompute bounding trees with fused scores
+        var totalChars = 0;
+        foreach (var document in ReferencedDocuments.Values)
+        {
+            document.ComputeBoundingTrees(out var documentChars);
+            
+            totalChars += documentChars;
+        }
+        
+        return totalChars;
+    }
+
+    /// <summary>
+    ///     Detects query tokens that are statistically underrepresented in the results using a Poisson CDF test.
+    ///     Returns gap tokens with their observed count in results and total count in the corpus.
+    /// </summary>
+    public List<GapToken> ExtractGapTokens(float significanceLevel = 0.05f)
+    {
+        var queryTokens = Tokenizer.TokenizeWithFrequency(_query, false);
+        
+        if (queryTokens.Count == 0)
+        {
+            return [];
+        }
+
+        // Collect all referenced HNSW IDs and their tokens:
+        var referencedChunks = new List<(int HnswId, Dictionary<string, int> Tokens)>();
+        foreach (var document in ReferencedDocuments.Values)
+        {
+            foreach (var hnswId in document.References.Keys)
+            {
+                referencedChunks.Add((hnswId, _engine.LexicalIndex.GetChunkTokenSet(hnswId)));
+            }
+        }
+
+        // For each query token, count how many referenced chunks contain it
+        var tokenCounts = new List<(string Token, int InResults, int InCorpus)>(queryTokens.Count);
+        foreach (var token in queryTokens.Keys)
+        {
+            var inResults = 0;
+            foreach (var (_, tokens) in referencedChunks)
+            {
+                if (tokens.ContainsKey(token))
+                {
+                    inResults++;
+                }
+            }
+            
+            var inCorpus = _engine.LexicalIndex.GetChunkFrequency(token);
+            tokenCounts.Add((token, inResults, inCorpus));
+        }
+
+        // Mean of observed frequencies across all query tokens:
+        var lambda = tokenCounts.Count > 0
+            ? tokenCounts.Average(t => (double)t.InResults)
+            : 0;
+
+        // Poisson CDF test per token to find out if the observed count is significantly below expected:
+        var gaps = new List<GapToken>(4);
+        foreach (var (token, inResults, inCorpus) in tokenCounts)
+        {
+            if (lambda <= 0)
+            {
+                continue;
+            }
+            
+            var pValue = PoissonCdf(inResults, lambda);
+            if (pValue < significanceLevel)
+            {
+                gaps.Add(new GapToken(token, inResults, inCorpus, pValue));
+            }
+        }
+
+        return gaps;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static double PoissonCdf(int k, double lambda)
+    {
+        var sum = 0.0;
+        var term = Math.Exp(-lambda);
+        for (var i = 0; i <= k; i++)
+        {
+            sum += term;
+            term *= lambda / (i + 1);
+        }
+
+        return sum;
+    }
+
+    /// <summary>
+    ///     A query token that is statistically underrepresented in the search results.
+    /// </summary>
+    public readonly struct GapToken(string token, int inResults, int inCorpus, double pValue)
+    {
+        /// <summary>
+        ///     The gap token.
+        /// </summary>
+        public readonly string Token = token;
+
+        /// <summary>
+        ///     How many referenced chunks contain this token.
+        /// </summary>
+        public readonly int InResults = inResults;
+
+        /// <summary>
+        ///     How many chunks in the entire corpus contain this token.
+        /// </summary>
+        public readonly int InCorpus = inCorpus;
+
+        /// <summary>
+        ///     The Poisson CDF p-value. Lower means more absent.
+        /// </summary>
+        public readonly double PValue = pValue;
     }
 
     /// <summary>
@@ -255,7 +488,6 @@ public sealed class FastContextRetrieval
         
         _centroid = centroid;
         _coherenceThreshold = medianCoherenceScore + _parameter * mad;
-        _centroidBootstrapped = true;
     }
 
     private int UpdateTreesAndGetChars()
@@ -300,6 +532,11 @@ public sealed class FastContextRetrieval
         ///     Regex filter applied to the file paths.
         /// </summary>
         public string? FilePathPattern { get; init; }
+
+        /// <summary>
+        ///     The fixed number of BM25 results to pull.
+        /// </summary>
+        public int Bm25Results { get; init; } = 30;
     }
 
     private sealed class FileFilter(Regex matcher)
@@ -317,7 +554,7 @@ public sealed class FastContextRetrieval
         ///     All the search results found.
         ///     Populated by <see cref="Step"/>.
         /// </summary>
-        public readonly List<Reference> References = [];
+        public readonly Dictionary<int, Reference> References = [];
         
         /// <summary>
         ///     Nodes one level higher than the found nodes.
@@ -352,9 +589,8 @@ public sealed class FastContextRetrieval
             _boundingTreesByRoot.Clear();
             _boundingTreesSorted.Clear();
 
-            for (var index = 0; index < References.Count; index++)
+            foreach (var reference in References.Values)
             {
-                var reference = References[index];
                 _referencesForBuild.Push(reference);
             }
 
@@ -393,7 +629,7 @@ public sealed class FastContextRetrieval
                 }
 
                 boundingTree.ReferenceCount++;
-                boundingTree.ScoreSum += front.VectorResult.Score;
+                boundingTree.ScoreSum += front.FusedScore;
             }
 
             characterCount = 0;
@@ -411,12 +647,45 @@ public sealed class FastContextRetrieval
         }
         
         /// <summary>
-        ///     Represents a single vector search result within this document.
+        ///     Represents a single search result within this document.
+        ///     A reference can come from vector search, BM25, or both.
         /// </summary>
-        public readonly struct Reference
+        public struct Reference
         {
-            public required VectorSearchResult VectorResult { get; init; }
             public required EmdChunk Chunk { get; init; }
+
+            /// <summary>
+            ///     The HNSW index for this chunk.
+            /// </summary>
+            public required int HnswId { get; init; }
+
+            /// <summary>
+            ///     The adjusted cosine similarity.
+            ///     Only valid when <see cref="HasVectorResult"/> is true.
+            /// </summary>
+            public float VectorScore;
+            
+            /// <summary>
+            ///     The BM25 score (higher = better).
+            ///     Only valid when <see cref="HasBm25"/> is true.
+            /// </summary>
+            public float Bm25Score;
+
+            /// <summary>
+            ///     The final fused score computed by <see cref="FastContextRetrieval.FuseScoresAndFinish"/>.
+            ///     Zero until RRF is called.
+            /// </summary>
+            public double FusedScore;
+            
+            /// <summary>
+            ///     Whether this reference was also found via vector search.
+            /// </summary>
+            public bool HasVectorResult;
+            
+            /// <summary>
+            ///     Whether this reference was found via BM25 search.
+            /// </summary>
+            public bool HasBm25;
         }
 
         /// <summary>

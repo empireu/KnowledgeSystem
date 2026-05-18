@@ -19,6 +19,9 @@ public sealed partial class LexicalIndex
     
     private float _averageChunkLengthTokens;
 
+    // Pre-tokenized raw chunk text.
+    private readonly Dictionary<int, Dictionary<string, int>> _chunkTokensByHnswId = [];
+
     private readonly struct ChunkEntry(int hnswId, int termFrequency, int documentLength)
     {
         public readonly int HnswId = hnswId;
@@ -40,18 +43,20 @@ public sealed partial class LexicalIndex
     {
         _invertedIndexForChunks.Clear();
         _globalDocumentFrequencies.Clear();
+        _chunkTokensByHnswId.Clear();
 
         TotalDocumentCount = documentCount;
         TotalChunkCount = chunksByHnswId.Count;
         
         var totalDocumentLengthTokens = 0;
-        
         var parentDocuments = new Dictionary<string, HashSet<EmdDocument>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (hnswId, chunk) in chunksByHnswId)
         {
-            var frequencies = Tokenizer.TokenizeQueryFrequency(chunk.RawContent, false);
-
+            var frequencies = Tokenizer.TokenizeWithFrequency(chunk.RawContent, false);
+            
+            _chunkTokensByHnswId.Add(hnswId, frequencies);
+            
             var chunkLength = 0;
             foreach (var frequency in frequencies.Values)
             {
@@ -84,7 +89,7 @@ public sealed partial class LexicalIndex
         
         foreach (var (term, documentSet) in parentDocuments)
         {
-            _globalDocumentFrequencies[term] = documentSet.Count;
+            _globalDocumentFrequencies.Add(term, documentSet.Count);
         }
 
         _averageChunkLengthTokens = TotalChunkCount > 0 
@@ -95,10 +100,12 @@ public sealed partial class LexicalIndex
     /// <summary>
     ///     Returns the number of chunks containing the given term, or 0 if the term is not in the index.
     /// </summary>
-    public int GetChunkFrequency(string term)
-    {
-        return _invertedIndexForChunks.TryGetValue(term.ToLowerInvariant(), out var postings) 
-            ? postings.Count
-            : 0;
-    }
+    public int GetChunkFrequency(string term) => _invertedIndexForChunks.TryGetValue(term.ToLowerInvariant(), out var postings) 
+        ? postings.Count
+        : 0;
+
+    /// <summary>
+    ///     Returns the tokens for the given chunk.
+    /// </summary>
+    public Dictionary<string, int> GetChunkTokenSet(int hnswId) => _chunkTokensByHnswId[hnswId];
 }

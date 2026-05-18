@@ -41,4 +41,14 @@ public sealed class FastContextToolConfig
     ///     Desired number of snippets total. If the number of tokens exceeds this, then one snippet per token will be included (exceeding this count).
     /// </summary>
     public int DesiredSnippets { get; set; } = 4;
+
+    /// <summary>
+    ///     Parameter for: <see cref="KnowledgeSystem.Retrieval.FastContextRetrieval.Description.Bm25Results"/>.
+    /// </summary>
+    public int Bm25Results { get; set; } = 30;
+
+    /// <summary>
+    ///     The significance level for <see cref="KnowledgeSystem.Retrieval.FastContextRetrieval.ExtractGapTokens"/>.
+    /// </summary>
+    public float SignificanceLevel = 0.05f;
 }
