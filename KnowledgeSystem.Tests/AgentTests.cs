@@ -1,4 +1,3 @@
-using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
@@ -334,7 +333,7 @@ public class AgentTests
     [Fact]
     public void AgentCompletionResult_CompletesWithNoError()
     {
-        var result = new AgentCompletionResult(true, null);
+        var result = new AgentCallbackResult(true, null);
 
         Assert.True(result.CompletesExecution);
         Assert.Null(result.Error);
@@ -344,7 +343,7 @@ public class AgentTests
     public void AgentCompletionResult_CompletesWithError()
     {
         var error = new AgentExecutionError("fail", true);
-        var result = new AgentCompletionResult(true, error);
+        var result = new AgentCallbackResult(true, error);
 
         Assert.True(result.CompletesExecution);
         Assert.NotNull(result.Error);
@@ -354,7 +353,7 @@ public class AgentTests
     [Fact]
     public void AgentCompletionResult_DoesNotComplete()
     {
-        var result = new AgentCompletionResult(false, null);
+        var result = new AgentCallbackResult(false, null);
 
         Assert.False(result.CompletesExecution);
         Assert.Null(result.Error);

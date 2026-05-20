@@ -28,7 +28,7 @@ public sealed class RepoFetchToolHandler(
         registry.RegisterTool(fetchTool, handler);
     }
     
-    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, ConversationalContext runContext, CancellationToken cancellationToken)
+    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var argument = referenceArgument.GetValue(args);
 

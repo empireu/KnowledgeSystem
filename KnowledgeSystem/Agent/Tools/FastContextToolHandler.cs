@@ -30,7 +30,7 @@ public sealed partial class FastContextToolHandler(
         registry.RegisterTool(searchTool, handler);
     }
 
-    public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, ConversationalContext runContext, CancellationToken cancellationToken)
+    public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var query = queryArgument.GetValue(args);
         var pathFilter = pathFilterArgument.GetValueOrNull(args);
@@ -91,7 +91,6 @@ public sealed partial class FastContextToolHandler(
         
         var results = retrieval.ReferencedDocuments.Values.ToList();
         results.Sort((a, b) => a.AverageScore.CompareTo(b.AverageScore));
-        
         
         if (chars > config.MaxDirectCharCount)
         {

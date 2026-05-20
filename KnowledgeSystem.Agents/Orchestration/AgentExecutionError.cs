@@ -16,7 +16,7 @@ public class AgentExecutionError(string message, bool isCritical)
     ///     If true, this error will finish the execution of the agent. Otherwise, the agent will try to handle it.
     /// </summary>
     public bool IsCritical { get; } = isCritical;
-
+    
     public override string ToString()
     {
         return Message;

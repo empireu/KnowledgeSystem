@@ -30,4 +30,6 @@ public class ChatOptions
     public string TokenizerDir { get; set; } = null!;
     
     public bool Verbose { get; set; } = false;
+
+    public ReviewOptions? Review { get; set; } = null!;
 }

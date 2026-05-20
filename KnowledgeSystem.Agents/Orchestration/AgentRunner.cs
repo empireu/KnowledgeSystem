@@ -1,9 +1,11 @@
 ﻿using System.ClientModel;
+using System.Diagnostics.CodeAnalysis;
 using KnowledgeSystem.Agents.Orchestration.Observer;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using OpenAI.Chat;
 // ReSharper disable ForCanBeConvertedToForeach
+// ReSharper disable UnusedAutoPropertyAccessor.Local
 
 namespace KnowledgeSystem.Agents.Orchestration;
 
@@ -41,7 +43,7 @@ public abstract class AgentRunner
     ///     Gets the ongoing tool calls.
     /// </summary>
     public IReadOnlyList<AgentToolFrame> ActiveToolCalls => ToolCallsInternal;
-
+    
     protected readonly ICompletionFactory CompletionFactory;
     
     protected AgentRunner(IAgentObserver observer, ChatClient client, AgentRunner? parent, ICompletionFactory? completionFactory)
@@ -163,14 +165,32 @@ public sealed class AgentRunner<TContext>(
     /// <returns></returns>
     public async Task<TurnStatus> ExecuteTurn()
     {
+        if (IsFinished)
+        {
+            throw new Exception("Tried to execute finished runner!");
+        }
+        
+        // Handle the early completions:
+        if (Agent.CompletedEarly)
+        {
+            IsFinished = true;
+            FinishError = Agent.EarlyCompletionError;
+            
+            return Agent.EarlyCompletionError == null
+                ? TurnStatus.CompletedSuccessfully
+                : TurnStatus.CompletedWithError;
+        }
+        
         if (ToolCallsInternal.Count > 0)
         {
             if (await StepTools())
             {
                 return TurnStatus.ToolsStepped;
             }
-            
-            return TurnStatus.ToolsFinished;
+
+            var callbackStatus = await HandleCallbackResult(() => Agent.HandleToolFinish(this));
+            ToolCallsInternal.Clear();
+            return callbackStatus ?? TurnStatus.ToolsFinished;
         }
         
         var chatOptions = CompletionFactory.CreateOptionsForTurn(this);
@@ -217,31 +237,38 @@ public sealed class AgentRunner<TContext>(
             await Observer.OnAssistantMessageAsync(this, textContent, cancellationToken);
         }
 
+        return await HandleCallbackResult(() => Agent.HandleCompletion(this, completion)) ??
+               TurnStatus.CompletionHandled;
+    }
+
+    private async Task<TurnStatus?> HandleCallbackResult(Func<Task<AgentCallbackResult>> callback)
+    {
         // Let the agent decide whether this finishes execution:
-        AgentCompletionResult completionResult;
+        AgentCallbackResult callbackResult;
         try
         {
-            completionResult = await Agent.HandleCompletion(completion, ExecutionContext);
+            callbackResult = await callback();
         }
         catch (Exception ex)
         {
-            completionResult = new AgentCompletionResult(true, new AgentExecutionError($"Agent completion handler failed: {ex.Message}", true));
+            callbackResult = new AgentCallbackResult(true, new AgentExecutionError($"Agent completion handler threw: {ex.Message}", true));
         }
 
-        if (!completionResult.CompletesExecution)
+        if (!callbackResult.CompletesExecution)
         {
-            return TurnStatus.CompletionHandled;
+            // Doesn't complete agent. Needs specific status:
+            return null;
         }
 
         IsFinished = true;
-        FinishError = completionResult.Error;
+        FinishError = callbackResult.Error;
         
         await Observer.OnAgentCompletedAsync(this, cancellationToken);
 
         return FinishError == null 
             ? TurnStatus.CompletedSuccessfully 
             : TurnStatus.CompletedWithError;
-    }
+    } 
 
     /// <summary>
     ///     Steps the current tools.
@@ -283,7 +310,6 @@ public sealed class AgentRunner<TContext>(
                             plainFrame.StartedTask = handler.ExecuteAsync(
                                 this,
                                 plainFrame.Args,
-                                ExecutionContext,
                                 cancellationToken
                             );
                         }
@@ -404,8 +430,6 @@ public sealed class AgentRunner<TContext>(
             ExecutionContext.InsertToolResult(toolCall.CallId, output);
         }
         
-        ToolCallsInternal.Clear();
-
         return false;
     }
     
@@ -582,4 +606,68 @@ public sealed class AgentRunner<TContext>(
 
         return $"Missing required arguments {missing}";
     }
+
+    #region Helper
+
+    public bool TryGetUniqueActiveHandlerOfType<THandler>([NotNullWhen(true)] out THandler? result) where THandler : ToolHandler
+    {
+        result = null;
+
+        for (var index = 0; index < ToolCallsInternal.Count; index++)
+        {
+            var agentToolFrame = ToolCallsInternal[index];
+
+            if (agentToolFrame is not AgentToolFrame.RunningFrame runningFrame)
+            {
+                continue;
+            }
+
+            if (Agent.ToolRegistry.Handlers[runningFrame.Tool] is not THandler handler)
+            {
+                continue;
+            }
+            
+            if (result != null)
+            {
+                throw new InvalidOperationException($"Tried to get unique active handler of type {typeof(THandler)}, but found duplicates");
+            }
+
+            result = handler;
+        }
+        
+        return result != null;
+    }
+
+    public bool TryGetUniqueActiveSubAgentProxyForHandler<THandler>([NotNullWhen(true)] out ISubAgentProxy? result) where THandler : ToolHandler
+    {
+        result = null;
+        
+        var foundHandler = false;
+        for (var index = 0; index < ToolCallsInternal.Count; index++)
+        {
+            var agentToolFrame = ToolCallsInternal[index];
+
+            if (agentToolFrame is not AgentToolFrame.RunningSubAgent subAgentFrame)
+            {
+                continue;
+            }
+
+            if (Agent.ToolRegistry.Handlers[subAgentFrame.Tool] is not THandler handler)
+            {
+                continue;
+            }
+            
+            if (foundHandler)
+            {
+                throw new InvalidOperationException($"Tried to get unique active handler of type {typeof(THandler)}, but found duplicates");
+            }
+
+            foundHandler = true;
+            result = subAgentFrame.Proxy ?? throw new InvalidOperationException($"Tried to get proxy for {handler} before it was available");
+        }
+        
+        return result != null;
+    }
+    
+    #endregion
 }

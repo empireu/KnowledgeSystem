@@ -28,7 +28,7 @@ public sealed class TreeToolHandler(
         registry.RegisterTool(treeTool, handler);
     }
 
-    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, ConversationalContext runContext, CancellationToken cancellationToken)
+    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var path = pathArgument.GetValue(args).Trim('/');
         

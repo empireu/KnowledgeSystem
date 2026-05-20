@@ -75,12 +75,14 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         if (!string.IsNullOrWhiteSpace(_chatOptions.ProviderOnly))
         {
             result.ProviderOnly = _chatOptions.ProviderOnly;
-            result.Temperature = _chatOptions.Temperature;
-#pragma warning disable OPENAI001
-            result.ReasoningEffortLevel = ChatReasoningEffortLevel.High;
-#pragma warning restore OPENAI001
         }
 
+        result.Temperature = _chatOptions.Temperature;
+        
+#pragma warning disable OPENAI001
+        result.ReasoningEffortLevel = ChatReasoningEffortLevel.High;
+#pragma warning restore OPENAI001
+        
         return result;
     }
 
@@ -122,7 +124,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
             var context = new ConversationalContext();
             context.ChatContext.InsertSystem(_systemPrompt);
 
-            var agent = new ConversationalAgent(channelId.ToString(), _serviceProvider);
+            var agent = new ConversationalAgent(channelId.ToString(), _serviceProvider, _chatOptions);
 
             var conversation = new ActiveConversation(
                 this,
@@ -265,7 +267,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         context.ChatContext.InsertSystem(_systemPrompt);
         context.ChatContext.InsertUser(message);
 
-        var agent = new ConversationalAgent("ask", _serviceProvider);
+        var agent = new ConversationalAgent("ask", _serviceProvider, _chatOptions);
        
         var runner = new AgentRunner<ConversationalContext>(
             observer,
