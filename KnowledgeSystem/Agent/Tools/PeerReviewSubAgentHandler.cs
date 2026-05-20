@@ -17,9 +17,11 @@ namespace KnowledgeSystem.Agent.Tools;
 
 public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ReviewOptions options) : ToolHandler<ConversationalContext>.SubAgent(tool)
 {
+    public const string ToolId = "submit_with_review";    
+    
     public static void Register(AgentToolRegistry<ConversationalContext> registry, ReviewOptions options)
     {
-        var reviewTool = new ToolBuilder("submit_with_review")
+        var reviewTool = new ToolBuilder(ToolId)
             .WithDescription("Submits your message for the user to be peer-reviewed. If it passes, it will be shown to the user immediately. Otherwise, you will get a report on the found issues. Only call if you are responding with any information; don't call if you are just exchanging pleasantries.")
             .WithRequiredStringArgument("report", "Your final report for the user.", out var reportArg)
             .Build();
@@ -33,6 +35,7 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
         AgentRunner<ConversationalContext> runner,
         ArgumentExtractionResult args, 
         ConversationalContext runContext,
+        string toolCallId,
         CancellationToken cancellationToken)
     {
         var report = reportArgument.GetValue(args);
@@ -81,7 +84,7 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
             }
         }
         
-        var reviewContext = new PeerReviewContext(sb.ToString(), report);
+        var reviewContext = new PeerReviewContext(toolCallId, sb.ToString(), report);
         
         return new Proxy(runner, this, reviewContext, options, cancellationToken);
     }

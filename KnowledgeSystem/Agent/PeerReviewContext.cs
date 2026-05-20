@@ -4,6 +4,9 @@ namespace KnowledgeSystem.Agent;
 
 public sealed class PeerReviewContext : ConversationalContext
 {
+    public string ToolCallId { get; }
+    public string Report { get; }
+
     public enum Status
     {
         Invalid,
@@ -13,7 +16,15 @@ public sealed class PeerReviewContext : ConversationalContext
     
     public Status FinalStatus
     {
-        get => field == Status.Invalid ? throw new InvalidOperationException("Cannot get results from peer review agent before it's done.") : field;
+        get
+        {
+            if (field == Status.Invalid)
+            {
+                throw new InvalidOperationException("Cannot get results from peer review agent before it's done.");
+            }
+
+            return field;
+        }
         set
         {
             if (field != Status.Invalid)
@@ -49,8 +60,10 @@ public sealed class PeerReviewContext : ConversationalContext
         }
     }
     
-    public PeerReviewContext(string systemPrompt, string report)
+    public PeerReviewContext(string toolCallId, string systemPrompt, string report)
     {
+        ToolCallId = toolCallId;
+        Report = report;
         ChatContext.InsertSystem(systemPrompt);
         ChatContext.InsertUser(report);
     }

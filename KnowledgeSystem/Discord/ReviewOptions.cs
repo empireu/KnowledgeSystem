@@ -4,8 +4,6 @@ namespace KnowledgeSystem.Discord;
 
 public class ReviewOptions
 {
-    public const string Section = "review";
-    
     [Required]
     public string Endpoint { get; set; } = null!;
 

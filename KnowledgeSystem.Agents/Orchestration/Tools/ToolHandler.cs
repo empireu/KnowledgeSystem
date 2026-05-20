@@ -44,7 +44,7 @@ public abstract class ToolHandler<TContext> : ToolHandler where TContext : Agent
         ///     The task will be awaited next turn.
         ///     Errors should all be handled and reported in the <see cref="ToolExecutionResult"/>.
         /// </summary>
-        public abstract Task<ISubAgentProxy> BeginSubAgentExecution(AgentRunner<TContext> runner, ArgumentExtractionResult args, TContext runContext, CancellationToken cancellationToken);
+        public abstract Task<ISubAgentProxy> BeginSubAgentExecution(AgentRunner<TContext> runner, ArgumentExtractionResult args, TContext runContext, string toolCallId, CancellationToken cancellationToken);
     }
 }
 

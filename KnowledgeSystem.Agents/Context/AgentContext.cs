@@ -109,7 +109,7 @@ public sealed class AgentContext
         new ChatElement(message),
         index
     );
-    
+
     /// <summary>
     ///     Clears all messages in the chat.
     /// </summary>

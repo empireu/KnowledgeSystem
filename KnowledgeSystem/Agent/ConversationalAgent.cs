@@ -25,18 +25,20 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
         return Task.FromResult(AgentCallbackResult.Break);
     }
 
-    public override Task<AgentCallbackResult> HandleToolFinish(AgentRunner<ConversationalContext> runner)
+    public override async Task<AgentCallbackResult> HandleToolFinish(AgentRunner<ConversationalContext> runner)
     {
         if (runner.TryGetUniqueActiveSubAgentProxyForHandler<PeerReviewSubAgentHandler>(out var peerReviewProxy))
         {
-            return Task.FromResult(StitchPeerReviewOutput(runner.ExecutionContext, (PeerReviewSubAgentHandler.Proxy)peerReviewProxy));
+            var proxy = (PeerReviewSubAgentHandler.Proxy)peerReviewProxy;
+
+            if (proxy.ReviewContext.FinalStatus == PeerReviewContext.Status.Approved)
+            {
+                await runner.Observer.OnAssistantMessageAsync(runner, proxy.ReviewContext.Report, runner.CancellationToken);
+        
+                return AgentCallbackResult.Break;
+            }
         }
         
-        return base.HandleToolFinish(runner);
-    }
-
-    private AgentCallbackResult StitchPeerReviewOutput(ConversationalContext mainAgentContext, PeerReviewSubAgentHandler.Proxy proxy)
-    {
-        
+        return await base.HandleToolFinish(runner);
     }
 }

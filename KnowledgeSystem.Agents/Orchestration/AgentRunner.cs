@@ -125,27 +125,39 @@ public abstract class AgentRunner
 ///     Constructs an agent execution engine.
 ///     The engine is meant to execute a full turn, including all tool calls required for the turn.
 /// </summary>
-/// <param name="observer">Event sink.</param>
-/// <param name="client">The chat client.</param>
-/// <param name="agent">The agent being executed.</param>
-/// <param name="parent">The parent execution engine, if this is a sub-agent.</param>
-/// <param name="context">The specific execution context.</param>
-/// <param name="cancellationToken"><b>Cancellation token that is valid throughout the lifetime of the runner (stored in various places).</b></param>
-/// <param name="completionFactory">Optional factory to configure the completion options.</param>
 /// <typeparam name="TContext">Specific context class. Holds the chat history and specialized data for sub-agents.</typeparam>
-public sealed class AgentRunner<TContext>(
-    IAgentObserver observer,
-    ChatClient client,
-    Agent<TContext> agent,
-    AgentRunner? parent,
-    TContext context,
-    CancellationToken cancellationToken,
-    AgentRunner.ICompletionFactory? completionFactory = null
-) : AgentRunner(observer, client, parent, completionFactory) where TContext : AgentExecutionContext
+public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentExecutionContext
 {
-    public override Agent<TContext> Agent { get; } = agent;
+    public readonly CancellationToken CancellationToken;
 
-    public TContext ExecutionContext { get; } = context;
+    /// <summary>
+    ///     Constructs an agent execution engine.
+    ///     The engine is meant to execute a full turn, including all tool calls required for the turn.
+    /// </summary>
+    /// <param name="observer">Event sink.</param>
+    /// <param name="client">The chat client.</param>
+    /// <param name="agent">The agent being executed.</param>
+    /// <param name="parent">The parent execution engine, if this is a sub-agent.</param>
+    /// <param name="context">The specific execution context.</param>
+    /// <param name="cancellationToken"><b>Cancellation token that is valid throughout the lifetime of the runner (stored in various places).</b></param>
+    /// <param name="completionFactory">Optional factory to configure the completion options.</param>
+    /// <typeparam name="TContext">Specific context class. Holds the chat history and specialized data for sub-agents.</typeparam>
+    public AgentRunner(IAgentObserver observer,
+        ChatClient client,
+        Agent<TContext> agent,
+        AgentRunner? parent,
+        TContext context,
+        CancellationToken cancellationToken,
+        ICompletionFactory? completionFactory = null) : base(observer, client, parent, completionFactory)
+    {
+        CancellationToken = cancellationToken;
+        Agent = agent;
+        ExecutionContext = context;
+    }
+
+    public override Agent<TContext> Agent { get; }
+
+    public TContext ExecutionContext { get; }
 
     /// <summary>
     ///     Runs the agent to completion, looping <see cref="ExecuteTurn"/> until finished.
@@ -154,7 +166,7 @@ public sealed class AgentRunner<TContext>(
     {
         while (!IsFinished)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            CancellationToken.ThrowIfCancellationRequested();
             await ExecuteTurn();
         }
     }
@@ -168,17 +180,6 @@ public sealed class AgentRunner<TContext>(
         if (IsFinished)
         {
             throw new Exception("Tried to execute finished runner!");
-        }
-        
-        // Handle the early completions:
-        if (Agent.CompletedEarly)
-        {
-            IsFinished = true;
-            FinishError = Agent.EarlyCompletionError;
-            
-            return Agent.EarlyCompletionError == null
-                ? TurnStatus.CompletedSuccessfully
-                : TurnStatus.CompletedWithError;
         }
         
         if (ToolCallsInternal.Count > 0)
@@ -203,7 +204,7 @@ public sealed class AgentRunner<TContext>(
             result = await Client.CompleteChatAsync(
                 ExecutionContext.ChatMessages,
                 chatOptions,
-                cancellationToken
+                CancellationToken
             );
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -211,8 +212,8 @@ public sealed class AgentRunner<TContext>(
             FinishError = new AgentExecutionError($"Chat request failed: {ex.Message}", true);
             IsFinished = true;
             
-            await Observer.OnErrorAsync(this, FinishError, cancellationToken);
-            await Observer.OnAgentCompletedAsync(this, cancellationToken);
+            await Observer.OnErrorAsync(this, FinishError, CancellationToken);
+            await Observer.OnAgentCompletedAsync(this, CancellationToken);
             
             return TurnStatus.CompletedWithError;
         }
@@ -234,7 +235,7 @@ public sealed class AgentRunner<TContext>(
 
         if (!string.IsNullOrEmpty(textContent))
         {
-            await Observer.OnAssistantMessageAsync(this, textContent, cancellationToken);
+            await Observer.OnAssistantMessageAsync(this, textContent, CancellationToken);
         }
 
         return await HandleCallbackResult(() => Agent.HandleCompletion(this, completion)) ??
@@ -263,7 +264,7 @@ public sealed class AgentRunner<TContext>(
         IsFinished = true;
         FinishError = callbackResult.Error;
         
-        await Observer.OnAgentCompletedAsync(this, cancellationToken);
+        await Observer.OnAgentCompletedAsync(this, CancellationToken);
 
         return FinishError == null 
             ? TurnStatus.CompletedSuccessfully 
@@ -310,13 +311,13 @@ public sealed class AgentRunner<TContext>(
                             plainFrame.StartedTask = handler.ExecuteAsync(
                                 this,
                                 plainFrame.Args,
-                                cancellationToken
+                                CancellationToken
                             );
                         }
                         catch (Exception ex)
                         {
                             var errorResult = new ToolExecutionResult(plainFrame.Tool, false, null, ex.Message, ex);
-                            await Observer.OnToolResultAsync(this, indexInCollection, plainFrame.Tool, errorResult, cancellationToken);
+                            await Observer.OnToolResultAsync(this, indexInCollection, plainFrame.Tool, errorResult, CancellationToken);
                             plainFrame.Result = errorResult;
                             return true;
                         }
@@ -339,7 +340,7 @@ public sealed class AgentRunner<TContext>(
                         indexInCollection,
                         plainFrame.Tool,
                         result,
-                        cancellationToken
+                        CancellationToken
                     );
 
                     plainFrame.Result = result;
@@ -358,13 +359,14 @@ public sealed class AgentRunner<TContext>(
                                 this, 
                                 subAgentFrame.Args,
                                 ExecutionContext,
-                                cancellationToken
+                                subAgentFrame.CallId,
+                                CancellationToken
                             );
                         }
                         catch (Exception ex)
                         {
                             var errorResult = new ToolExecutionResult(subAgentFrame.Tool, false, null, ex.Message, ex);
-                            await Observer.OnToolResultAsync(this, indexInCollection, subAgentFrame.Tool, errorResult, cancellationToken);
+                            await Observer.OnToolResultAsync(this, indexInCollection, subAgentFrame.Tool, errorResult, CancellationToken);
                             subAgentFrame.Result = errorResult;
                             return true;
                         }
@@ -389,7 +391,7 @@ public sealed class AgentRunner<TContext>(
                             indexInCollection,
                             subAgentFrame.Tool,
                             result,
-                            cancellationToken
+                            CancellationToken
                         );
                         
                         subAgentFrame.Result = result;
@@ -511,7 +513,7 @@ public sealed class AgentRunner<TContext>(
                         functionName, 
                         callIndex
                     ),
-                    cancellationToken
+                    CancellationToken
                 );
             }
             else
@@ -527,7 +529,7 @@ public sealed class AgentRunner<TContext>(
                             Tool = toolCall.Tool,
                             Args = args
                         },
-                        cancellationToken
+                        CancellationToken
                     );
                 }
                 else
@@ -541,7 +543,7 @@ public sealed class AgentRunner<TContext>(
                             callIndex,
                             args
                         ),
-                        cancellationToken
+                        CancellationToken
                     );
                 }
             }
