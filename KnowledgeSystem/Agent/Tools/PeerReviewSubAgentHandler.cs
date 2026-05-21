@@ -15,7 +15,7 @@ namespace KnowledgeSystem.Agent.Tools;
 public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ReviewOptions options ) : ToolHandler<ConversationalContext>.SubAgent(tool) {
     public const string ToolId = "submit_with_review";    
     
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, ReviewOptions options)
+    public static void Register(AgentToolRegistry<ConversationalContext> registry, ReviewOptions options)
     {
         var reviewTool = new ToolBuilder(ToolId)
             .WithDescription("Submits your message for the user to be peer-reviewed. If it passes, it will be shown to the user immediately. Otherwise, you will get a report on the found issues. Only call if you are responding with any information; don't call if you are just exchanging pleasantries.")

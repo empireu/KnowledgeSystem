@@ -4,6 +4,7 @@ using KnowledgeSystem.Agents.Orchestration.Observer;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using Microsoft.Extensions.AI;
+
 // ReSharper disable ForCanBeConvertedToForeach
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 

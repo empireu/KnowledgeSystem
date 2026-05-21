@@ -14,7 +14,7 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 
         if (options.Review != null)
         {
-            PeerReviewSubAgentHandler.Register(ToolRegistry, serviceProvider, options.Review);
+            PeerReviewSubAgentHandler.Register(ToolRegistry, options.Review);
         }
     }
 
