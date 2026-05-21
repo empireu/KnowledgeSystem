@@ -1,7 +1,6 @@
-﻿using System.Diagnostics;
-using KnowledgeSystem.Agent.Tools;
+﻿using KnowledgeSystem.Agent.Tools;
 using KnowledgeSystem.Agents.Orchestration;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agent;
 
@@ -49,9 +48,9 @@ public sealed class PeerReviewAgent: Agent<PeerReviewContext>
         return base.HandleToolFinish(runner);
     }
     
-    public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<PeerReviewContext> runner, ChatCompletion completion)
+    public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<PeerReviewContext> runner, ChatResponse response)
     {
-        runner.ExecutionContext.Feedback = completion.Content[0].Text;
+        runner.ExecutionContext.Feedback = response.Text;
         return Task.FromResult(AgentCallbackResult.Break);
     }
 }

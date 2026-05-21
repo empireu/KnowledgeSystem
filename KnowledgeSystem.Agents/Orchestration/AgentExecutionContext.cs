@@ -1,4 +1,4 @@
-﻿using OpenAI.Chat;
+﻿using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agents.Orchestration;
 
@@ -18,9 +18,9 @@ public abstract class AgentExecutionContext
     public abstract IReadOnlyList<ChatMessage> ChatMessages { get; }
 
     /// <summary>
-    ///     Inserts an assistant completion (with tool calls) into the context.
+    ///     Inserts an assistant response (with tool calls) into the context.
     /// </summary>
-    public abstract void InsertAssistantCompletion(ChatCompletion completion);
+    public abstract void InsertAssistantCompletion(ChatResponse response);
 
     /// <summary>
     ///     Inserts a tool result into the context.

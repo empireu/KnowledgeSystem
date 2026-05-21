@@ -1,5 +1,5 @@
 ﻿using KnowledgeSystem.Agents.Orchestration.Tools;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agents.Orchestration;
 
@@ -21,7 +21,7 @@ public abstract class Agent<TContext>(string agentId) : Agent(agentId) where TCo
     ///     Called when a completion arrives, that isn't a tool call.
     ///     Completion should be done on the runner if needed.
     /// </summary>
-    public virtual Task<AgentCallbackResult> HandleCompletion(AgentRunner<TContext> runner, ChatCompletion completion)
+    public virtual Task<AgentCallbackResult> HandleCompletion(AgentRunner<TContext> runner, ChatResponse response)
     {
         return Task.FromResult(AgentCallbackResult.Break);
     }

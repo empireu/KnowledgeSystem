@@ -1,7 +1,9 @@
 using System.Text.Json;
+using Microsoft.Extensions.AI;
 using Microsoft.ML.Tokenizers;
-using OpenAI.Chat;
 using HfTokenizer = Tokenizers.HuggingFace.Tokenizer.Tokenizer;
+
+// ReSharper disable UnusedAutoPropertyAccessor.Global
 
 namespace KnowledgeSystem.Agents.Context.TokenEstimation;
 

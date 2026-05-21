@@ -1,6 +1,6 @@
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agent;
 
@@ -10,13 +10,18 @@ public class ConversationalContext : AgentExecutionContext
 
     public override IReadOnlyList<ChatMessage> ChatMessages => ChatContext.ChatMessages;
 
-    public override void InsertAssistantCompletion(ChatCompletion completion)
+    public override void InsertAssistantCompletion(ChatResponse response)
     {
-        ChatContext.InsertAssistant(completion);
+        ChatContext.InsertAssistant(response);
     }
 
     public override void InsertToolResult(string toolCallId, string output)
     {
-        ChatContext.InsertChat(new ToolChatMessage(toolCallId, output));
+        var contents = new List<AIContent>
+        {
+            new FunctionResultContent(toolCallId, output)
+        };
+        
+        ChatContext.InsertChat(new ChatMessage(ChatRole.Tool, contents));
     }
 }

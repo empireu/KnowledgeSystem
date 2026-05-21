@@ -1,5 +1,4 @@
 ﻿using System.Text.Json;
-using OpenAI.Chat;
 
 // ReSharper disable UnusedMember.Global
 // ReSharper disable MemberCanBePrivate.Global
@@ -8,7 +7,7 @@ namespace KnowledgeSystem.Agents.Tools;
 
 public sealed class ToolBuilder(string toolId)
 {
-    private string? _description;
+    private string _description = string.Empty;
     private readonly List<ToolArgument> _arguments = [];
     private readonly List<ToolArgument> _requiredArguments = [];
     
@@ -120,7 +119,7 @@ public sealed class ToolBuilder(string toolId)
     /// <returns></returns>
     public AgentTool Build(bool? strict = null)
     {
-        BinaryData? functionParameters = null;
+        JsonElement parametersSchema;
 
         if (_arguments.Count > 0)
         {
@@ -157,10 +156,12 @@ public sealed class ToolBuilder(string toolId)
             }
 
             var json = JsonSerializer.Serialize(schema);
-            functionParameters = BinaryData.FromString(json);
+            parametersSchema = JsonDocument.Parse(json).RootElement.Clone();
         }
-
-        var tool = ChatTool.CreateFunctionTool(toolId, _description, functionParameters, functionSchemaIsStrict: strict);
+        else
+        {
+            parametersSchema = JsonDocument.Parse("{}").RootElement.Clone();
+        }
 
         return new AgentTool
         {
@@ -168,7 +169,7 @@ public sealed class ToolBuilder(string toolId)
             Description = _description,
             Arguments = _arguments.ToArray(),
             RequiredArguments = _requiredArguments.ToArray(),
-            Tool = tool
+            ParametersSchema = parametersSchema
         };
     }
 }

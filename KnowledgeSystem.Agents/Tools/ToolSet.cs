@@ -1,5 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agents.Tools;
 
@@ -9,7 +9,7 @@ public interface IReadOnlyToolSet
     ///     Adds the tools to the completion options.
     /// </summary>
     /// <param name="options"></param>
-    void AddToOptions(ChatCompletionOptions options);
+    void AddToOptions(ChatOptions options);
     
     /// <summary>
     ///     Tools by their tool ID.
@@ -19,10 +19,10 @@ public interface IReadOnlyToolSet
     /// <summary>
     ///     Tries to match a tool from the model's response.
     /// </summary>
-    /// <param name="toolCall">The raw tool call, returned by the SDK.</param>
+    /// <param name="toolCall">The raw tool call content from the response.</param>
     /// <param name="tool">If true, the tool that was matched.</param>
     /// <returns>True if a tool was matched. Otherwise, false.</returns>
-    public bool TryMatchTool(ChatToolCall toolCall, [NotNullWhen(true)] out AgentTool? tool);
+    public bool TryMatchTool(FunctionCallContent toolCall, [NotNullWhen(true)] out AgentTool? tool);
 }
 
 public sealed class ToolSet : IReadOnlyToolSet
@@ -31,17 +31,18 @@ public sealed class ToolSet : IReadOnlyToolSet
 
     public IReadOnlyDictionary<string, AgentTool> Tools => _tools;
 
-    public void AddToOptions(ChatCompletionOptions options)
+    public void AddToOptions(ChatOptions options)
     {
+        options.Tools ??= [];
         foreach (var agentTool in _tools.Values)
         {
-            options.Tools.Add(agentTool.Tool);
+            options.Tools.Add(agentTool.CreateSchemaFunction());
         }
     }
     
-    public bool TryMatchTool(ChatToolCall toolCall, [NotNullWhen(true)] out AgentTool? tool)
+    public bool TryMatchTool(FunctionCallContent toolCall, [NotNullWhen(true)] out AgentTool? tool)
     {
-        return _tools.TryGetValue(toolCall.FunctionName, out tool);
+        return _tools.TryGetValue(toolCall.Name, out tool);
     }
     
     /// <summary>
@@ -51,7 +52,7 @@ public sealed class ToolSet : IReadOnlyToolSet
     {
         if (!_tools.TryAdd(agentTool.ToolId, agentTool))
         {
-            throw new InvalidOperationException($"Duplicate tool definition {agentTool.Tool}");
+            throw new InvalidOperationException($"Duplicate tool definition {agentTool.ToolId}");
         }
     }
 }

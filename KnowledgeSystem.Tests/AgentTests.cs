@@ -3,7 +3,7 @@ using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Tests;
 
@@ -18,7 +18,7 @@ public class AgentTests
         context.InsertSystem("system");
         context.InsertUser("search");
         var largeContent = new string('#', 5000);
-        context.InsertChat(new ToolChatMessage("call_1", largeContent));
+        context.InsertChat(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("call_1", largeContent)]));
         context.InsertAssistant("Based on results, X is Y");
 
         var compactor = new ContextCompactor(MockTokenEstimator.Instance, toolResultCharThreshold: 2000);
@@ -26,9 +26,10 @@ public class AgentTests
 
         var elements = context.Elements;
         var toolElement = (ChatElement)elements[2];
-        var toolMsg = Assert.IsType<ToolChatMessage>(toolElement.Message);
-        Assert.Contains("compacted", toolMsg.Content.First().Text);
-        Assert.DoesNotContain(new string('#', 100), toolMsg.Content.First().Text);
+        Assert.Equal(ChatRole.Tool, toolElement.Message.Role);
+        var resultText = GetToolResultText(toolElement.Message);
+        Assert.Contains("compacted", resultText);
+        Assert.DoesNotContain(new string('#', 100), resultText);
     }
 
     [Fact]
@@ -38,15 +39,15 @@ public class AgentTests
         context.InsertSystem("system");
         context.InsertUser("search");
         var largeContent = new string('#', 5000);
-        context.InsertChat(new ToolChatMessage("call_1", largeContent));
+        context.InsertChat(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("call_1", largeContent)]));
 
         var compactor = new ContextCompactor(MockTokenEstimator.Instance, toolResultCharThreshold: 2000);
         compactor.CompactToolResults(context);
 
         var elements = context.Elements;
         var toolElement = (ChatElement)elements[2];
-        var toolMsg = Assert.IsType<ToolChatMessage>(toolElement.Message);
-        Assert.Equal(largeContent, toolMsg.Content.First().Text);
+        Assert.Equal(ChatRole.Tool, toolElement.Message.Role);
+        Assert.Equal(largeContent, GetToolResultText(toolElement.Message));
     }
 
     [Fact]
@@ -55,7 +56,7 @@ public class AgentTests
         var context = new AgentContext();
         context.InsertSystem("system");
         context.InsertUser("search");
-        context.InsertChat(new ToolChatMessage("call_1", "small result"));
+        context.InsertChat(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("call_1", "small result")]));
         context.InsertAssistant("Done");
 
         var compactor = new ContextCompactor(MockTokenEstimator.Instance, toolResultCharThreshold: 2000);
@@ -63,8 +64,8 @@ public class AgentTests
 
         var elements = context.Elements;
         var toolElement = (ChatElement)elements[2];
-        var toolMsg = Assert.IsType<ToolChatMessage>(toolElement.Message);
-        Assert.Equal("small result", toolMsg.Content.First().Text);
+        Assert.Equal(ChatRole.Tool, toolElement.Message.Role);
+        Assert.Equal("small result", GetToolResultText(toolElement.Message));
     }
 
     [Fact]
@@ -74,7 +75,7 @@ public class AgentTests
         var context = new AgentContext();
         context.InsertSystem("system");
         context.InsertUser("search");
-        context.InsertChat(new ToolChatMessage("call_1", largeResult));
+        context.InsertChat(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("call_1", largeResult)]));
         context.InsertAssistant("Done");
 
         var compactor = new ContextCompactor(MockTokenEstimator.Instance, toolResultCharThreshold: 2000);
@@ -82,8 +83,8 @@ public class AgentTests
 
         var elements = context.Elements;
         var toolElement = (ChatElement)elements[2];
-        var toolMsg = Assert.IsType<ToolChatMessage>(toolElement.Message);
-        var stub = toolMsg.Content.First().Text;
+        Assert.Equal(ChatRole.Tool, toolElement.Message.Role);
+        var stub = GetToolResultText(toolElement.Message);
         Assert.StartsWith("# fast_context: 3 documents found", stub);
         Assert.Contains("compacted", stub);
     }
@@ -94,18 +95,20 @@ public class AgentTests
         var context = new AgentContext();
         context.InsertSystem("system");
         context.InsertUser("search");
-        context.InsertChat(new ToolChatMessage("call_1", new string('A', 5000)));
-        context.InsertChat(new ToolChatMessage("call_2", new string('B', 3000)));
+        context.InsertChat(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("call_1", new string('A', 5000))]));
+        context.InsertChat(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("call_2", new string('B', 3000))]));
         context.InsertAssistant("Done");
 
         var compactor = new ContextCompactor(MockTokenEstimator.Instance, toolResultCharThreshold: 2000);
         compactor.CompactToolResults(context);
 
         var elements = context.Elements;
-        var msg1 = Assert.IsType<ToolChatMessage>(((ChatElement)elements[2]).Message);
-        var msg2 = Assert.IsType<ToolChatMessage>(((ChatElement)elements[3]).Message);
-        Assert.Contains("compacted", msg1.Content.First().Text);
-        Assert.Contains("compacted", msg2.Content.First().Text);
+        var msg1 = ((ChatElement)elements[2]).Message;
+        var msg2 = ((ChatElement)elements[3]).Message;
+        Assert.Equal(ChatRole.Tool, msg1.Role);
+        Assert.Equal(ChatRole.Tool, msg2.Role);
+        Assert.Contains("compacted", GetToolResultText(msg1));
+        Assert.Contains("compacted", GetToolResultText(msg2));
     }
 
     [Fact]
@@ -115,7 +118,7 @@ public class AgentTests
         var context = new AgentContext();
         context.InsertSystem("system");
         context.InsertUser("search");
-        context.InsertChat(new ToolChatMessage("call_1", largeResult));
+        context.InsertChat(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("call_1", largeResult)]));
         context.InsertAssistant("Done");
 
         var compactor = new ContextCompactor(MockTokenEstimator.Instance, toolResultCharThreshold: 2000);
@@ -123,8 +126,8 @@ public class AgentTests
 
         var elements = context.Elements;
         var toolElement = (ChatElement)elements[2];
-        var toolMsg = Assert.IsType<ToolChatMessage>(toolElement.Message);
-        var stub = toolMsg.Content.First().Text;
+        Assert.Equal(ChatRole.Tool, toolElement.Message.Role);
+        var stub = GetToolResultText(toolElement.Message);
         Assert.StartsWith("[Tool result compacted:", stub);
         Assert.Contains("5000 chars]", stub);
     }
@@ -371,7 +374,7 @@ public class AgentTests
             Description = $"Test tool {toolId}",
             Arguments = [],
             RequiredArguments = [],
-            Tool = ChatTool.CreateFunctionTool(toolId, $"Test tool {toolId}", BinaryData.FromString("{}"))
+            ParametersSchema = System.Text.Json.JsonDocument.Parse("{}").RootElement.Clone()
         };
     }
 
@@ -380,9 +383,19 @@ public class AgentTests
         return new ArgumentExtractionResult
         {
             Status = ArgumentExtractionResult.ExtractionStatus.Success,
-            Arguments = new Dictionary<ToolArgument, string?>(),
+            Arguments = new Dictionary<ToolArgument, object?>(),
             MissingArguments = []
         };
+    }
+
+    private static string GetToolResultText(ChatMessage message)
+    {
+        if (message.Contents.OfType<FunctionResultContent>().FirstOrDefault() is { } resultContent)
+        {
+            return Assert.IsType<string>(resultContent.Result);
+        }
+
+        return message.Contents.OfType<TextContent>().First().Text;
     }
 
     private sealed class MockTokenEstimator : ITokenEstimator

@@ -26,7 +26,7 @@ public abstract class ToolArgument(string argumentName, string argumentDescripti
     /// </summary>
     public virtual void AddSchemaProperties(Dictionary<string, object> propertySchema) { }
 
-    protected bool TryGetRawValue(ArgumentExtractionResult result, [NotNullWhen(true)] out string? value)
+    protected bool TryGetRawValue(ArgumentExtractionResult result, [NotNullWhen(true)] out object? value)
     {
         value = null;
         if (!result.Arguments.TryGetValue(this, out var raw) || raw == null)
@@ -37,13 +37,27 @@ public abstract class ToolArgument(string argumentName, string argumentDescripti
         value = raw;
         return true;
     }
+
+    protected static string? ConvertToString(object? raw) => raw switch
+    {
+        null => null,
+        string s => s,
+        JsonElement jsonElement => jsonElement.ValueKind == JsonValueKind.String
+            ? jsonElement.GetString()
+            : jsonElement.GetRawText(),
+        _ => raw.ToString()
+    };
 }
 
 public sealed class StringArgument(string argumentName, string argumentDescription) : ToolArgument(argumentName, argumentDescription)
 {
     public override string JsonTypeName => "string";
 
-    public bool TryGetValue(ArgumentExtractionResult result, [NotNullWhen(true)] out string? value) => TryGetRawValue(result, out value);
+    public bool TryGetValue(ArgumentExtractionResult result, [NotNullWhen(true)] out string? value)
+    {
+        value = null;
+        return TryGetRawValue(result, out var raw) && (value = ConvertToString(raw)) != null;
+    }
 
     public string GetValue(ArgumentExtractionResult result)
     {
@@ -65,7 +79,24 @@ public sealed class IntegerArgument(string argumentName, string argumentDescript
     public bool TryGetValue(ArgumentExtractionResult result, out int value)
     {
         value = 0;
-        return TryGetRawValue(result, out var raw) && int.TryParse(raw, out value);
+        if (!TryGetRawValue(result, out var raw))
+        {
+            return false;
+        }
+
+        switch (raw)
+        {
+            case int intValue:
+                value = intValue;
+                return true;
+            case long longValue when longValue is >= int.MinValue and <= int.MaxValue:
+                value = (int)longValue;
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.Number } jsonElement when jsonElement.TryGetInt32(out value):
+                return true;
+        }
+
+        return int.TryParse(ConvertToString(raw), out value);
     }
 
     public int GetValue(ArgumentExtractionResult result)
@@ -86,7 +117,27 @@ public sealed class NumberArgument(string argumentName, string argumentDescripti
     public bool TryGetValue(ArgumentExtractionResult result, out double value)
     {
         value = 0;
-        return TryGetRawValue(result, out var raw) && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        if (!TryGetRawValue(result, out var raw))
+        {
+            return false;
+        }
+
+        switch (raw)
+        {
+            case double doubleValue:
+                value = doubleValue;
+                return true;
+            case float floatValue:
+                value = floatValue;
+                return true;
+            case decimal decimalValue:
+                value = (double)decimalValue;
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.Number } jsonElement when jsonElement.TryGetDouble(out value):
+                return true;
+        }
+
+        return double.TryParse(ConvertToString(raw), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
     public double GetValue(ArgumentExtractionResult result)
@@ -107,7 +158,22 @@ public sealed class BooleanArgument(string argumentName, string argumentDescript
     public bool TryGetValue(ArgumentExtractionResult result, out bool value)
     {
         value = false;
-        return TryGetRawValue(result, out var raw) && bool.TryParse(raw, out value);
+        if (!TryGetRawValue(result, out var raw))
+        {
+            return false;
+        }
+
+        switch (raw)
+        {
+            case bool boolValue:
+                value = boolValue;
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.True or JsonValueKind.False } jsonElement:
+                value = jsonElement.GetBoolean();
+                return true;
+        }
+
+        return bool.TryParse(ConvertToString(raw), out value);
     }
 
     public bool GetValue(ArgumentExtractionResult result)
@@ -133,9 +199,10 @@ public sealed class EnumArgument(string argumentName, string argumentDescription
 
     public bool TryGetValue(ArgumentExtractionResult result, [NotNullWhen(true)] out string? value)
     {
-        if (TryGetRawValue(result, out var raw) && AllowedValues.Contains(raw))
+        var rawValue = TryGetRawValue(result, out var raw) ? ConvertToString(raw) : null;
+        if (rawValue != null && AllowedValues.Contains(rawValue))
         {
-            value = raw;
+            value = rawValue;
             return true;
         }
         
@@ -146,7 +213,10 @@ public sealed class EnumArgument(string argumentName, string argumentDescription
     public string GetValue(ArgumentExtractionResult result)
     {
         if (!TryGetValue(result, out var value))
+        {
             throw new InvalidOperationException($"Argument \"{ArgumentName}\" was not provided or value is not one of the allowed values: [{string.Join(", ", AllowedValues)}].");
+        }
+        
         return value;
     }
 }
@@ -163,23 +233,52 @@ public sealed class ArrayArgument(string argumentName, string argumentDescriptio
     public bool TryGetValue(ArgumentExtractionResult result, [NotNullWhen(true)] out string[]? value)
     {
         value = null;
-        if (!TryGetRawValue(result, out var raw)) return false;
-        try
+        if (!TryGetRawValue(result, out var raw))
         {
-            using var doc = JsonDocument.Parse(raw);
-            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            return false;
+        }
+
+        switch (raw)
+        {
+            case string[] values:
+                value = values;
+                return true;
+            case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Array:
+                value = jsonElement.EnumerateArray().Select(e => ConvertToString(e)!).ToArray();
+                return true;
+            case IEnumerable<object?> enumerable:
             {
-                value = doc.RootElement.EnumerateArray().Select(e => e.GetString()!).ToArray();
+                value = enumerable.Select(ConvertToString).Where(x => x != null).Cast<string>().ToArray();
                 return true;
             }
         }
-        catch(Exception e)
+
+        var rawText = ConvertToString(raw);
+        if (rawText == null)
         {
-            // Breakpoint:
-            // ReSharper disable once EmptyStatement
-            ;
+            return false;
         }
-        return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(rawText);
+            
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            value = document.RootElement
+                .EnumerateArray()
+                .Select(e => ConvertToString(e)!)
+                .ToArray();
+            
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public string[] GetValue(ArgumentExtractionResult result)

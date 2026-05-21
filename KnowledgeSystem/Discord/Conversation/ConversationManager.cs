@@ -1,24 +1,21 @@
-using System.ClientModel;
+using KnowledgeSystem.Ai;
 using KnowledgeSystem.Agent;
-using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
-using KnowledgeSystem.Agents.Helper;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Observer;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NetCord.Rest;
-using OpenAI;
-using OpenAI.Chat;
 
 namespace KnowledgeSystem.Discord.Conversation;
 
 public sealed class ConversationManager : IConversationManager, IHostedService, IDisposable
 {
     private readonly ILogger<ConversationManager> _logger;
-    private readonly ChatClient _chatClient;
+    private readonly IChatClient _chatClient;
     private readonly IServiceProvider _serviceProvider;
     private readonly ChatOptions _chatOptions;
     private readonly RestClient _restClient;
@@ -36,26 +33,14 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
     private bool _disposed;
 
-    public ConversationManager(
-        ILogger<ConversationManager> logger,
-        IServiceProvider serviceProvider,
-        IOptions<ChatOptions> options,
-        RestClient restClient)
+    public ConversationManager(ILogger<ConversationManager> logger, IServiceProvider serviceProvider, IOptions<ChatOptions> options, RestClient restClient)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _chatOptions = options.Value;
         _restClient = restClient;
 
-        var clientOptions = new OpenAIClientOptions
-        {
-            Endpoint = new Uri(_chatOptions.Endpoint),
-        };
-
-        var credentials = new ApiKeyCredential(_chatOptions.ApiKey);
-        var client = new OpenAIClient(credentials, clientOptions);
-
-        _chatClient = client.GetChatClient(_chatOptions.Model);
+        _chatClient = OpenAiChatClientFactory.Create(_chatOptions.Endpoint, _chatOptions.ApiKey, _chatOptions.Model);
 
         TokenEstimator = TokenizerHelper.Create(new TokenizerInfo
         {
@@ -68,22 +53,9 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         _systemPrompt = File.ReadAllText(_chatOptions.SystemPromptFile);
     }
 
-    public ChatCompletionOptions CreateOptionsForTurn(AgentRunner runner)
+    public Microsoft.Extensions.AI.ChatOptions CreateOptionsForTurn(AgentRunner runner)
     {
-        var result = new ExtendedChatCompletionOptions();
-
-        if (!string.IsNullOrWhiteSpace(_chatOptions.ProviderOnly))
-        {
-            result.ProviderOnly = _chatOptions.ProviderOnly;
-        }
-
-        result.Temperature = _chatOptions.Temperature;
-        
-#pragma warning disable OPENAI001
-        result.ReasoningEffortLevel = ChatReasoningEffortLevel.High;
-#pragma warning restore OPENAI001
-        
-        return result;
+        return OpenAiChatOptionsFactory.Create(_chatOptions.ProviderOnly, _chatOptions.Temperature, reasoningEffort: "high");
     }
 
     public ITokenEstimator TokenEstimator { get; }

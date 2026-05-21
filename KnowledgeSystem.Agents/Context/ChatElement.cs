@@ -1,10 +1,10 @@
 ﻿using System.Text;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agents.Context;
 
 /// <summary>
-///     Wraps an OpenAI message, that gets sent to the LLM.
+///     Wraps an AI message, that gets sent to the LLM.
 /// </summary>
 public sealed class ChatElement(ChatMessage message) : ITimelineElement
 {
@@ -14,67 +14,52 @@ public sealed class ChatElement(ChatMessage message) : ITimelineElement
     {
         var sb = new StringBuilder();
 
-        sb.AppendLine($"{Message.GetType().Name}:");
+        sb.AppendLine($"{Message.Role}:");
 
-        if (Message is AssistantChatMessage { ParticipantName: not null } assistant)
+        if (Message.AuthorName != null)
         {
-            sb.AppendLine($"  Name: {assistant.ParticipantName}");
-        }
-        
-        if (Message is SystemChatMessage { ParticipantName: not null } system)
-        {
-            sb.AppendLine($"  Name: {system.ParticipantName}");
+            sb.AppendLine($"  Name: {Message.AuthorName}");
         }
 
-        if (Message is ToolChatMessage tool)
+        // Check for tool result content:
+        foreach (var content in Message.Contents)
         {
-            sb.AppendLine($"  ToolCallId: {tool.ToolCallId}");
-        }
-
-        foreach (var part in Message.Content)
-        {
-            switch (part.Kind)
+            switch (content)
             {
-                case ChatMessageContentPartKind.Text:
+                case FunctionResultContent resultContent:
                 {
-                    foreach (var line in part.Text.EnumerateLines())
+                    sb.AppendLine($"  ToolCallId: {resultContent.CallId}");
+                    
+                    if (ChatMessageHelpers.FormatContentValue(resultContent.Result) is { } resultText)
+                    {
+                        sb.AppendLine($"  Result: {resultText}");
+                    }
+                    
+                    break;
+                }
+                case TextContent textContent:
+                {
+                    foreach (var line in textContent.Text.EnumerateLines())
                     {
                         sb.Append("  ");
                         sb.Append(line);
                         sb.AppendLine();
                     }
-
-                    break;
-                }
-                case ChatMessageContentPartKind.Refusal:
-                {
-                    sb.AppendLine($"  [Refusal] {part.Refusal}");
-                    break;
-                }
-                case ChatMessageContentPartKind.Image:
-                {
-                    if (part.ImageUri != null)
-                    {
-                        sb.AppendLine($"  [Image URI] {part.ImageUri}");
-                    }
-                    else if (part.ImageBytes != null)
-                    {
-                        sb.AppendLine($"  [Image Bytes] {part.ImageBytesMediaType}, {part.ImageBytes.Length} bytes");
-                    }
-
+                
                     break;
                 }
                 default:
-                    sb.AppendLine($"  [{part.Kind}] (unknown)");
+                    sb.AppendLine($"  [{content.GetType().Name}] (unknown)");
                     break;
             }
         }
 
-        if (Message is AssistantChatMessage { ToolCalls.Count: > 0 } assistantWithTools)
+        // Check for function call content (tool calls from assistant)
+        foreach (var content in Message.Contents)
         {
-            foreach (var toolCall in assistantWithTools.ToolCalls)
+            if (content is FunctionCallContent toolCall)
             {
-                sb.AppendLine($"  [ToolCall] {toolCall.FunctionName}({toolCall.FunctionArguments})");
+                sb.AppendLine($"  [ToolCall] {toolCall.Name}({toolCall.Arguments})");
             }
         }
 

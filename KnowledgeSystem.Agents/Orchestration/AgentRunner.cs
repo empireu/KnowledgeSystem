@@ -1,9 +1,9 @@
-﻿using System.ClientModel;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
+using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration.Observer;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 // ReSharper disable ForCanBeConvertedToForeach
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 
@@ -19,7 +19,7 @@ public abstract class AgentRunner
     /// <summary>
     ///     The chat client (either inherited from the parent, or a fresh one).
     /// </summary>
-    public ChatClient Client { get; }
+    public IChatClient Client { get; }
     
     /// <summary>
     ///     The parent execution context. Null if this is the root of the execution tree.
@@ -46,7 +46,7 @@ public abstract class AgentRunner
     
     protected readonly ICompletionFactory CompletionFactory;
     
-    protected AgentRunner(IAgentObserver observer, ChatClient client, AgentRunner? parent, ICompletionFactory? completionFactory)
+    protected AgentRunner(IAgentObserver observer, IChatClient client, AgentRunner? parent, ICompletionFactory? completionFactory)
     {
         Observer = observer;
         Client = client;
@@ -105,7 +105,7 @@ public abstract class AgentRunner
         /// <summary>
         ///     Creates the chat completion request for a turn.
         /// </summary>
-        ChatCompletionOptions CreateOptionsForTurn(AgentRunner runner);
+        ChatOptions CreateOptionsForTurn(AgentRunner runner);
     }
 
     public sealed class DefaultCompletionFactory : ICompletionFactory
@@ -114,9 +114,9 @@ public abstract class AgentRunner
         
         private DefaultCompletionFactory() { }
         
-        public ChatCompletionOptions CreateOptionsForTurn(AgentRunner runner)
+        public ChatOptions CreateOptionsForTurn(AgentRunner runner)
         {
-            return new ChatCompletionOptions();
+            return new ChatOptions();
         }
     }
 }
@@ -143,7 +143,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
     /// <param name="completionFactory">Optional factory to configure the completion options.</param>
     /// <typeparam name="TContext">Specific context class. Holds the chat history and specialized data for sub-agents.</typeparam>
     public AgentRunner(IAgentObserver observer,
-        ChatClient client,
+        IChatClient client,
         Agent<TContext> agent,
         AgentRunner? parent,
         TContext context,
@@ -198,10 +198,10 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         Agent.ToolRegistry.ToolSet.AddToOptions(chatOptions);
         
         // Executes the LLM call and raises the error and completion events:
-        ClientResult<ChatCompletion> result;
+        ChatResponse response;
         try
         {
-            result = await Client.CompleteChatAsync(
+            response = await Client.GetResponseAsync(
                 ExecutionContext.ChatMessages,
                 chatOptions,
                 CancellationToken
@@ -218,27 +218,24 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
             return TurnStatus.CompletedWithError;
         }
         
-        var completion = result.Value;
-        
         // Tool calls required:
-        if (completion.FinishReason == ChatFinishReason.ToolCalls)
+        if (response.FinishReason == ChatFinishReason.ToolCalls)
         {
-            ExecutionContext.InsertAssistantCompletion(completion);
-            await BeginToolCalls(completion.ToolCalls);
+            ExecutionContext.InsertAssistantCompletion(response);
+            var toolCalls = ChatMessageHelpers.GetFunctionCalls(response);
+            await BeginToolCalls(toolCalls);
             return TurnStatus.ToolCallsReceived;
         }
         
         // Non-tool completion. Continue with result and notify:
-        var textContent = string.Join("\n", completion.Content
-            .Where(p => p.Kind == ChatMessageContentPartKind.Text)
-            .Select(p => p.Text)); // Never seen multiple contents, but this is a fallback anyway.
+        var textContent = response.Text;
 
         if (!string.IsNullOrEmpty(textContent))
         {
             await Observer.OnAssistantMessageAsync(this, textContent, CancellationToken);
         }
 
-        return await HandleCallbackResult(() => Agent.HandleCompletion(this, completion)) ??
+        return await HandleCallbackResult(() => Agent.HandleCompletion(this, response)) ??
                TurnStatus.CompletionHandled;
     }
 
@@ -440,7 +437,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         /// <summary>
         ///     The original call from the API.
         /// </summary>
-        public required ChatToolCall Call { get; init; }
+        public required FunctionCallContent Call { get; init; }
         
         /// <summary>
         ///     The API call ID, used for writing back the history.
@@ -463,7 +460,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         public required ArgumentExtractionResult? Args { get; init; }
     }
     
-    private async Task BeginToolCalls(IReadOnlyList<ChatToolCall> toolCalls)
+    private async Task BeginToolCalls(List<FunctionCallContent> toolCalls)
     {
         // Will hold resolved and hallucinated tools, in the error they arrived:
         var calls = new List<ToolCall>();
@@ -478,10 +475,10 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
                 calls.Add(new ToolCall
                 {
                     Call = toolCall,
-                    CallId = toolCall.Id,
+                    CallId = toolCall.CallId,
                     Tool = tool,
                     OriginalIndex = callIndex,
-                    Args = ArgumentExtractionResult.ExtractArguments(tool, toolCall.FunctionArguments)
+                    Args = ArgumentExtractionResult.ExtractArguments(tool, toolCall.Arguments)
                 });
             }
             else
@@ -489,7 +486,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
                 calls.Add(new ToolCall
                 {
                     Call = toolCall,
-                    CallId = toolCall.Id,
+                    CallId = toolCall.CallId,
                     Tool = null,
                     OriginalIndex = callIndex,
                     Args = null
@@ -504,7 +501,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
 
             if (toolCall.Tool == null)
             {
-                var functionName = toolCall.Call.FunctionName;
+                var functionName = toolCall.Call.Name;
                 await Observer.OnErrorAsync(
                     this,
                     new AgentToolHallucinationError(
@@ -557,7 +554,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
 
             if (toolCall.Tool == null)
             {
-                var functionName = toolCall.Call.FunctionName;
+                var functionName = toolCall.Call.Name;
                 var message = Agent.GetToolHallucinationError(functionName) ??
                               GetDefaultToolHallucinationResult(functionName);
               

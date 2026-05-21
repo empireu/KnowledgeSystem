@@ -2,9 +2,9 @@
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Observer;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using NetCord.Rest;
-using OpenAI.Chat;
 
 namespace KnowledgeSystem.Discord.Conversation;
 
@@ -16,7 +16,7 @@ public sealed class ActiveConversation : IDisposable
     private readonly ConversationalAgent _agent;
     private readonly ConversationalContext _context;
     private readonly ContextCompactor _compactor;
-    private readonly ChatClient _chatClient;
+    private readonly IChatClient _chatClient;
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _runLock = new(1, 1);
     private CancellationTokenSource _runCts = new();
@@ -28,14 +28,14 @@ public sealed class ActiveConversation : IDisposable
 
     public bool IsRunning => _runLock.CurrentCount == 0;
     
-    public ActiveConversation(IConversationManager manager, ulong channelId, ConversationalAgent agent, ConversationalContext context, ChatClient chatClient, ILogger<ActiveConversation> logger)
+    public ActiveConversation(IConversationManager manager, ulong channelId, ConversationalAgent agent, ConversationalContext context, IChatClient chatClient, ILogger<ActiveConversation> logger)
     {
         _manager = manager;
         ChannelId = channelId;
         _agent = agent;
         _context = context;
-        _compactor = new ContextCompactor(manager.TokenEstimator, _chatClient);
         _chatClient = chatClient;
+        _compactor = new ContextCompactor(manager.TokenEstimator, _chatClient);
         _logger = logger;
         TouchActivity();
     }

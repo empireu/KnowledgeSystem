@@ -1,4 +1,4 @@
-﻿using OpenAI.Chat;
+﻿using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agents.Context.TokenEstimation;
 

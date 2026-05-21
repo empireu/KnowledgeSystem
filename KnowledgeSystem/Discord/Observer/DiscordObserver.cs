@@ -1,5 +1,6 @@
 using System.Text;
 using KnowledgeSystem.Agent;
+using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Observer;
 using KnowledgeSystem.Agents.Orchestration.Tools;
@@ -75,7 +76,7 @@ public sealed partial class DiscordObserver(
         var args = info.Args.Arguments
         .Select(kvp =>
         {
-            var parameterPrintout = Truncate(kvp.Value ?? "null", 40);
+            var parameterPrintout = Truncate(ChatMessageHelpers.FormatContentValue(kvp.Value) ?? "null", 40);
             
             // Escape newlines:
             parameterPrintout = EscapeNewlines(parameterPrintout);

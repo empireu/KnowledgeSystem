@@ -1,5 +1,5 @@
-﻿using System.Text;
-using OpenAI.Chat;
+using System.Text;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agents.Context.TokenEstimation;
 
@@ -44,14 +44,14 @@ internal sealed class ChatTemplateFormatter
         });
     }
 
-    private static string GetChatMlRole(ChatMessage message) => message switch
+    private static string GetChatMlRole(ChatMessage message) => message.Role.Value switch
     {
-        SystemChatMessage => "system",
-        DeveloperChatMessage => "developer",
-        UserChatMessage => "user",
-        AssistantChatMessage => "assistant",
-        ToolChatMessage => "tool",
-        _ => throw new ArgumentOutOfRangeException(nameof(message), message.GetType().Name, null)
+        "system" => "system",
+        "developer" => "developer",
+        "user" => "user",
+        "assistant" => "assistant",
+        "tool" => "tool",
+        _ => message.Role.Value
     };
 
     /// <summary>
@@ -80,14 +80,14 @@ internal sealed class ChatTemplateFormatter
         });
     }
 
-    private static string GetGemmaRole(ChatMessage message) => message switch
+    private static string GetGemmaRole(ChatMessage message) => message.Role.Value switch
     {
-        SystemChatMessage => "system",
-        DeveloperChatMessage => "system",
-        UserChatMessage => "user",
-        AssistantChatMessage => "model",
-        ToolChatMessage => "user",
-        _ => throw new ArgumentOutOfRangeException(nameof(message), message.GetType().Name, null)
+        "system" => "system",
+        "developer" => "system",
+        "user" => "user",
+        "assistant" => "model",
+        "tool" => "user",
+        _ => message.Role.Value
     };
 
     /// <summary>
@@ -114,33 +114,39 @@ internal sealed class ChatTemplateFormatter
         });
     }
 
-    private static string GetGlmRole(ChatMessage message) => message switch
+    private static string GetGlmRole(ChatMessage message) => message.Role.Value switch
     {
-        SystemChatMessage => "system",
-        DeveloperChatMessage => "system",
-        UserChatMessage => "user",
-        AssistantChatMessage => "assistant",
-        ToolChatMessage => "observation",
-        _ => throw new ArgumentOutOfRangeException(nameof(message), message.GetType().Name, null)
+        "system" => "system",
+        "developer" => "system",
+        "user" => "user",
+        "assistant" => "assistant",
+        "tool" => "observation",
+        _ => message.Role.Value
     };
     
     private static void AppendContentEstimate(StringBuilder sb, ChatMessage message)
     {
-        foreach (var part in message.Content)
+        foreach (var text in ChatMessageHelpers.EnumerateTextContents(message))
         {
-            if (part.Kind == ChatMessageContentPartKind.Text)
-            {
-                sb.AppendLine(part.Text);
-            }
+            sb.AppendLine(text);
         }
 
-        if (message is AssistantChatMessage { ToolCalls.Count: > 0 } assistant)
+        // Append function call info for token estimation:
+        foreach (var content in message.Contents)
         {
-            foreach (var toolCall in assistant.ToolCalls)
+            if (content is FunctionCallContent toolCall)
             {
-                sb.Append(toolCall.FunctionName);
+                sb.Append(toolCall.Name);
                 sb.Append('(');
-                sb.Append(toolCall.FunctionArguments);
+                if (toolCall.Arguments != null)
+                {
+                    foreach (var kvp in toolCall.Arguments)
+                    {
+                        sb.Append(kvp.Key);
+                        sb.Append(':');
+                        sb.Append(kvp.Value);
+                    }
+                }
                 sb.Append(')');
                 sb.AppendLine();
             }

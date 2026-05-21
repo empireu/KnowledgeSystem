@@ -1,4 +1,4 @@
-﻿using OpenAI.Chat;
+﻿using Microsoft.Extensions.AI;
 
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
@@ -86,24 +86,32 @@ public sealed class AgentContext
     }
 
     public void InsertSystem(string message, int? index = null) => InsertElement(
-        new ChatElement(new SystemChatMessage(message)),
+        new ChatElement(new ChatMessage(ChatRole.System, message)),
         index
     );
     
     public void InsertUser(string message, int? index = null) => InsertElement(
-        new ChatElement(new UserChatMessage(message)),
+        new ChatElement(new ChatMessage(ChatRole.User, message)),
         index
     );
     
     public void InsertAssistant(string message, int? index = null) => InsertElement(
-        new ChatElement(new AssistantChatMessage(message)),
+        new ChatElement(new ChatMessage(ChatRole.Assistant, message)),
         index
     );
 
-    public void InsertAssistant(ChatCompletion completion, int? index = null) => InsertElement(
-        new ChatElement(new AssistantChatMessage(completion)),
-        index
-    );
+    public void InsertAssistant(ChatResponse response, int? index = null)
+    {
+        // Add all response messages (typically one assistant message)
+        foreach (var message in response.Messages)
+        {
+            InsertElement(new ChatElement(message), index);
+            if (index.HasValue)
+            {
+                index++;
+            }
+        }
+    }
 
     public void InsertChat(ChatMessage message, int? index = null) => InsertElement(
         new ChatElement(message),

@@ -1,3 +1,4 @@
+using KnowledgeSystem.Ai;
 using KnowledgeSystem.Discord;
 using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Retrieval;
@@ -49,10 +50,6 @@ var host = builder.Build();
 
 var engine = host.Services.GetRequiredService<RagEngine>();
 await engine.InitializeAsync();
-
-var t = engine.LexicalIndex.SearchBm25("Adro faction hunting requirements weapons rifle")
-    .Select(res => (res, engine.GetChunkByHnswId(res.HnswId).ChunkText))
-    .ToArray();
 
 host.AddApplicationCommandModule<MqrModule>();
 

@@ -1,13 +1,12 @@
 using KnowledgeSystem.Agent.Tools;
 using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Discord;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agent;
 
 public sealed class ConversationalAgent : Agent<ConversationalContext>
 {
-    public ConversationalAgent(string agentId, IServiceProvider serviceProvider, ChatOptions options) : base(agentId)
+    public ConversationalAgent(string agentId, IServiceProvider serviceProvider, Discord.ChatOptions options) : base(agentId)
     {
         FastContextToolHandler.Register(ToolRegistry, serviceProvider, new FastContextToolConfig());
         RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, 16384);
@@ -15,13 +14,13 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 
         if (options.Review != null)
         {
-            PeerReviewSubAgentHandler.Register(ToolRegistry, options.Review);
+            PeerReviewSubAgentHandler.Register(ToolRegistry, serviceProvider, options.Review);
         }
     }
 
-    public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<ConversationalContext> runner, ChatCompletion completion)
+    public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<ConversationalContext> runner, ChatResponse response)
     {
-        runner.ExecutionContext.InsertAssistantCompletion(completion);
+        runner.ExecutionContext.InsertAssistantCompletion(response);
         return Task.FromResult(AgentCallbackResult.Break);
     }
 

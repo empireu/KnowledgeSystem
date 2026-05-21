@@ -1,32 +1,32 @@
-﻿using System.ClientModel;
-using System.Diagnostics;
-using System.Text;
+﻿using System.Text;
 using KnowledgeSystem.Agents.Context;
-using KnowledgeSystem.Agents.Helper;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Observer;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Ai;
 using KnowledgeSystem.Discord;
-using OpenAI;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Agent.Tools;
 
-public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ReviewOptions options) : ToolHandler<ConversationalContext>.SubAgent(tool)
-{
+public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ReviewOptions options ) : ToolHandler<ConversationalContext>.SubAgent(tool) {
     public const string ToolId = "submit_with_review";    
     
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, ReviewOptions options)
+    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, ReviewOptions options)
     {
         var reviewTool = new ToolBuilder(ToolId)
             .WithDescription("Submits your message for the user to be peer-reviewed. If it passes, it will be shown to the user immediately. Otherwise, you will get a report on the found issues. Only call if you are responding with any information; don't call if you are just exchanging pleasantries.")
             .WithRequiredStringArgument("report", "Your final report for the user.", out var reportArg)
             .Build();
 
-        var handler = new PeerReviewSubAgentHandler(reviewTool, reportArg, options);
+        var handler = new PeerReviewSubAgentHandler(
+            reviewTool,
+            reportArg,
+            options
+        );
         
         registry.RegisterTool(reviewTool, handler);
     }
@@ -53,10 +53,7 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
         var elements = runContext.ChatContext.MutableElements;
         
         // Distills the effective data used by the main agent:
-        var startIndex = elements.FindLastIndex(element => element is ChatElement
-        {
-            Message: UserChatMessage
-        });
+        var startIndex = elements.FindLastIndex(element => element is ChatElement { Message: var msg } && msg.Role == ChatRole.User);
 
         if (startIndex == -1)
         {
@@ -72,14 +69,14 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
                 continue;
             }
 
-            if (chatElement.Message is not ToolChatMessage toolMessage)
+            if (chatElement.Message.Role != ChatRole.Tool)
             {
                 continue;
             }
 
-            for (var index = 0; index < toolMessage.Content.Count; index++)
+            foreach (var text in ChatMessageHelpers.EnumerateTextContents(chatElement.Message))
             {
-                sb.AppendLine(toolMessage.Content[index].Text);
+                sb.AppendLine(text);
                 sb.AppendLine();
             }
         }
@@ -110,19 +107,10 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
             _parentRunner = parentRunner;
             _subAgentHandler = subAgentHandler;
             _options = options;
-            
-            var clientOptions = new OpenAIClientOptions
-            {
-                Endpoint = new Uri(options.Endpoint),
-            };
 
-            var credentials = new ApiKeyCredential(options.ApiKey);
-            var client = new OpenAIClient(credentials, clientOptions);
-            var chatClient = client.GetChatClient(options.Model);
-            
             _runner = new AgentRunner<PeerReviewContext>(
                 NullAgentObserver.Instance,
-                chatClient,
+                OpenAiChatClientFactory.Create(options.Endpoint, options.ApiKey, options.Model),
                 new PeerReviewAgent("peer_reviewer"),
                 parentRunner,
                 reviewContext,
@@ -163,21 +151,9 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
             return null;
         }
 
-        public ChatCompletionOptions CreateOptionsForTurn(AgentRunner runner)
+        public Microsoft.Extensions.AI.ChatOptions CreateOptionsForTurn(AgentRunner runner)
         {
-            var result = new ExtendedChatCompletionOptions();
-
-            if (!string.IsNullOrWhiteSpace(_options.ProviderOnly))
-            {
-                result.ProviderOnly = _options.ProviderOnly;
-            }
-
-            if (result.Temperature != null)
-            {
-                result.Temperature = _options.Temperature;
-            }
-
-            return result;
+            return OpenAiChatOptionsFactory.Create(_options.ProviderOnly, _options.Temperature);
         }
     }
 }

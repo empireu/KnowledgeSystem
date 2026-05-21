@@ -24,7 +24,7 @@ public sealed class ArgumentExtractionResult
     /// <summary>
     ///     The data extracted for each argument.
     /// </summary>
-    public required Dictionary<ToolArgument, string?> Arguments { get; init; }
+    public required Dictionary<ToolArgument, object?> Arguments { get; init; }
     
     /// <summary>
     ///     The <b>required</b> arguments missing from the data.
@@ -35,23 +35,20 @@ public sealed class ArgumentExtractionResult
     ///     Extracts the arguments from a tool call.
     /// </summary>
     /// <param name="agentTool">The tool to extract arguments from.</param>
-    /// <param name="functionArguments">The raw argument data.</param>
+    /// <param name="functionArguments">The arguments dictionary from <see cref="Microsoft.Extensions.AI.FunctionCallContent.Arguments"/>.</param>
     /// <returns></returns>
-    public static ArgumentExtractionResult ExtractArguments(AgentTool agentTool, BinaryData functionArguments)
+    public static ArgumentExtractionResult ExtractArguments(AgentTool agentTool, IDictionary<string, object?>? functionArguments)
     {
-        using var jsonDoc = JsonDocument.Parse(functionArguments);
-        var root = jsonDoc.RootElement;
-
-        var arguments = new Dictionary<ToolArgument, string?>();
+        var arguments = new Dictionary<ToolArgument, object?>();
         var missing = new List<ToolArgument>();
 
         foreach (var arg in agentTool.Arguments)
         {
-            if (root.TryGetProperty(arg.ArgumentName, out var valueElement))
+            if (functionArguments != null && functionArguments.TryGetValue(arg.ArgumentName, out var value) && value != null)
             {
-                arguments[arg] = valueElement.ValueKind == JsonValueKind.String
-                    ? valueElement.GetString()
-                    : valueElement.GetRawText();
+                arguments[arg] = value is JsonElement jsonElement
+                    ? jsonElement.Clone()
+                    : value;
             }
             else
             {

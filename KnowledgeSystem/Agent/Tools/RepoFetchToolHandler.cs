@@ -164,7 +164,7 @@ public sealed class RepoFetchToolHandler(
         {
             return Error($"repo_fetch: size limit ({maxChars}) exceeded. Please fetch a smaller number of characters.");
         }
-        
+
         var content = document.Content.Substring(refPath.StartOffset, length);
 
         return Success($"# Document: {document.Path}\n\n{content}");

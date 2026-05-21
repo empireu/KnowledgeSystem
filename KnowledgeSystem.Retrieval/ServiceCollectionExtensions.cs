@@ -26,8 +26,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEmbeddingService>(_ =>
             new OpenAiEmbeddingService(
                 options.EmbeddingEndpoint,
-                options.EmbeddingModel,
                 options.EmbeddingApiKey,
+                options.EmbeddingModel,
                 options.EmbeddingDimension,
                 options.EmbeddingSystemPrompt
             ));

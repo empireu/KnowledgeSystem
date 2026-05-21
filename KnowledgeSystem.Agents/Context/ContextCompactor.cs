@@ -1,6 +1,6 @@
 using System.Text;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
-using OpenAI.Chat;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agents.Context;
 
@@ -14,7 +14,7 @@ namespace KnowledgeSystem.Agents.Context;
 /// </summary>
 public sealed class ContextCompactor(
     ITokenEstimator tokenEstimator,
-    ChatClient? summaryClient = null,
+    IChatClient? summaryClient = null,
     string? summaryPrompt = null,
     int toolResultCharThreshold = 2000,
     int maxContextTokens = 16000,
@@ -44,12 +44,13 @@ public sealed class ContextCompactor(
 
         for (var i = 0; i < elements.Count; i++)
         {
-            if (elements[i] is not ChatElement { Message: ToolChatMessage toolMsg })
+            if (elements[i] is not ChatElement toolElement || toolElement.Message.Role != ChatRole.Tool)
             {
                 continue;
             }
-            
-            if (toolMsg.Content.FirstOrDefault()?.Text?.Length <= toolResultCharThreshold)
+
+            if (!ChatMessageHelpers.TryGetToolResultText(toolElement.Message, out var originalText, out var callId) ||
+                originalText.Length <= toolResultCharThreshold)
             {
                 continue;
             }
@@ -58,7 +59,7 @@ public sealed class ContextCompactor(
             var consumed = false;
             for (var j = i + 1; j < elements.Count; j++)
             {
-                if (elements[j] is ChatElement { Message: AssistantChatMessage })
+                if (elements[j] is ChatElement { Message: var msg } && msg.Role == ChatRole.Assistant)
                 {
                     consumed = true;
                     break;
@@ -70,9 +71,19 @@ public sealed class ContextCompactor(
                 continue;
             }
 
-            var originalText = toolMsg.Content.First().Text;
             var stub = CompactToolResultText(originalText);
-            elements[i] = new ChatElement(new ToolChatMessage(toolMsg.ToolCallId, stub));
+
+            var replacementContents = new List<AIContent>();
+            if (callId != null)
+            {
+                replacementContents.Add(new FunctionResultContent(callId, stub));
+            }
+            else
+            {
+                replacementContents.Add(new TextContent(stub));
+            }
+            
+            elements[i] = new ChatElement(new ChatMessage(ChatRole.Tool, replacementContents) { AuthorName = toolElement.Message.AuthorName });
         }
     }
 
@@ -93,7 +104,7 @@ public sealed class ContextCompactor(
 
         // Preserve leading system messages:
         var systemEnd = 0;
-        while (systemEnd < elements.Count && elements[systemEnd] is ChatElement { Message: SystemChatMessage })
+        while (systemEnd < elements.Count && elements[systemEnd] is ChatElement { Message: var sysMsg } && sysMsg.Role == ChatRole.System)
         {
             systemEnd++;
         }
@@ -103,7 +114,7 @@ public sealed class ContextCompactor(
         var turnsFound = 0;
         for (var i = elements.Count - 1; i >= systemEnd && turnsFound < preservedRecentTurns; i--)
         {
-            if (elements[i] is ChatElement { Message: AssistantChatMessage or UserChatMessage })
+            if (elements[i] is ChatElement { Message: var turnMsg } && (turnMsg.Role == ChatRole.Assistant || turnMsg.Role == ChatRole.User))
             {
                 turnsFound++;
                 recentStart = i;
@@ -131,7 +142,7 @@ public sealed class ContextCompactor(
         var summaryMessage = $"[Earlier conversation summary]\n{summary}";
         var removeCount = recentStart - systemEnd;
         elements.RemoveRange(systemEnd, removeCount);
-        elements.Insert(systemEnd, new ChatElement(new SystemChatMessage(summaryMessage)));
+        elements.Insert(systemEnd, new ChatElement(new ChatMessage(ChatRole.System, summaryMessage)));
     }
 
     private static string CompactToolResultText(string original)
@@ -156,8 +167,7 @@ public sealed class ContextCompactor(
             {conversationText}
             """;
 
-        var options = new ChatCompletionOptions();
-        var result = await summaryClient!.CompleteChatAsync([new UserChatMessage(prompt)], options, cancellationToken);
-        return result.Value.Content.FirstOrDefault()?.Text ?? "[Summary unavailable]";
+        var response = await summaryClient!.GetResponseAsync([new ChatMessage(ChatRole.User, prompt)], cancellationToken: cancellationToken);
+        return response.Text ?? "[Summary unavailable]";
     }
 }

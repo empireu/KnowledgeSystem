@@ -1,37 +1,56 @@
-using System.ClientModel;
-using OpenAI;
-using OpenAI.Embeddings;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace KnowledgeSystem.Retrieval.Embeddings;
 
 /// <summary>
-///     Embedding service wrapping the OpenAI SDK.
+///     An embedding service that uses the OpenAI API.
+///     This is meant to be used with a local model that exposes an OpenAI-compatible API.
 /// </summary>
 public sealed class OpenAiEmbeddingService : IEmbeddingService
 {
+    private readonly HttpClient _httpClient;
+    private readonly string _modelId;
     private readonly string? _prompt;
-    private readonly EmbeddingClient _embeddingClient;
+    private readonly int _dimension;
 
-    public int Dimension { get; }
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
 
-    public OpenAiEmbeddingService(string endpoint, string modelId, string apiKey, int dimension, string? prompt)
+    public OpenAiEmbeddingService(string endpoint, string apiKey, string modelId, int dimension = 1024, string? prompt = null)
     {
         _prompt = prompt;
         ArgumentException.ThrowIfNullOrWhiteSpace(endpoint);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         ArgumentOutOfRangeException.ThrowIfLessThan(dimension, 1);
 
+        _dimension = dimension;
         Dimension = dimension;
+        _modelId = modelId;
 
-        var options = new OpenAIClientOptions
+        var baseUri = endpoint.TrimEnd('/');
+        if (baseUri.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
         {
-            Endpoint = new Uri(endpoint),
+            baseUri = baseUri[..^3];
+        }
+        
+        _httpClient = new HttpClient
+        {
+            BaseAddress = new Uri(baseUri.TrimEnd('/') + "/v1/"),
         };
         
-        var credentials = new ApiKeyCredential(apiKey);
-        
-        var client = new OpenAIClient(credentials, options);
-        _embeddingClient = client.GetEmbeddingClient(modelId);
+        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+    }
+
+    public int Dimension { get; }
+
+    public void Dispose()
+    {
+        _httpClient.Dispose();
     }
 
     private string ProcessQuery(string query)
@@ -43,17 +62,13 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
 
         return _prompt + query;
     }
-    
+
     public async Task<ReadOnlyMemory<float>> EmbedAsync(string text, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
-        var response = await _embeddingClient.GenerateEmbeddingAsync(ProcessQuery(text), new EmbeddingGenerationOptions
-        {
-            Dimensions = Dimension,
-        }, cancellationToken);
-
-        return response.Value.ToFloats();
+        var results = await EmbedBatchAsync([text], cancellationToken);
+        return results[0];
     }
 
     public async Task<ReadOnlyMemory<float>[]> EmbedBatchAsync(IReadOnlyList<string> texts, CancellationToken cancellationToken = default)
@@ -65,23 +80,69 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
             return [];
         }
 
-        var response = await _embeddingClient.GenerateEmbeddingsAsync(texts.Select(ProcessQuery), new EmbeddingGenerationOptions
-        {
-            Dimensions = Dimension,
-        }, cancellationToken);
-        
-        var results = new ReadOnlyMemory<float>[texts.Count];
+        var queries = texts.Select(ProcessQuery).ToList();
 
-        for (var index = 0; index < response.Value.Count; index++)
-        { 
-            results[index] = response.Value[index].ToFloats();
+        var requestBody = new EmbeddingRequest
+        {
+            Model = _modelId,
+            Input = queries,
+            Dimensions = _dimension > 0 ? _dimension : null,
+        };
+
+        var response = await _httpClient.PostAsJsonAsync("embeddings", requestBody, JsonOptions, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException($"Embedding request failed with status {response.StatusCode}: {errorBody}");
+        }
+
+        var rawResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        var result = JsonSerializer.Deserialize<EmbeddingResponse>(rawResponse, JsonOptions)
+            ?? throw new InvalidOperationException("Failed to deserialize embedding response.");
+
+        if (result.Data == null || result.Data.Length == 0)
+        {
+            throw new InvalidOperationException($"Embedding response contained no data. Raw response: {rawResponse}");
+        }
+
+        var results = new ReadOnlyMemory<float>[result.Data.Length];
+        for (var i = 0; i < result.Data.Length; i++)
+        {
+            var embedding = result.Data[i].Embedding;
+            if (embedding == null)
+            {
+                throw new InvalidOperationException($"Embedding at index {i} was null.");
+            }
+
+            results[i] = new ReadOnlyMemory<float>(embedding);
         }
 
         return results;
     }
 
-    public void Dispose()
+    private sealed class EmbeddingRequest
     {
-        // Empty
+        [JsonPropertyName("model")]
+        public string Model { get; set; } = "";
+
+        [JsonPropertyName("input")]
+        public List<string> Input { get; set; } = [];
+
+        [JsonPropertyName("dimensions")]
+        public int? Dimensions { get; set; }
+    }
+
+    private sealed class EmbeddingResponse
+    {
+        [JsonPropertyName("data")]
+        public EmbeddingItem[]? Data { get; set; }
+    }
+
+    private sealed class EmbeddingItem
+    {
+        [JsonPropertyName("embedding")]
+        public float[]? Embedding { get; set; }
     }
 }
