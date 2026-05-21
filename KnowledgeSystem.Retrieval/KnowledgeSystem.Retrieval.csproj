@@ -18,6 +18,7 @@
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Hnsw\KnowledgeSystem.Hnsw.csproj" />
+      <ProjectReference Include="..\KnowledgeSystems.Extensions\KnowledgeSystems.Extensions.csproj" />
     </ItemGroup>
 
 </Project>

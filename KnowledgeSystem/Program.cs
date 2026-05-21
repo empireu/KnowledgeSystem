@@ -3,11 +3,15 @@ using KnowledgeSystem.Discord;
 using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Retrieval;
 using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Telemetry;
+using KnowledgeSystem.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services.ApplicationCommands;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Serilog;
 
 var builder = Host.CreateDefaultBuilder(args)
@@ -44,6 +48,25 @@ var builder = Host.CreateDefaultBuilder(args)
         services.AddSingleton<DiscordObserverFactory>();
         services.AddSingleton<ActiveRunTracker>();
         services.AddHostedService<ActiveRunTracker>(sp => sp.GetRequiredService<ActiveRunTracker>());
+    })
+    .ConfigureServices(services =>
+    {
+        services
+            .AddOpenTelemetry()
+            .ConfigureResource(resource => 
+            {
+                resource.AddService("KnowledgeSystem");
+            })
+            .WithTracing(tracing =>
+            {
+                tracing.AddSource(RagTelemetry.Rag.Name);
+                tracing.AddSource(KnowledgeSystemTelemetry.AgentTools.Name);
+                tracing.AddOtlpExporter(options => 
+                {
+                    options.Endpoint = new Uri("http://localhost:4317");
+                    options.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                });
+            });
     });
 
 var host = builder.Build();

@@ -4,6 +4,8 @@ using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Retrieval;
+using KnowledgeSystem.Telemetry;
+using KnowledgeSystems.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -49,6 +51,11 @@ public sealed partial class FastContextToolHandler(
             return Error("fast_context: Empty query argument!");
         }
 
+
+        using var activity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("FastContext");
+        activity?.SetTag("query", query);
+        activity?.SetTag("pathFilter", pathFilter);
+        
         FastContextRetrieval retrieval;
         
         try
@@ -67,31 +74,33 @@ public sealed partial class FastContextToolHandler(
             return Error($"fast_context: Failed to construct regex: {ex.Message}");
         }
 
-        var sw = Stopwatch.StartNew();
-        
-        await retrieval.PrepareForRun(cancellationToken);
-        
+        using (KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("PrepareForRun"))
+        {
+            await retrieval.PrepareForRun(cancellationToken);
+        }
+
         var turns = 0;
         int chars;
-        do
+        using (var loopActivity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("Retrieval"))
         {
-            chars = retrieval.Step(config.BatchSize);
-            ++turns;
-        } while (!retrieval.IsExhausted && chars < config.MaxDirectCharCount && turns < config.MaxTurns);
+            do
+            {
+                chars = retrieval.Step(config.BatchSize);
+                ++turns;
+            } while (!retrieval.IsExhausted && chars < config.MaxDirectCharCount && turns < config.MaxTurns);
 
-        retrieval.FuseScoresAndFinish();
+            loopActivity?.SetTag("turns", turns);
+            loopActivity?.SetTag("chars", chars);
+        }
+
+        using (KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("Evaluate"))
+        {
+            retrieval.FuseScoresAndFinish();
+        }
+
+        activity?.SetTag("document_count", retrieval.ReferencedDocuments.Count);
+        activity?.SetTag("reference_count", retrieval.ReferencedDocuments.Values.Sum(x => x.References.Count));
         
-        sw.Stop();
-        
-        logger.LogInformation(
-            "Fast context for {query} finished in {ms} milliseconds, over {t} turns, returning {c} chars and {d} documents", 
-            query,
-            sw.Elapsed.TotalMilliseconds,
-            turns,
-            chars,
-            retrieval.ReferencedDocuments.Count
-        );
-       
         var sb = new StringBuilder();
         
         var gaps = retrieval.ExtractGapTokens();
@@ -122,8 +131,13 @@ public sealed partial class FastContextToolHandler(
         {
             DirectExtraction(sb, results);
         }
+
+        var result = sb.ToString();
         
-        return Success(sb.ToString());
+        activity?.SetTag("result_size", result.Length);
+        activity?.SetStatus(ActivityStatusCode.Ok);
+        
+        return Success(result);
     }
 
     /// <summary>

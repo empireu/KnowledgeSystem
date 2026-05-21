@@ -8,6 +8,8 @@ using KnowledgeSystem.Hnsw;
 using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Engine;
 using KnowledgeSystem.Retrieval.Lexical;
+using KnowledgeSystem.Retrieval.Telemetry;
+using KnowledgeSystems.Extensions;
 
 // ReSharper disable ForeachCanBeConvertedToQueryUsingAnotherGetEnumerator
 // ReSharper disable ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
@@ -82,10 +84,14 @@ public sealed class FastContextRetrieval
             throw new InvalidOperationException("Already prepared for run!");
         }
 
+        using var activity = RagTelemetry.Rag.StartInternalActivity("Embed");
+        
         var results = await _embeddingService.EmbedAsync(_query, cancellationToken);
 
         _embedding = results.ToArray();
         _preparedForRun = true;
+
+        activity?.SetStatus(ActivityStatusCode.Ok);
     }
 
     private bool FileFilterPredicate(int vector)
@@ -119,6 +125,8 @@ public sealed class FastContextRetrieval
     /// </summary>
     private void Bm25()
     {
+        using var activity = RagTelemetry.Rag.StartInternalActivity("BM25");
+        
         var bm25Results = _engine.LexicalIndex.SearchBm25(_query);
         var passedCount = 0;
 
@@ -149,6 +157,9 @@ public sealed class FastContextRetrieval
                 Bm25Score = bm25Result.Score
             });
         }
+
+        activity?.SetTag("passed_count", passedCount);
+        activity?.SetStatus(ActivityStatusCode.Ok);
     }
     
     /// <summary>
@@ -163,12 +174,29 @@ public sealed class FastContextRetrieval
         {
             throw new InvalidOperationException("Not prepared for step!");
         }
+     
+        using var activity = RagTelemetry.Rag.StartInternalActivity("Step");
         
-        var fetchCount = _firstStepDone ? count : _bootstrapCount;
-        var vectorResults = _engine.Search(_embedding, fetchCount, efSearch: 1000, predicate: SemanticSearchPredicate);
+        var fetchCount = _firstStepDone 
+            ? count 
+            : _bootstrapCount;
+
+        activity?.SetTag("fetch_count", fetchCount);
+
+        VectorSearchResult[] vectorResults;
+        using (RagTelemetry.Rag.StartInternalActivity("VectorSearch"))
+        {
+            vectorResults = _engine.Search(
+                _embedding, 
+                fetchCount,
+                efSearch: 1000,
+                predicate: SemanticSearchPredicate
+            );
+        }
 
         if (vectorResults.Length == 0)
         {
+            activity?.SetStatus(ActivityStatusCode.Ok);
             IsExhausted = true;
             return UpdateTreesAndGetChars();
         }
@@ -242,7 +270,11 @@ public sealed class FastContextRetrieval
         {
             IsExhausted = true;
         }
-
+        
+        activity?.SetTag("accepted", accepted);
+        activity?.SetTag("exhausted", IsExhausted);
+        activity?.SetStatus(ActivityStatusCode.Ok);
+        
         return UpdateTreesAndGetChars();
     }
 
