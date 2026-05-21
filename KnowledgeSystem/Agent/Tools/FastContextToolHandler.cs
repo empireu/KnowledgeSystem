@@ -1,15 +1,18 @@
+using System.Diagnostics;
 using System.Text;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Retrieval;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Agent.Tools;
 
 public sealed partial class FastContextToolHandler(
+    ILogger<FastContextToolHandler> logger,
     AgentTool tool,
     StringArgument queryArgument,
     StringArgument pathFilterArgument,
@@ -64,8 +67,10 @@ public sealed partial class FastContextToolHandler(
             return Error($"fast_context: Failed to construct regex: {ex.Message}");
         }
 
+        var sw = Stopwatch.StartNew();
+        
         await retrieval.PrepareForRun(cancellationToken);
-
+        
         var turns = 0;
         int chars;
         do
@@ -75,6 +80,17 @@ public sealed partial class FastContextToolHandler(
         } while (!retrieval.IsExhausted && chars < config.MaxDirectCharCount && turns < config.MaxTurns);
 
         retrieval.FuseScoresAndFinish();
+        
+        sw.Stop();
+        
+        logger.LogInformation(
+            "Fast context for {query} finished in {ms} milliseconds, over {t} turns, returning {c} chars and {d} documents", 
+            query,
+            sw.Elapsed.TotalMilliseconds,
+            turns,
+            chars,
+            retrieval.ReferencedDocuments.Count
+        );
        
         var sb = new StringBuilder();
         

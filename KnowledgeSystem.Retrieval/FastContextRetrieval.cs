@@ -88,14 +88,10 @@ public sealed class FastContextRetrieval
         _preparedForRun = true;
     }
 
-    private bool Predicate(int vector)
+    private bool FileFilterPredicate(int vector)
     {
-        if (VisitedVectors.Contains(vector))
-        {
-            return false;
-        }
-
         var filter = _filePathFilter;
+       
         if (filter == null)
         {
             return true;
@@ -111,17 +107,32 @@ public sealed class FastContextRetrieval
 
         return result;
     }
+    
+    private bool SemanticSearchPredicate(int vector)
+    {
+        return !VisitedVectors.Contains(vector) && FileFilterPredicate(vector);
+    }
 
     /// <summary>
-    ///     Gets the fixed number of results using BM25 ranking. Does not prevent vector search from finding the same results.
+    ///     Gets the fixed number of results using BM25 ranking.
+    ///     Does not prevent vector search from finding the same results. When that happens, the score will be recorded for RRF.
     /// </summary>
     private void Bm25()
     {
         var bm25Results = _engine.LexicalIndex.SearchBm25(_query);
+        var passedCount = 0;
 
-        for (var resultIndex = 0; resultIndex < Math.Min(bm25Results.Length, _bm25Count); resultIndex++)
+        for (var index = 0; index < bm25Results.Length && passedCount < _bm25Count; index++)
         {
-            var bm25Result = bm25Results[resultIndex];
+            var bm25Result = bm25Results[index];
+
+            if (!FileFilterPredicate(bm25Result.HnswId))
+            {
+                continue;
+            }
+            
+            ++passedCount;
+                
             var chunk = _engine.GetChunkByHnswId(bm25Result.HnswId);
             
             if (!ReferencedDocuments.TryGetValue(chunk.Node.Document, out var referencedDocument))
@@ -154,7 +165,7 @@ public sealed class FastContextRetrieval
         }
         
         var fetchCount = _firstStepDone ? count : _bootstrapCount;
-        var vectorResults = _engine.Search(_embedding, fetchCount, efSearch: 1000, predicate: Predicate);
+        var vectorResults = _engine.Search(_embedding, fetchCount, efSearch: 1000, predicate: SemanticSearchPredicate);
 
         if (vectorResults.Length == 0)
         {
