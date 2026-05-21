@@ -75,78 +75,23 @@ public sealed partial class MutableHnswIndex
                 }
  
                 data.MarkVisited(neighbor);
- 
-                var neighborExcluded = predicate != null && !predicate(neighbor);
- 
-                if (neighborExcluded)
-                {
-                    // Traverse through excluded nodes but don't add them to results.
-                    // Conditional two-hop: expand the excluded node's neighbors to maintain graph connectivity:
-                    candidates.Enqueue(neighbor, VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor]!.VectorView));
-
-                    // Skip two-hop expansion if the neighbor doesn't exist at this layer:
-                    if (vectors[neighbor]!.TargetLayer < layer)
-                    {
-                        continue;
-                    }
-
-                    var twoHopEdges = vectors[neighbor]!.GetEdgesInLayer(layer);
-                    var twoHopCount = twoHopEdges.Count;
-                    data.EnsureScratchCapacity(twoHopCount);
-                    var twoHopSnapshot = data.TwoHopScratch.AsSpan(0, twoHopCount);
-                    for (var e = 0; e < twoHopCount; e++)
-                    {
-                        twoHopSnapshot[e] = twoHopEdges[e];
-                    }
-
-                    for (var j = 0; j < twoHopSnapshot.Length; j++)
-                    {
-                        var twoHopNeighbor = twoHopSnapshot[j];
- 
-                        if (data.IsVisited(twoHopNeighbor))
-                        {
-                            continue;
-                        }
- 
-                        data.MarkVisited(twoHopNeighbor);
- 
-                        var twoHopScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[twoHopNeighbor]!.VectorView);
-                        var twoHopExcluded = !predicate!(twoHopNeighbor);
- 
-                        // Always add to candidates for traversal, even if excluded, to maintain connectivity:
-                        candidates.Enqueue(twoHopNeighbor, twoHopScore);
- 
-                        if (!twoHopExcluded)
-                        {
-                            resultsQueue.TryPeek(out _, out var twoHopInverseWorstScore);
-                            if (resultsQueue.Count < explorationFactor || twoHopScore < -twoHopInverseWorstScore)
-                            {
-                                resultsQueue.Enqueue(twoHopNeighbor, -twoHopScore);
- 
-                                // Discards the worst result:
-                                if (resultsQueue.Count > explorationFactor)
-                                {
-                                    resultsQueue.Dequeue();
-                                }
-                            }
-                        }
-                    }
- 
-                    continue;
-                }
-
+                
                 var neighborScore = VectorObjective.AdjustedCosineSimilarity(query, vectors[neighbor]!.VectorView);
- 
+
                 resultsQueue.TryPeek(out _, out var currentInverseWorstScore);
+
                 if (resultsQueue.Count < explorationFactor || neighborScore < -currentInverseWorstScore)
                 {
                     candidates.Enqueue(neighbor, neighborScore);
-                    resultsQueue.Enqueue(neighbor, -neighborScore);
- 
-                    // Discards the worst result:
-                    if (resultsQueue.Count > explorationFactor)
+    
+                    if (predicate == null || predicate(neighbor))
                     {
-                        resultsQueue.Dequeue();
+                        resultsQueue.Enqueue(neighbor, -neighborScore);
+        
+                        if (resultsQueue.Count > explorationFactor)
+                        {
+                            resultsQueue.Dequeue();
+                        }
                     }
                 }
             }
@@ -276,12 +221,6 @@ public sealed partial class MutableHnswIndex
         /// </summary>
         public int[] EdgeScratch = [];
 
-        /// <summary>
-        ///     Scratch buffer for two-hop edge snapshots in <see cref="SearchLayer"/>.
-        ///     Separate from <see cref="EdgeScratch"/> because both can be live simultaneously.
-        /// </summary>
-        public int[] TwoHopScratch = [];
-
         public void Clear()
         {
             VisitedGeneration++;
@@ -307,11 +246,6 @@ public sealed partial class MutableHnswIndex
             if (EdgeScratch.Length < capacity)
             {
                 EdgeScratch = new int[Math.Max(capacity, EdgeScratch.Length * 2)];
-            }
-
-            if (TwoHopScratch.Length < capacity)
-            {
-                TwoHopScratch = new int[Math.Max(capacity, TwoHopScratch.Length * 2)];
             }
         }
 
