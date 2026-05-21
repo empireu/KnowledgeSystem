@@ -25,7 +25,13 @@ public sealed partial class FastContextToolHandler(
             .WithStringArgument("pathFilter", "Optional case-insensitive regex that filters which file paths to include (e.g., 'docs' or '\\.md$'). Only use when the query targets specific files or directories.", out var filterArg)
             .Build();
         
-        var handler = new FastContextToolHandler(searchTool, queryArg, filterArg, serviceProvider, config);
+        var handler = ActivatorUtilities.CreateInstance<FastContextToolHandler>(
+            serviceProvider,
+            searchTool,
+            queryArg,
+            filterArg,
+            config
+        );
         
         registry.RegisterTool(searchTool, handler);
     }

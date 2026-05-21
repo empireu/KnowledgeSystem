@@ -22,8 +22,13 @@ public sealed class RepoFetchToolHandler(
             .WithDescription("Fetches the content of a specific repository reference (file, definition, directory, or offsets).")
             .WithRequiredStringArgument("reference", "The reference to fetch. Formats: 'path/to/file.md@Heading' (section under heading), 'path/to/file.md:100,200' (slice between offsets), or 'path/to/dir/' (directory listing).", out var referenceArg)
             .Build();
-        
-        var handler = new RepoFetchToolHandler(fetchTool, referenceArg, serviceProvider.GetRequiredService<RagEngine>(), maxChars);
+
+        var handler = ActivatorUtilities.CreateInstance<RepoFetchToolHandler>(
+            serviceProvider,
+            fetchTool,
+            referenceArg,
+            maxChars
+        );
         
         registry.RegisterTool(fetchTool, handler);
     }

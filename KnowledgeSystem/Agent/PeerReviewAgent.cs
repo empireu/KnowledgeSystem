@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agent;
 
-public sealed class PeerReviewAgent: Agent<PeerReviewContext>
+public sealed class PeerReviewAgent : Agent<PeerReviewContext>
 {
     public PeerReviewAgent(string agentId) : base(agentId)
     {

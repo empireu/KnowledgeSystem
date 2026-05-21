@@ -12,7 +12,7 @@ public sealed class TreeToolHandler(
     AgentTool tool,
     StringArgument pathArgument,
     BooleanArgument detailedArgument,
-    IServiceProvider serviceProvider
+    RagEngine engine
 ) : ToolHandler<ConversationalContext>.Plain(tool) 
 {
     public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider)
@@ -23,7 +23,7 @@ public sealed class TreeToolHandler(
             .WithBooleanArgument("detailed", "If true, displays the headings inside each document. Use these heading names with repo_fetch('file.md@Heading'). Don't use unless your path is very targeted.", out var detailedArg)
             .Build();
 
-        var handler = new TreeToolHandler(treeTool, pathArg, detailedArg, serviceProvider);
+        var handler = ActivatorUtilities.CreateInstance<TreeToolHandler>(serviceProvider, treeTool, pathArg, detailedArg);
 
         registry.RegisterTool(treeTool, handler);
     }
@@ -37,7 +37,6 @@ public sealed class TreeToolHandler(
             detailed = false;
         }
         
-        var engine = serviceProvider.GetRequiredService<RagEngine>();
         var repo = engine.Repo;
 
         var documents = repo.Documents.Values

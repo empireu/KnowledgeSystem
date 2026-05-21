@@ -12,7 +12,7 @@ using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agent.Tools;
 
-public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ReviewOptions options ) : ToolHandler<ConversationalContext>.SubAgent(tool) {
+public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ReviewOptions options) : ToolHandler<ConversationalContext>.SubAgent(tool) {
     public const string ToolId = "submit_with_review";    
     
     public static void Register(AgentToolRegistry<ConversationalContext> registry, ReviewOptions options)
