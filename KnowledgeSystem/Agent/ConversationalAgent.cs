@@ -11,7 +11,7 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
         FastContextToolHandler.Register(ToolRegistry, serviceProvider, new FastContextToolConfig());
         RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, 16384);
         TreeToolHandler.Register(ToolRegistry, serviceProvider);
-
+        
         if (options.Review != null)
         {
             PeerReviewSubAgentHandler.Register(ToolRegistry, options.Review);
@@ -20,6 +20,12 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 
     public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<ConversationalContext> runner, ChatResponse response)
     {
+        if (string.IsNullOrWhiteSpace(response.Text))
+        {
+            runner.ExecutionContext.ChatContext.InsertAssistant("I should write my final output now.");
+            return Task.FromResult(AgentCallbackResult.Continue);
+        }
+
         runner.ExecutionContext.InsertAssistantCompletion(response);
         return Task.FromResult(AgentCallbackResult.Break);
     }
