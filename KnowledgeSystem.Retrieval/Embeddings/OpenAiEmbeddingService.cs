@@ -2,6 +2,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+
 namespace KnowledgeSystem.Retrieval.Embeddings;
 
 /// <summary>
@@ -66,7 +68,6 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
     public async Task<ReadOnlyMemory<float>> EmbedAsync(string text, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
-
         var results = await EmbedBatchAsync([text], cancellationToken);
         return results[0];
     }
@@ -111,10 +112,13 @@ public sealed class OpenAiEmbeddingService : IEmbeddingService
         for (var i = 0; i < result.Data.Length; i++)
         {
             var embedding = result.Data[i].Embedding;
+            
             if (embedding == null)
             {
                 throw new InvalidOperationException($"Embedding at index {i} was null.");
             }
+            
+            IEmbeddingService.SanitizeNetworkResult(embedding);
 
             results[i] = new ReadOnlyMemory<float>(embedding);
         }
