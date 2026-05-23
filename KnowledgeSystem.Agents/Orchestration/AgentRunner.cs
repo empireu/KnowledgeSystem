@@ -5,6 +5,7 @@ using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using Microsoft.Extensions.AI;
 
+// ReSharper disable UnusedAutoPropertyAccessor.Global
 // ReSharper disable ForCanBeConvertedToForeach
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 
@@ -233,7 +234,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         {
             ExecutionContext.InsertAssistantCompletion(response);
             var toolCalls = ChatMessageHelpers.GetFunctionCalls(response);
-            await BeginToolCalls(toolCalls);
+            await BeginToolCalls(response.Text, toolCalls);
             return TurnStatus.ToolCallsReceived;
         }
         
@@ -469,7 +470,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         public required ArgumentExtractionResult? Args { get; init; }
     }
     
-    private async Task BeginToolCalls(List<FunctionCallContent> toolCalls)
+    private async Task BeginToolCalls(string completion, List<FunctionCallContent> toolCalls)
     {
         // Will hold resolved and hallucinated tools, in the error they arrived:
         var calls = new List<ToolCall>();
@@ -503,7 +504,9 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
             }
         }
 
-        // Dispatches the events in order:
+        var toolEvents = new ToolCallInfo[calls.Count];
+        
+        // Matches all the events:
         for (var callIndex = 0; callIndex < calls.Count; callIndex++)
         {
             var toolCall = calls[callIndex];
@@ -528,15 +531,12 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
                 
                 if (args.Status == ArgumentExtractionResult.ExtractionStatus.Success)
                 {
-                    await Observer.OnToolCallAsync(
-                        this,
-                        new ToolCallInfo
-                        {
-                            Tool = toolCall.Tool,
-                            Args = args
-                        },
-                        CancellationToken
-                    );
+                    toolEvents[callIndex] = new ToolCallInfo
+                    {
+                        IsValid = true,
+                        Tool = toolCall.Tool,
+                        Args = args
+                    };
                 }
                 else
                 {
@@ -555,6 +555,14 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
             }
         }
 
+        // Dispatches the events, along with the completion:
+        await Observer.OnToolCallsAsync(
+            this,
+            completion,
+            toolEvents.ToArray(),
+            CancellationToken
+        );
+        
         // Pushes each call to the pending list.
         // Does not start their execution yet, but it does resolve the immediate errors.
         for (var callIndex = 0; callIndex < calls.Count; callIndex++)

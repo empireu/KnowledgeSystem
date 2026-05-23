@@ -17,7 +17,7 @@ public interface IAgentObserver
     ///     Called when the agent runs tools with all required arguments. Multiple tools can be called per round, so this may be called multiple times.
     ///     If the agent hallucinates a tool, <see cref="OnErrorAsync"/> will be called with a <see cref="AgentToolHallucinationError"/>.
     /// </summary>
-    Task OnToolCallAsync(AgentRunner runner, ToolCallInfo info, CancellationToken cancellationToken) => Task.CompletedTask;
+    Task OnToolCallsAsync(AgentRunner runner, string completion, ToolCallInfo[] info, CancellationToken cancellationToken) => Task.CompletedTask;
 
     /// <summary>
     ///     Called when the execution of a tool finishes. Always comes after the initial <see cref="OnToolCallAsync"/> passes the tool calls.

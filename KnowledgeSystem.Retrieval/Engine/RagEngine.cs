@@ -113,6 +113,8 @@ public sealed class RagEngine
     /// </summary>
     public async Task SynchronizeAsync(CancellationToken cancellationToken = default)
     {
+        var changed = false;
+        
         _logger.LogInformation("Loading HNSW repository");
         
         _repo = await EmdRepository.LoadAsync(
@@ -134,29 +136,43 @@ public sealed class RagEngine
         
         // Deleted files:
         var deletedPaths = dbPaths.Except(repoPaths).ToList();
-        await RemoveDeletedFilesAsync(deletedPaths, cancellationToken);
+        if (deletedPaths.Count > 0)
+        {
+            changed = true;
+            await RemoveDeletedFilesAsync(deletedPaths, cancellationToken);
+        }
 
         // New files:
         var newPaths = repoPaths.Except(dbPaths).ToList();
-        await AddNewFilesAsync(_repo, newPaths, cancellationToken);
+        if (newPaths.Count > 0)
+        {
+            changed = true;
+            await AddNewFilesAsync(_repo, newPaths, cancellationToken);
+        }
 
         // Existing files. Diff the chunks by hash:
         var existingPaths = repoPaths.Intersect(dbPaths).ToList();
-        await SyncExistingFilesAsync(_repo, existingPaths, cancellationToken);
+        if (await SyncExistingFilesAsync(_repo, existingPaths, cancellationToken))
+        {
+            changed = true;
+        }
 
-        _logger.LogInformation("Freezing DB. Vectors: {vec}", _hnsw?.Vectors.Sum(x => x == null ? 0 : 1));
-        
-        await _db.SaveChangesAsync(cancellationToken);
-        _hnsw?.Save(_options.HnswIndexPath);
+        if (changed)
+        {
+            _logger.LogInformation("Freezing DB. Vectors: {vec}", _hnsw?.Vectors.Sum(x => x == null ? 0 : 1));
+            await _db.SaveChangesAsync(cancellationToken);
+            _hnsw?.Save(_options.HnswIndexPath);
+        }
         
         _chunkByHnswId.Clear();
         _hnswIdByChunkHash.Clear();
+        
         var allChunkRecords = await _db.Chunks.ToListAsync(cancellationToken);
         foreach (var record in allChunkRecords)
         {
             var fileKey = EmdReferencePath.CreateFile(record.DocumentPath);
         
-            if (_repo.Documents.TryGetValue(fileKey, out var doc) && doc.ChunksByHexHash.TryGetValue(record.HashHex, out var chunk))
+            if (_repo.Documents.TryGetValue(fileKey, out var document) && document.ChunksByHexHash.TryGetValue(record.HashHex, out var chunk))
             {
                 _chunkByHnswId[record.HnswId] = chunk;
                 _hnswIdByChunkHash[chunk.Hash] = record.HnswId;
@@ -164,6 +180,7 @@ public sealed class RagEngine
         }
 
         _logger.LogInformation("Building lexical index from {count} chunks", _chunkByHnswId.Count);
+      
         LexicalIndex.Build(_repo.Documents.Count, _chunkByHnswId);
     }
     
@@ -212,8 +229,10 @@ public sealed class RagEngine
         }
     }
 
-    private async Task SyncExistingFilesAsync(EmdRepository repo, List<string> existingPaths, CancellationToken cancellationToken)
+    private async Task<bool> SyncExistingFilesAsync(EmdRepository repo, List<string> existingPaths, CancellationToken cancellationToken)
     {
+        var changed = false;
+        
         foreach (var path in existingPaths)
         {
             var key = EmdReferencePath.CreateFile(path);
@@ -235,9 +254,9 @@ public sealed class RagEngine
             if (removedHashes.Count > 0)
             {
                 _logger.LogInformation("Updating {path}: deleted {num} chunks", path, removedHashes.Count);
+                changed = true;
+                await RemoveChunksAsync(removedHashes, cancellationToken);
             }
-            
-            await RemoveChunksAsync(removedHashes, cancellationToken);
 
             // New chunks: in repo but not in DB
             var addedHashes = repoHashes.Except(dbHashes).ToList();
@@ -249,10 +268,12 @@ public sealed class RagEngine
             if (newChunks.Count > 0)
             {
                 _logger.LogInformation("Updating {path}: added {num} chunks", path, newChunks.Count);
+                changed = true;
+                await EmbedAndAddChunksAsync(newChunks, path, cancellationToken);
             }
-            
-            await EmbedAndAddChunksAsync(newChunks, path, cancellationToken);
         }
+
+        return changed;
     }
 
     private async Task RemoveChunksAsync(List<string> removedHashes, CancellationToken cancellationToken)
@@ -260,9 +281,14 @@ public sealed class RagEngine
         foreach (var hashHex in removedHashes)
         {
             var chunk = await _db.Chunks.FindAsync([hashHex], cancellationToken);
-            if (chunk == null) continue;
+            
+            if (chunk == null)
+            {
+                continue;
+            }
 
             var vector = Hnsw.Vectors[chunk.HnswId];
+            
             if (vector != null)
             {
                 Hnsw.Remove(vector);

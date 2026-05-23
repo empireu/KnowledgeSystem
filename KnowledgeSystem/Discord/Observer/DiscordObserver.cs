@@ -71,36 +71,39 @@ public sealed partial class DiscordObserver(
         return sb.ToString();
     }
 
-    public async Task OnToolCallAsync(AgentRunner runner, ToolCallInfo info, CancellationToken cancellationToken)
+    public async Task OnToolCallsAsync(AgentRunner runner, string completion, ToolCallInfo[] infos, CancellationToken cancellationToken)
     {
-        var args = info.Args.Arguments
-        .Select(kvp =>
+        foreach (var info in infos)
         {
-            var parameterPrintout = Truncate(ChatMessageHelpers.FormatContentValue(kvp.Value) ?? "null", 40);
-            
-            // Escape newlines:
-            parameterPrintout = EscapeNewlines(parameterPrintout);
-            
-            // Value is wrapped in code because it can contain Markdown that breaks the rendering.
-            parameterPrintout = $"`{parameterPrintout}`";
-            
-            // Format for specific types:
-            parameterPrintout = kvp.Key switch
+            var args = info.Args.Arguments.Select(kvp =>
             {
-                StringArgument => $"\"{parameterPrintout}\"",
-                _ => parameterPrintout
-            };
+                var parameterPrintout = Truncate(ChatMessageHelpers.FormatContentValue(kvp.Value) ?? "null", 40);
             
-            return $"{kvp.Key.ArgumentName}: {parameterPrintout}";
-        });
+                // Escape newlines:
+                parameterPrintout = EscapeNewlines(parameterPrintout);
+            
+                // Value is wrapped in code because it can contain Markdown that breaks the rendering.
+                parameterPrintout = $"`{parameterPrintout}`";
+            
+                // Format for specific types:
+                parameterPrintout = kvp.Key switch
+                {
+                    StringArgument => $"\"{parameterPrintout}\"",
+                    _ => parameterPrintout
+                };
+            
+                return $"{kvp.Key.ArgumentName}: {parameterPrintout}";
+            });
         
-        var arguments = string.Join(", ", args);
+            var arguments = string.Join(", ", args);
       
-        lock (_stateLock)
-        {
-            _toolStatus.Add(new ToolStatusEntry(info.Tool.ToolId, arguments, ToolState.Running));
+            lock (_stateLock)
+            {
+                _toolStatus.Add(new ToolStatusEntry(info.Tool.ToolId, arguments, ToolState.Running));
+            }
+            
+            await UpdateMessageAsync(cancellationToken);
         }
-        await UpdateMessageAsync(cancellationToken);
     }
 
     public async Task OnToolResultAsync(AgentRunner runner, int indexInCollection, AgentTool tool, ToolExecutionResult result, CancellationToken cancellationToken)

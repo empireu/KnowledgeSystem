@@ -8,6 +8,11 @@ namespace KnowledgeSystem.Agents.Orchestration.Observer;
 public readonly struct ToolCallInfo
 {
     /// <summary>
+    ///     If true, the call at this index is valid.
+    /// </summary>
+    public required bool IsValid { get; init; }
+    
+    /// <summary>
     ///     The executed tool.
     /// </summary>
     public required AgentTool Tool { get; init; }
