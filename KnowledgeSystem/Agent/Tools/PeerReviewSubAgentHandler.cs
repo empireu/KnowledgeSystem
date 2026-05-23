@@ -1,10 +1,11 @@
 ﻿using System.Text;
 using KnowledgeSystem.Agent.Config;
+using KnowledgeSystem.Agent.Tools.Markers;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
-using KnowledgeSystem.Discord;
+using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Events.Implementation;
 using KnowledgeSystem.Provider;
 using Microsoft.Extensions.AI;
@@ -61,24 +62,58 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
             throw new Exception("Could not isolate user message");
         }
 
+        var visitedNodes = new HashSet<MarkdownNode>();
         for (var i = startIndex + 1; i < elements.Count; i++)
         {
             var element = elements[i];
 
-            if (element is not ChatElement chatElement)
+            switch (element)
             {
-                continue;
-            }
+                case FastContextMarker fastContextMarker:
+                {
+                    sb.AppendLine(fastContextMarker.Output);
+                    sb.AppendLine("---");
+                    break;
+                }
+                case RepositoryFetchedNodeMarker repoFetchNodeMarker:
+                {
+                    // Check if this node is a child of an already added node:
+                    var isIncluded = false;
+                    var current = repoFetchNodeMarker.Node.RawNode;
+                    while (current != null)
+                    {
+                        if (visitedNodes.Contains(current))
+                        {
+                            isIncluded = true;
+                            break;
+                        }
 
-            if (chatElement.Message.Role != ChatRole.Tool)
-            {
-                continue;
-            }
+                        current = current.Parent;
+                    }
 
-            foreach (var text in ChatMessageHelpers.EnumerateTextContents(chatElement.Message))
-            {
-                sb.AppendLine(text);
-                sb.AppendLine();
+                    if (!isIncluded)
+                    {
+                        visitedNodes.Add(repoFetchNodeMarker.Node.RawNode);
+
+                        var node = repoFetchNodeMarker.Node;
+
+                        var content = node.Document.Content.Substring(
+                            node.RawNode.StartOffset,
+                            node.RawNode.EndOffset - node.RawNode.StartOffset
+                        );
+
+                        sb.AppendLine(content);
+                        sb.AppendLine("---");
+                    }
+
+                    break;
+                }
+                case RepositoryFetchedTextMarker repoFetchTextMarker:
+                {
+                    sb.AppendLine(repoFetchTextMarker.Content);
+                    sb.AppendLine("---");
+                    break;
+                }
             }
         }
         

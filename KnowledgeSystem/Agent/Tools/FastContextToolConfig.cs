@@ -20,12 +20,7 @@ public sealed class FastContextToolConfig
     /// <summary>
     ///     Hard cap on the number of turns.
     /// </summary>
-    public int MaxTurns { get; set; } = 250;
-
-    /// <summary>
-    ///     If the resulting raw text exceeds this number of characters, then the tool will switch to printing compact references.
-    /// </summary>
-    public int MaxDirectCharCount { get; set; } = 16384;
+    public int MaxTurns { get; set; } = 5;
 
     /// <summary>
     ///     Max number of matches to search for per body.

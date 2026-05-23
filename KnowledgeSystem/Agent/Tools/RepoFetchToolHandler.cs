@@ -1,4 +1,6 @@
 ﻿using System.Text;
+using KnowledgeSystem.Agent.Tools.Markers;
+using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
@@ -47,55 +49,31 @@ public sealed class RepoFetchToolHandler(
             ));
         }
 
+        var context = runner.ExecutionContext.ChatContext;
         switch (refPath.Type)
         {
             case EmdReferencePath.ReferenceType.Directory:
             {
-                return Task.FromResult(RepoFetchDirectory(refPath, argument));
+                return Task.FromResult(Error("Cannot fetch directory."));
             }
             case EmdReferencePath.ReferenceType.File:
             {
-                return Task.FromResult(RepoFetchFile(refPath));
+                return Task.FromResult(RepoFetchFile(context, refPath));
             }
             case EmdReferencePath.ReferenceType.Definition:
             {
-                return Task.FromResult(RepoFetchDefinition(refPath));
+                return Task.FromResult(RepoFetchDefinition(context, refPath));
             }
             case EmdReferencePath.ReferenceType.Offsets:
             {
-                return Task.FromResult(RepoFetchOffsets(refPath));
+                return Task.FromResult(RepoFetchOffsets(context, refPath));
             }
             default:
                 throw new Exception($"Unhandled ref type {refPath.Type}");
         }   
     }
-
-    private ToolExecutionResult RepoFetchDirectory(EmdReferencePath refPath, string argument)
-    {
-        var directory = refPath.RepositoryRelativePath;
-        var documents = engine.Repo.Documents
-            .Where(x => x.Key.RepositoryRelativePath.StartsWith(directory, StringComparison.OrdinalIgnoreCase))
-            .Select(x => x.Value)
-            .OrderBy(x => x.Content.Length)
-            .ToList();
-
-        if (documents.Count == 0)
-        {
-            return Error($"repo_fetch: Directory \"{argument}\" not found!");
-        }
-
-        var sb = new StringBuilder();
-        sb.AppendLine($"repo_fetch: Found {documents.Count} documents in \"{argument}\":");
-
-        foreach (var document in documents)
-        {
-            sb.AppendLine($"  - {document.Path} - {document.Content.Length} chars");
-        }
-                
-        return Success(sb.ToString());
-    }
     
-    private ToolExecutionResult RepoFetchFile(EmdReferencePath refPath)
+    private ToolExecutionResult RepoFetchFile(AgentContext context, EmdReferencePath refPath)
     {
         var fileRef = refPath.GetFile();
         if (!engine.Repo.Documents.TryGetValue(fileRef, out var document))
@@ -109,10 +87,15 @@ public sealed class RepoFetchToolHandler(
                          $"Fetch by offsets, e.g. 0,{maxChars}");
         }
 
+        context.InsertElement(new RepositoryFetchedNodeMarker
+        {
+            Node = document.RootNode
+        });
+        
         return Success($"# Document: {document.Path}\n\n{document.Content}");
     }
     
-    private ToolExecutionResult RepoFetchDefinition(EmdReferencePath refPath)
+    private ToolExecutionResult RepoFetchDefinition(AgentContext context, EmdReferencePath refPath)
     {
         var fileRef = refPath.GetFile();
         if (!engine.Repo.Documents.TryGetValue(fileRef, out var document))
@@ -139,11 +122,17 @@ public sealed class RepoFetchToolHandler(
             return Error($"repo_fetch: definition too long. Please explore it in offset slices. Offsets of the requested section are: {node.RawNode.StartOffset},{node.RawNode.EndOffset}");
         }
 
+        context.InsertElement(new RepositoryFetchedNodeMarker
+        {
+            Node = node
+        });
+        
         var sectionContent = document.Content.Substring(node.RawNode.StartOffset, node.RawNode.EndOffset - node.RawNode.StartOffset);
+        
         return Success($"# Document: {document.Path}\n\n{sectionContent}");
     }
     
-    private ToolExecutionResult RepoFetchOffsets(EmdReferencePath refPath)
+    private ToolExecutionResult RepoFetchOffsets(AgentContext context, EmdReferencePath refPath)
     {
         var fileRef = refPath.GetFile();
         if (!engine.Repo.Documents.TryGetValue(fileRef, out var document))
@@ -171,7 +160,13 @@ public sealed class RepoFetchToolHandler(
         }
 
         var content = document.Content.Substring(refPath.StartOffset, length);
-
-        return Success($"# Document: {document.Path}\n\n{content}");
+        var output = $"# Document: {document.Path}\n\n{content}";
+        
+        context.InsertElement(new RepositoryFetchedTextMarker
+        {
+            Content = output
+        });
+        
+        return Success(output);
     }
 }
