@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace KnowledgeSystem.Events.Implementation;
 
-public sealed class DefaultEventManager(ILogger<DefaultEventManager>? errorLogger, IServiceProvider serviceProvider) : IEventManager
+public class DefaultEventManager(ILogger<DefaultEventManager>? errorLogger, IServiceProvider serviceProvider) : IEventManager
 {
     private sealed class DisposeList : IDisposable
     {
@@ -68,7 +68,7 @@ public sealed class DefaultEventManager(ILogger<DefaultEventManager>? errorLogge
         return handlers;
     }
 
-    public async ValueTask SendAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
+    public virtual async ValueTask SendAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
     {
         if (!_sortedHandlers.TryGetValue(typeof(TEvent), out var handlers))
         {

@@ -2,8 +2,10 @@
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
 using KnowledgeSystem.Agents.Orchestration.Tools;
+using KnowledgeSystem.Agents.Telemetry;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Events.Api;
+using KnowledgeSystems.Extensions;
 using Microsoft.Extensions.AI;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Global
@@ -219,11 +221,26 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         ChatResponse response;
         try
         {
+            using var requestTelemetry = AgentTelemetry.Agent.StartInternalActivity("GetResponse");
+
+            requestTelemetry?.SetTag("agent", Agent.AgentId);
+
             response = await Client.GetResponseAsync(
                 ExecutionContext.ChatMessages,
                 chatOptions,
                 CancellationToken
             );
+
+            var usage = response.Usage;
+            
+            if (usage != null)
+            {
+                if (usage.InputTokenCount.HasValue) { requestTelemetry?.SetTag("input_tokens", usage.InputTokenCount.Value); }
+                if (usage.CachedInputTokenCount.HasValue) { requestTelemetry?.SetTag("cached_input_tokens", usage.CachedInputTokenCount.Value); }
+                if (usage.ReasoningTokenCount.HasValue) { requestTelemetry?.SetTag("reasoning_tokens", usage.ReasoningTokenCount.Value); }
+                if (usage.OutputTokenCount.HasValue) { requestTelemetry?.SetTag("output_tokens", usage.OutputTokenCount.Value); }
+                if (usage.TotalTokenCount.HasValue) { requestTelemetry?.SetTag("total_tokens", usage.TotalTokenCount.Value); }
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

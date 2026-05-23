@@ -18,6 +18,7 @@
     
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />
+      <ProjectReference Include="..\KnowledgeSystems.Extensions\KnowledgeSystems.Extensions.csproj" />
     </ItemGroup>
 
 </Project>

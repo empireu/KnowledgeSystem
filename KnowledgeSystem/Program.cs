@@ -1,4 +1,5 @@
 using KnowledgeSystem.Agent.Config;
+using KnowledgeSystem.Agents.Telemetry;
 using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Discord.Integration;
 using KnowledgeSystem.Retrieval;
@@ -60,6 +61,8 @@ var builder = Host.CreateDefaultBuilder(args)
             {
                 tracing.AddSource(RagTelemetry.Rag.Name);
                 tracing.AddSource(KnowledgeSystemTelemetry.AgentTools.Name);
+                tracing.AddSource(AgentTelemetry.Agent.Name);
+                
                 tracing.AddOtlpExporter(options => 
                 {
                     options.Endpoint = new Uri("http://localhost:4317");

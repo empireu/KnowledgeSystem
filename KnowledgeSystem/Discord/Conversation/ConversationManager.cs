@@ -268,7 +268,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
     public DiscordOrchestrationLayer CreateResponseOrchestrator(string name, ConversationalContext context, IDiscordMessageTarget target, CancellationToken cancellationToken)
     {
         // Creates the event manager, used by the agent's orchestration logic:
-        var eventManager = ActivatorUtilities.CreateInstance<DefaultEventManager>(_serviceProvider);
+        var eventManager = ActivatorUtilities.CreateInstance<AgentEventManager>(_serviceProvider);
         
         // Orchestrates all high-level events and sub-agents.  Uses the event manager to dispatch the final output event, after review rewrite:
         var agent = new ConversationalAgent(
