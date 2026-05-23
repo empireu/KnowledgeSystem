@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Agents", "K
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystems.Extensions", "KnowledgeSystems.Extensions\KnowledgeSystems.Extensions.csproj", "{FEF386A4-C5ED-420A-86C0-F7381690D9A5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Events", "KnowledgeSystem.Events\KnowledgeSystem.Events.csproj", "{C042A612-1271-4337-8B04-AF52C72A62D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,5 +50,9 @@ Global
 		{FEF386A4-C5ED-420A-86C0-F7381690D9A5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FEF386A4-C5ED-420A-86C0-F7381690D9A5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FEF386A4-C5ED-420A-86C0-F7381690D9A5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C042A612-1271-4337-8B04-AF52C72A62D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C042A612-1271-4337-8B04-AF52C72A62D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C042A612-1271-4337-8B04-AF52C72A62D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C042A612-1271-4337-8B04-AF52C72A62D2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
