@@ -15,5 +15,13 @@
       <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
       <PackageReference Include="Tokenizers.HuggingFace" Version="3.23.1" />
     </ItemGroup>
+    
+    <ItemGroup>
+      <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />
+    </ItemGroup>
+    
+    <ItemGroup>
+      <Folder Include="Orchestration\RunnerEvents\" />
+    </ItemGroup>
 
 </Project>

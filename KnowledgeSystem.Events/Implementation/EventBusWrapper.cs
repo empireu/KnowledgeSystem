@@ -2,23 +2,14 @@
 
 namespace KnowledgeSystem.Events.Implementation;
 
-internal class EventBusWrapper : IEventBus
+internal class EventBusWrapper(IEventBus wrapAround, object o) : IEventBus
 {
-    private readonly IEventBus _wrapAround;
-    private readonly object _object;
+    public Type EventType => wrapAround.EventType;
 
-    public EventBusWrapper(IEventBus wrapAround, object o)
+    public EventPriority Priority => wrapAround.Priority;
+
+    public ValueTask InvokeAsync(object? eventHandler, object @event, IServiceProvider provider, CancellationToken cancellationToken = default)
     {
-        _wrapAround = wrapAround;
-        _object = o;
-    }
-
-    public Type EventType => _wrapAround.EventType;
-
-    public EventPriority Priority => _wrapAround.Priority;
-
-    public ValueTask InvokeAsync(object? eventHandler, object @event, IServiceProvider provider)
-    {
-        return _wrapAround.InvokeAsync(_object, @event, provider);
+        return wrapAround.InvokeAsync(o, @event, provider, cancellationToken);
     }
 }

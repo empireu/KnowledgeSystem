@@ -68,7 +68,7 @@ public sealed class EventManager(ILogger<EventManager> errorLogger, IServiceProv
         return handlers;
     }
 
-    public async ValueTask SendAsync<TEvent>(TEvent @event) where TEvent : IEvent
+    public async ValueTask SendAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
     {
         try
         {
@@ -79,7 +79,7 @@ public sealed class EventManager(ILogger<EventManager> errorLogger, IServiceProv
 
             foreach (var (handler, eventListener) in handlers)
             {
-                await eventListener.InvokeAsync(handler, @event, serviceProvider);
+                await eventListener.InvokeAsync(handler, @event, serviceProvider, cancellationToken);
             }
         }
         catch (Exception e)

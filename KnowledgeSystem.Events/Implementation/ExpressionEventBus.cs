@@ -5,12 +5,14 @@ using KnowledgeSystem.Events.Api;
 using KnowledgeSystem.Events.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
+// ReSharper disable UnusedAutoPropertyAccessor.Global
+
 namespace KnowledgeSystem.Events.Implementation;
 
 internal class ExpressionEventBus : IEventBus
 {
     private static readonly ConcurrentDictionary<Type, ExpressionEventBus[]> Instances = new();
-    private readonly Func<object?, object, IServiceProvider, ValueTask> _invoker;
+    private readonly Func<object?, object, IServiceProvider, CancellationToken, ValueTask> _invoker;
     private readonly Type _eventListenerType;
 
     private ExpressionEventBus(Type eventType, MethodInfo method, SubscribeEvent attribute, Type eventListenerType)
@@ -75,20 +77,20 @@ internal class ExpressionEventBus : IEventBus
         }
     }
 
-    public ValueTask InvokeAsync(object? eventHandler, object @event, IServiceProvider provider)
+    public ValueTask InvokeAsync(object? eventHandler, object @event, IServiceProvider provider, CancellationToken cancellationToken = default)
     {
-        return _invoker(eventHandler, @event, provider);
+        return _invoker(eventHandler, @event, provider, cancellationToken);
     }
 
-    private Func<object?, object, IServiceProvider, ValueTask> CreateInvoker(MethodInfo method)
+    private Func<object?, object, IServiceProvider, CancellationToken, ValueTask> CreateInvoker(MethodInfo method)
     {
         var instance = Expression.Parameter(typeof(object), "instance");
         var eventParameter = Expression.Parameter(typeof(object), "event");
         var provider = Expression.Parameter(typeof(IServiceProvider), "provider");
+        var cancellationTokenParameter = Expression.Parameter(typeof(CancellationToken), "cancellationToken");
         var @event = Expression.Convert(eventParameter, EventType);
 
-        var getRequiredService = typeof(ServiceProviderServiceExtensions)
-            .GetMethod("GetRequiredService", new[] { typeof(IServiceProvider) });
+        var getRequiredService = typeof(ServiceProviderServiceExtensions).GetMethod("GetRequiredService", [typeof(IServiceProvider)]);
 
         if (getRequiredService == null)
         {
@@ -102,16 +104,17 @@ internal class ExpressionEventBus : IEventBus
         {
             var methodArgument = methodArguments[i];
 
-            if (typeof(IEvent).IsAssignableFrom(methodArgument.ParameterType)
-                && methodArgument.ParameterType.IsAssignableFrom(EventType))
+            if (typeof(IEvent).IsAssignableFrom(methodArgument.ParameterType) && methodArgument.ParameterType.IsAssignableFrom(EventType))
             {
                 arguments[i] = @event;
             }
+            else if (methodArgument.ParameterType == typeof(CancellationToken))
+            {
+                arguments[i] = cancellationTokenParameter;
+            }
             else
             {
-                arguments[i] = Expression.Call(
-                    getRequiredService.MakeGenericMethod(methodArgument.ParameterType),
-                    provider);
+                arguments[i] = Expression.Call(getRequiredService.MakeGenericMethod(methodArgument.ParameterType), provider);
             }
         }
 
@@ -120,9 +123,7 @@ internal class ExpressionEventBus : IEventBus
 
         if (method.ReturnType == typeof(void))
         {
-            invoke = Expression.Block(
-                invoke,
-                Expression.Label(returnTarget, Expression.Default(typeof(ValueTask))));
+            invoke = Expression.Block(invoke, Expression.Label(returnTarget, Expression.Default(typeof(ValueTask))));
         }
         else if (method.ReturnType != typeof(ValueTask))
         {
@@ -130,11 +131,13 @@ internal class ExpressionEventBus : IEventBus
         }
 
         return Expression
-            .Lambda<Func<object?, object, IServiceProvider, ValueTask>>(
+            .Lambda<Func<object?, object, IServiceProvider, CancellationToken, ValueTask>>(
                 invoke,
                 instance, 
                 eventParameter,
-                provider)
+                provider,
+                cancellationTokenParameter
+            )
             .Compile();
     }
 }

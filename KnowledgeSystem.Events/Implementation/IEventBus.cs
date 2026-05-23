@@ -8,5 +8,5 @@ internal interface IEventBus
 
     EventPriority Priority { get; }
 
-    ValueTask InvokeAsync(object? eventHandler, object @event, IServiceProvider provider);
+    ValueTask InvokeAsync(object? eventHandler, object @event, IServiceProvider provider, CancellationToken cancellationToken = default);
 }
