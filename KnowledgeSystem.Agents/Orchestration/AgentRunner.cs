@@ -178,6 +178,15 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
     /// <returns></returns>
     public async Task<TurnStatus> ExecuteTurn()
     {
+        var status = await ExecuteTurnCore();
+
+        await Observer.OnTurnAsync(this, status, CancellationToken);
+        
+        return status;
+    }
+
+    private async Task<TurnStatus> ExecuteTurnCore()
+    {
         if (IsFinished)
         {
             throw new Exception("Tried to execute finished runner!");
@@ -236,8 +245,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
             await Observer.OnAssistantMessageAsync(this, textContent, CancellationToken);
         }
 
-        return await HandleCallbackResult(() => Agent.HandleCompletion(this, response)) ??
-               TurnStatus.CompletionHandled;
+        return await HandleCallbackResult(() => Agent.HandleCompletion(this, response)) ?? TurnStatus.CompletionHandled;
     }
 
     private async Task<TurnStatus?> HandleCallbackResult(Func<Task<AgentCallbackResult>> callback)

@@ -12,10 +12,10 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
         RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, 16384);
         TreeToolHandler.Register(ToolRegistry, serviceProvider);
         
-        if (options.Review != null)
-        {
-            PeerReviewSubAgentHandler.Register(ToolRegistry, options.Review);
-        }
+        //if (options.Review != null)
+        //{
+        //    PeerReviewSubAgentHandler.Register(ToolRegistry, options.Review);
+        //}
     }
 
     public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<ConversationalContext> runner, ChatResponse response)

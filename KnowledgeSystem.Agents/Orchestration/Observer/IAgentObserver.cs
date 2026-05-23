@@ -9,9 +9,13 @@ namespace KnowledgeSystem.Agents.Orchestration.Observer;
 public interface IAgentObserver
 {
     /// <summary>
+    ///     Called when the runner completes a turn.
+    /// </summary>
+    Task OnTurnAsync(AgentRunner runner, AgentRunner.TurnStatus status, CancellationToken cancellationToken) => Task.CompletedTask;
+    
+    /// <summary>
     ///     Called when the agent runs tools with all required arguments. Multiple tools can be called per round, so this may be called multiple times.
     ///     If the agent hallucinates a tool, <see cref="OnErrorAsync"/> will be called with a <see cref="AgentToolHallucinationError"/>.
-    ///
     /// </summary>
     Task OnToolCallAsync(AgentRunner runner, ToolCallInfo info, CancellationToken cancellationToken) => Task.CompletedTask;
 
