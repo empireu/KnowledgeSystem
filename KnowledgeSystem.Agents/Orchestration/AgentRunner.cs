@@ -1,8 +1,9 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using KnowledgeSystem.Agents.Context;
-using KnowledgeSystem.Agents.Orchestration.Observer;
+using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Events.Api;
 using Microsoft.Extensions.AI;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Global
@@ -16,7 +17,7 @@ public abstract class AgentRunner
     /// <summary>
     ///     The observer for the whole execution tree, inherited from the parent.
     /// </summary>
-    public IAgentObserver Observer { get; }
+    public abstract IEventReceiverRegistry EventReceiverRegistry { get; }
     
     /// <summary>
     ///     The chat client (either inherited from the parent, or a fresh one).
@@ -48,9 +49,8 @@ public abstract class AgentRunner
     
     protected readonly ICompletionFactory CompletionFactory;
     
-    protected AgentRunner(IAgentObserver observer, IChatClient client, AgentRunner? parent, ICompletionFactory? completionFactory)
+    protected AgentRunner(IChatClient client, AgentRunner? parent, ICompletionFactory? completionFactory)
     {
-        Observer = observer;
         Client = client;
         Parent = parent;
         
@@ -130,32 +130,39 @@ public abstract class AgentRunner
 /// <typeparam name="TContext">Specific context class. Holds the chat history and specialized data for sub-agents.</typeparam>
 public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentExecutionContext
 {
+    private readonly IEventManager _eventManager;
     public readonly CancellationToken CancellationToken;
 
     /// <summary>
     ///     Constructs an agent execution engine.
     ///     The engine is meant to execute a full turn, including all tool calls required for the turn.
     /// </summary>
-    /// <param name="observer">Event sink.</param>
     /// <param name="client">The chat client.</param>
     /// <param name="agent">The agent being executed.</param>
     /// <param name="parent">The parent execution engine, if this is a sub-agent.</param>
     /// <param name="context">The specific execution context.</param>
     /// <param name="cancellationToken"><b>Cancellation token that is valid throughout the lifetime of the runner (stored in various places).</b></param>
+    /// <param name="eventManager">The event manager implementation. Will be used to dispatch all core events.</param>
     /// <param name="completionFactory">Optional factory to configure the completion options.</param>
     /// <typeparam name="TContext">Specific context class. Holds the chat history and specialized data for sub-agents.</typeparam>
-    public AgentRunner(IAgentObserver observer,
+    public AgentRunner(
         IChatClient client,
         Agent<TContext> agent,
         AgentRunner? parent,
         TContext context,
+        IEventManager eventManager,
         CancellationToken cancellationToken,
-        ICompletionFactory? completionFactory = null) : base(observer, client, parent, completionFactory)
+        ICompletionFactory? completionFactory = null
+    ) : base(client, parent, completionFactory)
     {
+        _eventManager = eventManager;
+
         CancellationToken = cancellationToken;
         Agent = agent;
         ExecutionContext = context;
     }
+
+    public override IEventReceiverRegistry EventReceiverRegistry => _eventManager;
 
     public override Agent<TContext> Agent { get; }
 
@@ -181,7 +188,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
     {
         var status = await ExecuteTurnCore();
 
-        await Observer.OnTurnAsync(this, status, CancellationToken);
+        await _eventManager.SendAsync(new AgentTurnEvent(status), CancellationToken);
         
         return status;
     }
@@ -222,9 +229,9 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         {
             FinishError = new AgentExecutionError($"Chat request failed: {ex.Message}", true);
             IsFinished = true;
-            
-            await Observer.OnErrorAsync(this, FinishError, CancellationToken);
-            await Observer.OnAgentCompletedAsync(this, CancellationToken);
+
+            await _eventManager.SendAsync(new AgentErrorEvent(FinishError), CancellationToken);
+            await _eventManager.SendAsync(new AgentCompletedEvent(), CancellationToken);
             
             return TurnStatus.CompletedWithError;
         }
@@ -234,12 +241,12 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         {
             ExecutionContext.InsertAssistantCompletion(response);
             var toolCalls = ChatMessageHelpers.GetFunctionCalls(response);
-            await BeginToolCalls(response.Text, toolCalls);
+            await BeginToolCalls(response, toolCalls);
             return TurnStatus.ToolCallsReceived;
         }
         
         // Non-tool completion. Continue with result and notify:
-        await Observer.OnAssistantMessageAsync(this, response, CancellationToken);
+        await _eventManager.SendAsync(new AgentMessageEvent(response), CancellationToken);
         return await HandleCallbackResult(() => Agent.HandleCompletion(this, response)) ?? TurnStatus.CompletionHandled;
     }
 
@@ -264,8 +271,8 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
 
         IsFinished = true;
         FinishError = callbackResult.Error;
-        
-        await Observer.OnAgentCompletedAsync(this, CancellationToken);
+
+        await _eventManager.SendAsync(new AgentCompletedEvent(), CancellationToken);
 
         return FinishError == null 
             ? TurnStatus.CompletedSuccessfully 
@@ -318,7 +325,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
                         catch (Exception ex)
                         {
                             var errorResult = new ToolExecutionResult(plainFrame.Tool, false, null, ex.Message, ex);
-                            await Observer.OnToolResultAsync(this, indexInCollection, plainFrame.Tool, errorResult, CancellationToken);
+                            await _eventManager.SendAsync(new AgentToolResultEvent(indexInCollection, plainFrame.Tool, errorResult), CancellationToken);
                             plainFrame.Result = errorResult;
                             return true;
                         }
@@ -335,12 +342,9 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
                     {
                         result = new ToolExecutionResult(plainFrame.Tool, false, null, ex.Message, ex);
                     }
-                    
-                    await Observer.OnToolResultAsync(
-                        this,
-                        indexInCollection,
-                        plainFrame.Tool,
-                        result,
+
+                    await _eventManager.SendAsync(
+                        new AgentToolResultEvent(indexInCollection, plainFrame.Tool, result),
                         CancellationToken
                     );
 
@@ -367,7 +371,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
                         catch (Exception ex)
                         {
                             var errorResult = new ToolExecutionResult(subAgentFrame.Tool, false, null, ex.Message, ex);
-                            await Observer.OnToolResultAsync(this, indexInCollection, subAgentFrame.Tool, errorResult, CancellationToken);
+                            await _eventManager.SendAsync(new AgentToolResultEvent(indexInCollection, subAgentFrame.Tool, errorResult), CancellationToken);
                             subAgentFrame.Result = errorResult;
                             return true;
                         }
@@ -387,11 +391,8 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
 
                     if (result != null)
                     {
-                        await Observer.OnToolResultAsync(
-                            this,
-                            indexInCollection,
-                            subAgentFrame.Tool,
-                            result,
+                        await _eventManager.SendAsync(
+                            new AgentToolResultEvent(indexInCollection, subAgentFrame.Tool, result),
                             CancellationToken
                         );
                         
@@ -464,7 +465,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         public required ArgumentExtractionResult? Args { get; init; }
     }
     
-    private async Task BeginToolCalls(string completion, List<FunctionCallContent> toolCalls)
+    private async Task BeginToolCalls(ChatResponse completion, List<FunctionCallContent> toolCalls)
     {
         // Will hold resolved and hallucinated tools, in the error they arrived:
         var calls = new List<ToolCall>();
@@ -508,14 +509,14 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
             if (toolCall.Tool == null)
             {
                 var functionName = toolCall.Call.Name;
-                await Observer.OnErrorAsync(
-                    this,
-                    new AgentToolHallucinationError(
-                        $"Invalid tool \"{functionName}\"", 
+
+                await _eventManager.SendAsync(
+                    new AgentErrorEvent(new AgentToolHallucinationError(
+                        $"Invalid tool \"{functionName}\"",
                         false,
-                        functionName, 
+                        functionName,
                         callIndex
-                    ),
+                    )),
                     CancellationToken
                 );
             }
@@ -534,15 +535,14 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
                 }
                 else
                 {
-                    await Observer.OnErrorAsync(
-                        this,
-                        new AgentToolIncompleteArgumentsError(
-                            $"Missing arguments for \"{toolCall.Tool.ToolId}\"", 
+                    await _eventManager.SendAsync(
+                        new AgentErrorEvent(new AgentToolIncompleteArgumentsError(
+                            $"Missing arguments for \"{toolCall.Tool.ToolId}\"",
                             false,
-                            toolCall.Tool.ToolId, 
+                            toolCall.Tool.ToolId,
                             callIndex,
                             args
-                        ),
+                        )),
                         CancellationToken
                     );
                 }
@@ -550,12 +550,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         }
 
         // Dispatches the events, along with the completion:
-        await Observer.OnToolCallsAsync(
-            this,
-            completion,
-            toolEvents.ToArray(),
-            CancellationToken
-        );
+        await _eventManager.SendAsync(new AgentToolCallsEvent(completion, toolEvents), CancellationToken);
         
         // Pushes each call to the pending list.
         // Does not start their execution yet, but it does resolve the immediate errors.

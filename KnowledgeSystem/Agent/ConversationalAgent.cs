@@ -1,21 +1,27 @@
+using KnowledgeSystem.Agent.AgentEvents;
 using KnowledgeSystem.Agent.Tools;
 using KnowledgeSystem.Agents.Orchestration;
+using KnowledgeSystem.Events.Api;
 using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agent;
 
 public sealed class ConversationalAgent : Agent<ConversationalContext>
 {
-    public ConversationalAgent(string agentId, IServiceProvider serviceProvider, Discord.ChatOptions options) : base(agentId)
+    private readonly IEventManager _eventManager;
+
+    public ConversationalAgent(IEventManager eventManager, string agentId, IServiceProvider serviceProvider, Discord.ChatOptions options) : base(agentId)
     {
+        _eventManager = eventManager;
+        
         FastContextToolHandler.Register(ToolRegistry, serviceProvider, new FastContextToolConfig());
-        RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, 16384);
+        RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, 8192);
         TreeToolHandler.Register(ToolRegistry, serviceProvider);
         
-        //if (options.Review != null)
-        //{
-        //    PeerReviewSubAgentHandler.Register(ToolRegistry, options.Review);
-        //}
+        if (options.Review != null)
+        {
+            PeerReviewSubAgentHandler.Register(ToolRegistry, options.Review);
+        }
     }
 
     public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<ConversationalContext> runner, ChatResponse response)
@@ -32,15 +38,14 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 
     public override async Task<AgentCallbackResult> HandleToolFinish(AgentRunner<ConversationalContext> runner)
     {
+        // P.S. alternatively, we can strong-link the handler. Maybe do
         if (runner.TryGetUniqueActiveSubAgentProxyForHandler<PeerReviewSubAgentHandler>(out var peerReviewProxy))
         {
             var proxy = (PeerReviewSubAgentHandler.Proxy)peerReviewProxy;
 
             if (proxy.ReviewContext.FinalStatus == PeerReviewContext.Status.Approved)
             {
-                // FIXME update architecture
-                var temp = new ChatResponse(new ChatMessage(ChatRole.Assistant, proxy.ReviewContext.Report));
-                await runner.Observer.OnAssistantMessageAsync(runner, temp, runner.CancellationToken);
+                await _eventManager.SendAsync(new AgentPeerReviewedMessageEvent(proxy.ReviewContext.Report));
                 
                 return AgentCallbackResult.Break;
             }

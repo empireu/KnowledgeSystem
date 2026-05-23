@@ -19,9 +19,5 @@
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />
     </ItemGroup>
-    
-    <ItemGroup>
-      <Folder Include="Orchestration\RunnerEvents\" />
-    </ItemGroup>
 
 </Project>

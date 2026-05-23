@@ -1,7 +1,5 @@
 ﻿using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context;
-using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Agents.Orchestration.Observer;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using NetCord.Rest;
@@ -12,12 +10,10 @@ public sealed class ActiveConversation : IDisposable
 {
     private static readonly TimeSpan TimeoutDuration = TimeSpan.FromHours(1);
 
+    private readonly ILogger<ActiveConversation> _logger;
     private readonly IConversationManager _manager;
-    private readonly ConversationalAgent _agent;
     private readonly ConversationalContext _context;
     private readonly ContextCompactor _compactor;
-    private readonly IChatClient _chatClient;
-    private readonly ILogger _logger;
     private readonly SemaphoreSlim _runLock = new(1, 1);
     private CancellationTokenSource _runCts = new();
     private bool _disposed;
@@ -28,15 +24,21 @@ public sealed class ActiveConversation : IDisposable
 
     public bool IsRunning => _runLock.CurrentCount == 0;
     
-    public ActiveConversation(IConversationManager manager, ulong channelId, ConversationalAgent agent, ConversationalContext context, IChatClient chatClient, ILogger<ActiveConversation> logger)
+    public ActiveConversation(
+        ILogger<ActiveConversation> logger,
+        IConversationManager manager,
+        ulong channelId,
+        ConversationalContext context,
+        IChatClient chatClient
+    ) 
     {
+        _logger = logger;
         _manager = manager;
         ChannelId = channelId;
-        _agent = agent;
         _context = context;
-        _chatClient = chatClient;
-        _compactor = new ContextCompactor(manager.TokenEstimator, _chatClient);
-        _logger = logger;
+
+        _compactor = new ContextCompactor(manager.TokenEstimator, chatClient);
+
         TouchActivity();
     }
 
@@ -51,6 +53,7 @@ public sealed class ActiveConversation : IDisposable
     public async Task CloseAsync(RestClient restClient, string reason, CancellationToken cancellationToken = default)
     {
         Cancel();
+        
         try
         {
             await restClient.SendMessageAsync(ChannelId, new MessageProperties
@@ -64,7 +67,7 @@ public sealed class ActiveConversation : IDisposable
         }
     }
 
-    public async Task RunToCompletionAsync(string userMessage, IAgentObserver observer, CancellationToken cancellationToken = default)
+    public async Task RunToCompletionAsync(string userMessage, IDiscordMessageTarget target, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         TouchActivity();
@@ -85,24 +88,22 @@ public sealed class ActiveConversation : IDisposable
         {
             _context.ChatContext.InsertUser(userMessage);
 
-            var runner = new AgentRunner<ConversationalContext>(
-                observer,
-                _chatClient,
-                _agent,
-                parent: null,
+            var orchestration = _manager.CreateResponseOrchestrator(
+                $"Channel {ChannelId}",
                 _context,
-                token,
-                completionFactory: _manager
+                target,
+                cancellationToken
             );
-
             try
             {
-                await runner.RunAsync();
+                await orchestration.RootRunner.RunAsync();
+                
                 var tokensBeforeCompaction = _manager.TokenEstimator.CountTokens(_context.ChatMessages);
                 await _compactor.CompactAsync(_context.ChatContext, token);
                 var tokensAfterCompaction = _manager.TokenEstimator.CountTokens(_context.ChatMessages);
                 var delta = tokensBeforeCompaction - tokensAfterCompaction;
-                _logger.LogInformation("Compacted {tokens} for conversation {channel}", delta, ChannelId);
+                
+                _logger.LogInformation("Compacted ~{tokens} for conversation {channel}", delta, ChannelId);
             }
             catch (OperationCanceledException)
             {
@@ -115,9 +116,9 @@ public sealed class ActiveConversation : IDisposable
                 return;
             }
 
-            if (runner.FinishError != null)
+            if (orchestration.RootRunner.FinishError != null)
             {
-                _logger.LogWarning("Conversation {channel} completed with error: {error}", ChannelId, runner.FinishError);
+                _logger.LogWarning("Conversation {channel} completed with error: {error}", ChannelId, orchestration.RootRunner.FinishError);
                 return;
             }
             
@@ -136,9 +137,12 @@ public sealed class ActiveConversation : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+        
         _disposed = true;
-
         _runCts.Cancel();
         _runCts.Dispose();
     }

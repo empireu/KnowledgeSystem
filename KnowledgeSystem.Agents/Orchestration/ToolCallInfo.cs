@@ -1,9 +1,9 @@
 ﻿using KnowledgeSystem.Agents.Tools;
 
-namespace KnowledgeSystem.Agents.Orchestration.Observer;
+namespace KnowledgeSystem.Agents.Orchestration;
 
 /// <summary>
-///     Observer information for a tool call within a round.
+///     Information for a tool call within a round.
 /// </summary>
 public readonly struct ToolCallInfo
 {

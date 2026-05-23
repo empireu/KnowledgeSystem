@@ -1,17 +1,14 @@
-﻿using KnowledgeSystem.Discord.Observer;
+﻿using KnowledgeSystem.Agent;
+using KnowledgeSystem.Agents.Orchestration;
+using KnowledgeSystem.Discord.Integration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Discord;
 
 public class DiscordObserverFactory(IServiceProvider serviceProvider)
 {
-    public DiscordObserver Create(IDiscordMessageTarget target)
+    public DiscordAgentIntegration CreateV2(AgentRunner<ConversationalContext> runner, IDiscordMessageTarget target)
     {
-        return ActivatorUtilities.CreateInstance<DiscordObserver>(serviceProvider, target);
-    }
-
-    public DiscordObserver2 CreateV2(IDiscordMessageTarget target)
-    {
-        return ActivatorUtilities.CreateInstance<DiscordObserver2>(serviceProvider, target);
+        return ActivatorUtilities.CreateInstance<DiscordAgentIntegration>(serviceProvider, runner, target);
     }
 }

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace KnowledgeSystem.Events.Implementation;
 
-public sealed class EventManager(ILogger<EventManager> errorLogger, IServiceProvider serviceProvider) : IEventManager
+public sealed class DefaultEventManager(ILogger<DefaultEventManager>? errorLogger, IServiceProvider serviceProvider) : IEventManager
 {
     private sealed class DisposeList : IDisposable
     {
@@ -77,7 +77,7 @@ public sealed class EventManager(ILogger<EventManager> errorLogger, IServiceProv
 
         foreach (var (handler, eventListener) in handlers)
         {
-            if (eventListener.IsCritical)
+            if (errorLogger == null || eventListener.IsCritical)
             {
                 await eventListener.InvokeAsync(handler, @event, serviceProvider, cancellationToken);
             }
@@ -89,8 +89,7 @@ public sealed class EventManager(ILogger<EventManager> errorLogger, IServiceProv
                 }
                 catch (Exception e)
                 {
-                    errorLogger.LogError("Non-critical handler {method} failed for {type}: {ex}",
-                        eventListener.Method, typeof(TEvent), e);
+                    errorLogger.LogError("Non-critical handler {method} failed for {type}: {ex}", eventListener.Method, typeof(TEvent), e);
                 }
             }
         }

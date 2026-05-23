@@ -1,6 +1,6 @@
-﻿using KnowledgeSystem.Agents.Context.TokenEstimation;
+﻿using KnowledgeSystem.Agent;
+using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Agents.Orchestration.Observer;
 
 namespace KnowledgeSystem.Discord.Conversation;
 
@@ -49,5 +49,20 @@ public interface IConversationManager : AgentRunner.ICompletionFactory
     /// <summary>
     ///     Asks a single question and returns the answer. Used for one-shot calls.
     /// </summary>
-    public Task AskAsync(string message, IAgentObserver observer, CancellationToken cancellationToken = default);
+    public Task AskAsync(string message, IDiscordMessageTarget target, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Creates an orchestration layer to respond to a single user message.
+    /// </summary>
+    /// <param name="name">The main agent's name, for tracing.</param>
+    /// <param name="context">The conversation's context.</param>
+    /// <param name="target">The discord link.</param>
+    /// <param name="cancellationToken">The persistent cancellation token, used over the entire response.</param>
+    /// <returns></returns>
+    public DiscordOrchestrationLayer CreateResponseOrchestrator(
+        string name,
+        ConversationalContext context,
+        IDiscordMessageTarget target,
+        CancellationToken cancellationToken
+    );
 }

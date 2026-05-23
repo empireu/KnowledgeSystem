@@ -2,7 +2,8 @@ using KnowledgeSystem.Ai;
 using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Agents.Orchestration.Observer;
+using KnowledgeSystem.Discord.Integration;
+using KnowledgeSystem.Events.Implementation;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -60,6 +61,8 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
     public ITokenEstimator TokenEstimator { get; }
 
+    #region Conversation API
+    
     public bool HasConversation(ulong channelId)
     {
         lock (_lock)
@@ -94,17 +97,14 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
             }
 
             var context = new ConversationalContext();
+
             context.ChatContext.InsertSystem(_systemPrompt);
 
-            var agent = new ConversationalAgent(channelId.ToString(), _serviceProvider, _chatOptions);
-
-            var conversation = new ActiveConversation(
-                this,
-                channelId,
-                agent,
+            var conversation = ActivatorUtilities.CreateInstance<ActiveConversation>(
+                _serviceProvider, 
                 context,
-                _chatClient,
-                _serviceProvider.GetRequiredService<ILogger<ActiveConversation>>()
+                channelId,
+                _chatClient
             );
 
             InsertSorted(conversation);
@@ -159,6 +159,8 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         }
     }
 
+    #endregion
+    
     private void InsertSorted(ActiveConversation conversation)
     {
         _sorted[(conversation.ExpiresAt, conversation.ChannelId)] = conversation;
@@ -233,27 +235,17 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         await CloseAllAsync("application is shutting down", cancellationToken);
     }
 
-    public async Task AskAsync(string message, IAgentObserver observer, CancellationToken cancellationToken = default)
+    public async Task AskAsync(string message, IDiscordMessageTarget target, CancellationToken cancellationToken = default)
     {
         var context = new ConversationalContext();
         context.ChatContext.InsertSystem(_systemPrompt);
         context.ChatContext.InsertUser(message);
 
-        var agent = new ConversationalAgent("ask", _serviceProvider, _chatOptions);
-       
-        var runner = new AgentRunner<ConversationalContext>(
-            observer,
-            _chatClient,
-            agent,
-            parent: null,
-            context,
-            cancellationToken,
-            completionFactory: this
-        );
+        var orchestration = CreateResponseOrchestrator("ask", context, target, cancellationToken);
 
         try
         {
-            await runner.RunAsync();
+            await orchestration.RootRunner.RunAsync();
         }
         catch (OperationCanceledException)
         {
@@ -266,12 +258,53 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
             return;
         }
 
-        if (runner.FinishError != null)
+        if (orchestration.RootRunner.FinishError != null)
         {
-            _logger.LogWarning("One-shot query completed with error: {Error}", runner.FinishError);
+            _logger.LogWarning("One-shot query completed with error: {Error}", orchestration.RootRunner.FinishError);
         }
     }
 
+    public DiscordOrchestrationLayer CreateResponseOrchestrator(string name, ConversationalContext context, IDiscordMessageTarget target, CancellationToken cancellationToken)
+    {
+        // Creates the event manager, used by the agent's orchestration logic:
+        var eventManager = ActivatorUtilities.CreateInstance<DefaultEventManager>(_serviceProvider);
+        
+        // Orchestrates all high-level events and sub-agents.  Uses the event manager to dispatch the final output event, after review rewrite:
+        var agent = new ConversationalAgent(
+            eventManager,
+            name,
+            _serviceProvider,
+            _chatOptions
+        );
+        
+        var runner = new AgentRunner<ConversationalContext>(
+            client: _chatClient,
+            agent: agent,
+            parent: null,
+            context: context,
+            eventManager: eventManager,
+            cancellationToken: cancellationToken,
+            completionFactory: this
+        );
+
+        // Handles the discord integration:
+        var observer = ActivatorUtilities.CreateInstance<DiscordAgentIntegration>(
+            _serviceProvider,
+            runner,
+            target
+        );
+        
+        // Links the data flow from the agents:
+        eventManager.AddReceiver(observer);
+
+        return new DiscordOrchestrationLayer
+        {
+            RootAgent = agent,
+            RootRunner = runner,
+            DiscordIntegration = observer
+        };
+    }
+    
     public void Dispose()
     {
         if (_disposed)

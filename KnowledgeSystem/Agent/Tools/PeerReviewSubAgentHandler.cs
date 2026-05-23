@@ -1,11 +1,11 @@
 ﻿using System.Text;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Agents.Orchestration.Observer;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Ai;
 using KnowledgeSystem.Discord;
+using KnowledgeSystem.Events.Implementation;
 using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach
@@ -109,11 +109,11 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
             _options = options;
 
             _runner = new AgentRunner<PeerReviewContext>(
-                NullAgentObserver.Instance,
                 OpenAiChatClientFactory.Create(options.Endpoint, options.ApiKey, options.Model),
                 new PeerReviewAgent("peer_reviewer"),
                 parentRunner,
                 reviewContext,
+                NullEventManager.Instance,
                 cancellationToken,
                 this
             );

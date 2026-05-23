@@ -1,36 +1,39 @@
 using System.Text;
 using KnowledgeSystem.Agent;
+using KnowledgeSystem.Agent.AgentEvents;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Agents.Orchestration.Observer;
-using KnowledgeSystem.Agents.Orchestration.Tools;
+using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Discord.Conversation;
-using Microsoft.Extensions.AI;
+using KnowledgeSystem.Events.Api;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NetCord;
 using NetCord.Rest;
 
-namespace KnowledgeSystem.Discord.Observer;
+namespace KnowledgeSystem.Discord.Integration;
 
 /// <summary>
-///     Enhanced observer that subscribes to <see cref="IAgentObserver.OnTurnAsync"/> to build a structured execution tree. In the future, this will allow fully rendering sub-agent execution as well.
+///     Integrates a user request with discord. The lifetime of this handler is from the moment the user sends the message, to the moment the final response is generated.
 ///     <list type="bullet">
 ///         <item><description>Each round is an LLM turn that may produce an output trace and tool calls.</description></item>
 ///         <item><description>Tool calls are grouped under their round.</description></item>
-///         <item><description>Sub-agents are revealed by peeking at <see cref="AgentToolFrame.RunningSubAgent.Proxy"/>, during <see cref="IAgentObserver.OnTurnAsync"/>, recursively building the subtree.</description></item>
+///         <item><description>Sub-agents are revealed by peeking at <see cref="AgentToolFrame.RunningSubAgent.Proxy"/>, during <see cref="OnTurnAsync"/>, recursively building the subtree.</description></item>
 ///         <item><description>The single Discord message is updated in-place via debounced incremental updates, then replaced with a final embed on completion.</description></item>
 ///         <item><description></description></item>
 ///     </list>
 /// </summary>
-public sealed class DiscordObserver2(
-    ILogger<DiscordObserver2> logger,
+public sealed class DiscordAgentIntegration(
+    AgentRunner<ConversationalContext> runner,
+    ILogger<DiscordAgentIntegration> logger,
     IConversationManager conversationManager,
     IDiscordMessageTarget target,
     IOptions<ChatOptions> options
-) : IAgentObserver
+) : IEventReceiver
 {
+    // ReSharper disable UnusedAutoPropertyAccessor.Local
+
     private sealed class RoundNode
     {
         /// <summary>
@@ -83,6 +86,8 @@ public sealed class DiscordObserver2(
         public bool HasError { get; set; }
     }
 
+    // ReSharper restore UnusedAutoPropertyAccessor.Local
+
     private enum ToolState
     {
         /// <summary>
@@ -98,26 +103,12 @@ public sealed class DiscordObserver2(
         /// </summary>
         Failed
     }
-
-    private readonly struct TokenCountInfo
-    {
-        /// <summary>
-        ///     The number of tokens in the entire conversation.
-        /// </summary>
-        public required int Tokens { get; init; }
-        
-        /// <summary>
-        ///     If true, the number of tokens is exact, from the API.
-        /// </summary>
-        public required bool IsExact { get; init; }
-
-        public override string ToString() => IsExact ? Tokens.ToString() : $"~{Tokens}";
-    }
     
     private readonly List<RoundNode> _rounds = [];
     private RoundNode? _currentRound;
     private string? _finalResponse;
-    private TokenCountInfo? _finalTokens;
+    private bool _isVerified;
+    private int _finalTokens;
     private bool _hasError;
     private bool _finalSent;
 
@@ -127,43 +118,41 @@ public sealed class DiscordObserver2(
     private readonly Lock _stateLock = new();
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(600);
     
-    public async Task OnTurnAsync(AgentRunner runner, AgentRunner.TurnStatus status, CancellationToken cancellationToken)
+    [SubscribeEvent]
+    public async ValueTask OnTurnAsync(AgentTurnEvent @event, CancellationToken cancellationToken)
     {
         lock (_stateLock)
         {
-            switch (status)
+            switch (@event.TurnStatus)
             {
                 case AgentRunner.TurnStatus.ToolCallsReceived:
                     // A new round with tool calls just arrived. _currentRound was set up in OnToolCallsAsync, nothing extra needed.
                     break;
-
                 case AgentRunner.TurnStatus.ToolsStepped:
                     // Tool calls are being executed. Peek at sub-agent trees:
-                    UpdateSubAgentTrees(runner);
+                    UpdateSubAgentTrees();
                     break;
-
                 case AgentRunner.TurnStatus.ToolsFinished:
                     // Tool calls for this round finished. About to go back to LLM:
-                    UpdateSubAgentTrees(runner);
+                    UpdateSubAgentTrees();
                     break;
-
                 case AgentRunner.TurnStatus.CompletionHandled:
                 case AgentRunner.TurnStatus.CompletedSuccessfully:
                     // Turn completed without (further) tool calls:
                     break;
-
                 case AgentRunner.TurnStatus.CompletedWithError:
                     _hasError = true;
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(status), status, $"Unhandled agent turn status {status}");
+                    throw new ArgumentOutOfRangeException(nameof(@event), @event.TurnStatus, $"Unhandled agent turn status {@event.TurnStatus}");
             }
         }
 
         await GetUpdateMessageTask(cancellationToken);
     }
 
-    public async Task OnToolCallsAsync(AgentRunner runner, string completion, ToolCallInfo[] infos, CancellationToken cancellationToken)
+    [SubscribeEvent]
+    public async ValueTask OnToolCallsAsync(AgentToolCallsEvent @event, CancellationToken cancellationToken)
     {            
         // Starts a new rounds:
 
@@ -171,10 +160,10 @@ public sealed class DiscordObserver2(
         {
             var round = new RoundNode
             {
-                OutputTrace = string.IsNullOrWhiteSpace(completion) ? null : completion
+                OutputTrace = string.IsNullOrWhiteSpace(@event.Response.Text) ? null : @event.Response.Text
             };
 
-            foreach (var info in infos)
+            foreach (var info in @event.Calls)
             {
                 if (!info.IsValid)
                 {
@@ -197,7 +186,8 @@ public sealed class DiscordObserver2(
         await GetUpdateMessageTask(cancellationToken);
     }
 
-    public async Task OnToolResultAsync(AgentRunner runner, int indexInCollection, AgentTool tool, ToolExecutionResult result, CancellationToken cancellationToken)
+    [SubscribeEvent]
+    public async ValueTask OnToolResultAsync(AgentToolResultEvent @event, CancellationToken cancellationToken)
     {
         lock (_stateLock)
         {
@@ -210,10 +200,10 @@ public sealed class DiscordObserver2(
                 for (var j = round.ToolCalls.Count - 1; j >= 0; j--)
                 {
                     var call = round.ToolCalls[j];
-                    if (call.ToolId == tool.ToolId && call.State == ToolState.Running)
+                    if (call.ToolId == @event.Tool.ToolId && call.State == ToolState.Running)
                     {
-                        call.State = result.IsSuccessful ? ToolState.Completed : ToolState.Failed;
-                        call.Error = result.IsSuccessful ? null : Truncate(EscapeNewlines(result.FormatError()), 80);
+                        call.State = @event.Result.IsSuccessful ? ToolState.Completed : ToolState.Failed;
+                        call.Error = @event.Result.IsSuccessful ? null : Truncate(EscapeNewlines(@event.Result.FormatError()), 80);
                         found = true;
                         break;
                     }
@@ -229,41 +219,38 @@ public sealed class DiscordObserver2(
         await GetUpdateMessageTask(cancellationToken);
     }
 
-    public async Task OnAssistantMessageAsync(AgentRunner runner, ChatResponse response, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Handles a direct response, which is considered not verified.
+    /// </summary>
+    [SubscribeEvent]
+    public async ValueTask OnAssistantMessageAsync(AgentMessageEvent @event, CancellationToken cancellationToken)
+    {
+        await HandleAssistantMessage(@event.Response.Text, false, cancellationToken);
+    }
+
+    [SubscribeEvent]
+    public async ValueTask OnReviewedMessageAsync(AgentPeerReviewedMessageEvent @event, CancellationToken cancellationToken)
+    {
+        await HandleAssistantMessage(@event.Content, true,  cancellationToken);
+    }
+
+    private async Task HandleAssistantMessage(string content, bool isPeerReviewed, CancellationToken cancellationToken)
     {
         lock (_stateLock)
         {
-            _finalResponse = response.Text;
+            _finalResponse = content;
         }
 
-        if (response.Usage is not { TotalTokenCount: not null })
-        {
-            if (runner is AgentRunner<ConversationalContext> chatRunner)
-            {
-                // TODO we can add an interface here
-                var messages = chatRunner.ExecutionContext.ChatMessages;
+        var messages = runner.ExecutionContext.ChatMessages;
 
-                _finalTokens = new TokenCountInfo
-                {
-                    Tokens = conversationManager.TokenEstimator.CountTokens(messages),
-                    IsExact = false
-                };
-            }
-        }
-        else
-        {
-            // Why long? JSON convention?
-            _finalTokens = new TokenCountInfo
-            {
-                Tokens = (int)response.Usage.TotalTokenCount.Value,
-                IsExact = true
-            };
-        }
-
+        _finalTokens = conversationManager.TokenEstimator.CountTokens(messages);
+        _isVerified = isPeerReviewed;
+        
         await GetUpdateMessageTask(cancellationToken);
     }
     
-    public async Task OnErrorAsync(AgentRunner runner, AgentExecutionError error, CancellationToken cancellationToken)
+    [SubscribeEvent]
+    public async ValueTask OnErrorAsync(AgentErrorEvent @event, CancellationToken cancellationToken)
     {
         bool isFinal;
         lock (_stateLock)
@@ -276,7 +263,7 @@ public sealed class DiscordObserver2(
         {
             var embed = new EmbedProperties()
                 .WithTitle("Error")
-                .WithDescription(error.Message)
+                .WithDescription(@event.Error.Message)
                 .WithColor(new Color(0xED4245))
                 .WithTimestamp(DateTimeOffset.UtcNow)
                 .WithFooter(new EmbedFooterProperties { Text = "MQR Knowledge Agent" });
@@ -292,7 +279,8 @@ public sealed class DiscordObserver2(
         }
     }
 
-    public async Task OnAgentCompletedAsync(AgentRunner runner, CancellationToken cancellationToken)
+    [SubscribeEvent]
+    public async ValueTask OnAgentCompletedAsync(AgentCompletedEvent @event, CancellationToken cancellationToken)
     {
         // Final update is triggered by OnAssistantMessageAsync, SendUpdateAsync.
         // Just ensure we flush any pending update:
@@ -302,7 +290,7 @@ public sealed class DiscordObserver2(
     /// <summary>
     ///     Walks the runner's <see cref="AgentRunner.ActiveToolCalls"/> looking for <see cref="AgentToolFrame.RunningSubAgent"/> frames and peeks at their internal runner state to build a subtree.
     /// </summary>
-    private void UpdateSubAgentTrees(AgentRunner runner)
+    private void UpdateSubAgentTrees()
     {
         foreach (var frame in runner.ActiveToolCalls)
         {
@@ -342,10 +330,10 @@ public sealed class DiscordObserver2(
     /// <summary>
     ///     Recursively extracts rounds from a sub-agent runner by inspecting its execution context and active tool calls.
     /// </summary>
-    private static void ExtractSubAgentRounds(AgentRunner runner, ExecutionTree tree)
+    private static void ExtractSubAgentRounds(AgentRunner parentRunner, ExecutionTree tree)
     {
         // If the sub-agent has active tool calls, represent them as a synthetic round:
-        var activeCalls = runner.ActiveToolCalls;
+        var activeCalls = parentRunner.ActiveToolCalls;
         if (activeCalls.Count <= 0)
         {
             return;
@@ -455,7 +443,7 @@ public sealed class DiscordObserver2(
             if (!string.IsNullOrWhiteSpace(round.OutputTrace))
             {
                 var trace = Truncate(EscapeNewlines(round.OutputTrace), 200);
-                sb.AppendLine($"> > {trace}");
+                sb.AppendLine($"> “{trace}”");
                 lineCount++;
             }
 
@@ -569,14 +557,17 @@ public sealed class DiscordObserver2(
             );
         }
 
-        if (_finalTokens.HasValue)
-        {
-            embed = embed.AddFields(new EmbedFieldProperties()
-                .WithName("Tokens")
-                .WithValue(_finalTokens.ToString())
-                .WithInline()
-            );
-        }
+        embed = embed.AddFields(new EmbedFieldProperties()
+            .WithName("Tokens")
+            .WithValue(_finalTokens.ToString())
+            .WithInline()
+        );
+
+        embed = embed.AddFields(new EmbedFieldProperties()
+            .WithName("Peer-review")
+            .WithValue(_isVerified ? "Yes" : "No")
+            .WithInline()
+        );
 
         return embed;
     }

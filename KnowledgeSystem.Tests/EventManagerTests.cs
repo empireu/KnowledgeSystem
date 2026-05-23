@@ -18,7 +18,7 @@ public class EventManagerTests
     public async Task VoidMethodHandler_ReceivesEvent()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var tcs = new TaskCompletionSource<object?>();
 
         manager.AddReceiver(new VoidHandler(tcs));
@@ -31,7 +31,7 @@ public class EventManagerTests
     public async Task ValueTaskMethodHandler_ReceivesEvent()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var tcs = new TaskCompletionSource<object?>();
 
         manager.AddReceiver(new ValueTaskHandler(tcs));
@@ -48,7 +48,7 @@ public class EventManagerTests
     public async Task Handler_WithInjectedServices_ResolvesFromProvider()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var tcs = new TaskCompletionSource<object?>();
 
         manager.AddReceiver(new InjectionHandler(tcs));
@@ -65,7 +65,7 @@ public class EventManagerTests
     public async Task Handlers_ExecuteInDescendingPriorityOrder()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var tcs = new TaskCompletionSource<object?>();
 
         manager.AddReceiver(new PriorityHandler(tcs));
@@ -82,7 +82,7 @@ public class EventManagerTests
     public async Task Handler_ReceivesCancellationToken()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var tcs = new TaskCompletionSource<CancellationToken>();
 
         manager.AddReceiver(new CancellationHandler(tcs));
@@ -97,7 +97,7 @@ public class EventManagerTests
     public async Task Handler_ReceivesLinkedCancellationToken()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var tcs = new TaskCompletionSource<CancellationToken>();
         using var cts = new CancellationTokenSource();
 
@@ -113,7 +113,7 @@ public class EventManagerTests
     public async Task SendAsync_WithCancelledToken_Throws()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var cts = new CancellationTokenSource();
         await cts.CancelAsync();
         
@@ -137,7 +137,7 @@ public class EventManagerTests
     public async Task CriticalHandler_Exception_PropagatesToCaller()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
 
         manager.AddReceiver(new ThrowingCriticalHandler());
 
@@ -149,7 +149,7 @@ public class EventManagerTests
     public async Task NonCriticalHandler_Exception_DoesNotPropagate_AndNextHandlerRuns()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var tcs = new TaskCompletionSource<object?>();
 
         manager.AddReceiver(new ThrowingNonCriticalHandler());
@@ -164,7 +164,7 @@ public class EventManagerTests
     public async Task NonCriticalHandler_Exception_DoesNotPreventSubsequentHandlers()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var order = new List<string>();
 
         manager.AddReceiver(new TrackingHandler(order, "first"));
@@ -178,7 +178,7 @@ public class EventManagerTests
     public async Task CriticalHandler_BeforeNonCritical_CriticalFailureStopsAll()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var order = new List<string>();
 
         manager.AddReceiver(new ThrowingCriticalHandler());
@@ -198,7 +198,7 @@ public class EventManagerTests
     public async Task DisposedReceiver_DoesNotReceiveEvent()
     {
         var services = CreateServices();
-        var manager = services.GetRequiredService<EventManager>();
+        var manager = services.GetRequiredService<DefaultEventManager>();
         var tcs = new TaskCompletionSource<object?>();
 
         var receiver = new VoidHandler(tcs);
@@ -216,7 +216,7 @@ public class EventManagerTests
     private static IServiceProvider CreateServices()
     {
         return new ServiceCollection()
-            .AddSingleton<EventManager>()
+            .AddSingleton<DefaultEventManager>()
             .AddLogging()
             .BuildServiceProvider();
     }
@@ -249,7 +249,7 @@ public class EventManagerTests
     private sealed class InjectionHandler(TaskCompletionSource<object?> tcs) : IEventReceiver
     {
         [SubscribeEvent]
-        public void Handle(TestEvent e, ILogger<InjectionHandler> logger, EventManager manager)
+        public void Handle(TestEvent e, ILogger<InjectionHandler> logger, DefaultEventManager manager)
         {
             Assert.NotNull(e);
             Assert.NotNull(logger);
