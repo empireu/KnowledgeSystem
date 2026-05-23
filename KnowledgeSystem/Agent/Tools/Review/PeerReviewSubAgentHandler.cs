@@ -12,7 +12,7 @@ using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Agent.Tools;
+namespace KnowledgeSystem.Agent.Tools.Review;
 
 public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ReviewOptions options) : ToolHandler<ConversationalContext>.SubAgent(tool) {
     public const string ToolId = "submit_with_review";    

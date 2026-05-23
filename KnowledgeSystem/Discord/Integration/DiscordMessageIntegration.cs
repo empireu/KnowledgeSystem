@@ -573,49 +573,45 @@ public sealed class DiscordMessageIntegration(
         return embed;
     }
     
-    private Task GetUpdateMessageTask(CancellationToken cancellationToken)
+    private async Task GetUpdateMessageTask(CancellationToken cancellationToken)
     {
-        Task? pendingToAwait = null;
-        bool isFinal;
+        Task? pendingToAwait;
 
         lock (_stateLock)
         {
-            isFinal = _finalResponse != null;
+            var isFinal = _finalResponse != null;
 
             if (isFinal)
             {
                 _debounceCts?.Cancel();
                 pendingToAwait = _pendingUpdate;
             }
-            else if (_pendingUpdate != null)
-            {
-                return Task.CompletedTask;
-            }
             else
             {
-                _debounceCts = new CancellationTokenSource();
-                _pendingUpdate = DebouncedUpdateAsync(_debounceCts.Token);
+                if (_pendingUpdate == null)
+                {
+                    _debounceCts = new CancellationTokenSource();
+                    _pendingUpdate = DebouncedUpdateAsync(_debounceCts.Token);
+                }
+
+                return;
             }
         }
 
-        if (isFinal)
+        // Final path: await the pending debounce (if any), then flush the final embed.
+        if (pendingToAwait != null)
         {
-            if (pendingToAwait != null)
+            try
             {
-                try
-                {
-                    return pendingToAwait;
-                }
-                catch(Exception ex) when(ex is not OperationCanceledException)
-                {
-                    logger.LogWarning(ex, "Final observer update await produced error");
-                }
+                await pendingToAwait;
             }
-
-            return FlushFinalAsync(cancellationToken);
+            catch(Exception ex) when(ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Final observer update await produced error");
+            }
         }
 
-        return _pendingUpdate!;
+        await FlushFinalAsync(cancellationToken);
     }
 
     private async Task DebouncedUpdateAsync(CancellationToken debounceToken)

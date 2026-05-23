@@ -1,5 +1,4 @@
-﻿using System.Text;
-using KnowledgeSystem.Agent.Tools.Markers;
+﻿using KnowledgeSystem.Agent.Tools.Markers;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
@@ -9,16 +8,16 @@ using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Retrieval.Engine;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Agent.Tools;
+namespace KnowledgeSystem.Agent.Tools.RepoFetch;
 
 public sealed class RepoFetchToolHandler(
     AgentTool tool, 
     StringArgument referenceArgument,
     RagEngine engine,
-    int maxChars
+    RepoFetchToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, int maxChars)
+    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, RepoFetchToolConfig config)
     {
         var fetchTool = new ToolBuilder("repo_fetch")
             .WithDescription("Fetches the content of a specific repository reference (file, definition, directory, or offsets).")
@@ -29,7 +28,7 @@ public sealed class RepoFetchToolHandler(
             serviceProvider,
             fetchTool,
             referenceArg,
-            maxChars
+            config
         );
         
         registry.RegisterTool(fetchTool, handler);
@@ -81,6 +80,8 @@ public sealed class RepoFetchToolHandler(
             return Error($"repo_fetch: document {fileRef.RepositoryRelativePath} not found!");
         }
 
+        var maxChars = config.MaxChars;
+
         if (document.Content.Length > maxChars)
         {
             return Error($"repo_fetch: document too long ({document.Content.Length} chars, limit {maxChars}). " +
@@ -116,8 +117,8 @@ public sealed class RepoFetchToolHandler(
         }
 
         var length = node.RawNode.EndOffset - node.RawNode.StartOffset;
-
-        if (length > maxChars)
+        
+        if (length > config.MaxChars)
         {
             return Error($"repo_fetch: definition too long. Please explore it in offset slices. Offsets of the requested section are: {node.RawNode.StartOffset},{node.RawNode.EndOffset}");
         }
@@ -153,7 +154,8 @@ public sealed class RepoFetchToolHandler(
         }
 
         var length = end - refPath.StartOffset;
-
+        var maxChars = config.MaxChars;
+        
         if (length > maxChars)
         {
             return Error($"repo_fetch: size limit ({maxChars}) exceeded. Please fetch a smaller number of characters.");

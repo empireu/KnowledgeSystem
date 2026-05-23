@@ -1,5 +1,11 @@
 using KnowledgeSystem.Agent.Events;
-using KnowledgeSystem.Agent.Tools;
+using KnowledgeSystem.Agent.Tools.FastContext;
+using KnowledgeSystem.Agent.Tools.FetchContext;
+using KnowledgeSystem.Agent.Tools.FindFiles;
+using KnowledgeSystem.Agent.Tools.GrepContent;
+using KnowledgeSystem.Agent.Tools.ListDir;
+using KnowledgeSystem.Agent.Tools.RepoFetch;
+using KnowledgeSystem.Agent.Tools.Review;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Events.Api;
 using Microsoft.Extensions.AI;
@@ -16,8 +22,11 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
         _eventManager = eventManager;
         
         FastContextToolHandler.Register(ToolRegistry, serviceProvider, new FastContextToolConfig());
-        RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, 8192);
-        TreeToolHandler.Register(ToolRegistry, serviceProvider);
+        RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, new RepoFetchToolConfig());
+        ListDirToolHandler.Register(ToolRegistry, serviceProvider, new ListDirToolConfig());
+        FindFilesToolHandler.Register(ToolRegistry, serviceProvider, new FindFilesToolConfig());
+        GrepContentToolHandler.Register(ToolRegistry, serviceProvider, new GrepContentToolConfig());
+        FetchContextToolHandler.Register(ToolRegistry, serviceProvider, new FetchContextToolConfig());
         
         if (options.Review != null)
         {

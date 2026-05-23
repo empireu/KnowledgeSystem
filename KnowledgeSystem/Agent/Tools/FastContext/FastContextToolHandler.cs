@@ -14,9 +14,9 @@ using Microsoft.Extensions.Logging;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Agent.Tools;
+namespace KnowledgeSystem.Agent.Tools.FastContext;
 
-public sealed partial class FastContextToolHandler(
+public sealed class FastContextToolHandler(
     ILogger<FastContextToolHandler> logger,
     AgentTool tool,
     StringArgument queryArgument,
@@ -53,7 +53,6 @@ public sealed partial class FastContextToolHandler(
         {
             return Error("fast_context: Empty query argument!");
         }
-
 
         using var activity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("FastContext");
         activity?.SetTag("query", query);
@@ -319,8 +318,7 @@ public sealed partial class FastContextToolHandler(
         windows.Sort((a, b) => a.Start.CompareTo(b.Start));
 
         var merged = new List<(int Start, int End, HashSet<int> TokenIndices)>();
-        var (matchStart, matchEnd, matchTokens) =
-            (windows[0].Start, windows[0].End, new HashSet<int> { windows[0].TokenIndex });
+        var (matchStart, matchEnd, matchTokens) = (windows[0].Start, windows[0].End, new HashSet<int> { windows[0].TokenIndex });
         for (var windowIndex = 1; windowIndex < windows.Count; windowIndex++)
         {
             var (windowStart, windowEnd, windowToken) = windows[windowIndex];
