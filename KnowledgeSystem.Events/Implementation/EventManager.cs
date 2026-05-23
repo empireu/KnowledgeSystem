@@ -70,21 +70,29 @@ public sealed class EventManager(ILogger<EventManager> errorLogger, IServiceProv
 
     public async ValueTask SendAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent
     {
-        try
+        if (!_sortedHandlers.TryGetValue(typeof(TEvent), out var handlers))
         {
-            if (!_sortedHandlers.TryGetValue(typeof(TEvent), out var handlers))
-            {
-                handlers = SortHandlers<TEvent>();
-            }
+            handlers = SortHandlers<TEvent>();
+        }
 
-            foreach (var (handler, eventListener) in handlers)
+        foreach (var (handler, eventListener) in handlers)
+        {
+            if (eventListener.IsCritical)
             {
                 await eventListener.InvokeAsync(handler, @event, serviceProvider, cancellationToken);
             }
-        }
-        catch (Exception e)
-        {
-            errorLogger.LogError("Error handling {type}: {ex}", typeof(TEvent), e);
+            else
+            {
+                try
+                {
+                    await eventListener.InvokeAsync(handler, @event, serviceProvider, cancellationToken);
+                }
+                catch (Exception e)
+                {
+                    errorLogger.LogError("Non-critical handler {method} failed for {type}: {ex}",
+                        eventListener.Method, typeof(TEvent), e);
+                }
+            }
         }
     }
 

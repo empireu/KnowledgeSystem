@@ -20,6 +20,7 @@ internal class ExpressionEventBus : IEventBus
         EventType = eventType;
         Method = method.PrettyPrint();
         Priority = attribute.Priority;
+        IsCritical = attribute.IsCritical;
         _eventListenerType = eventListenerType;
 
         _invoker = CreateInvoker(method);
@@ -28,6 +29,8 @@ internal class ExpressionEventBus : IEventBus
     public Type EventType { get; }
 
     public EventPriority Priority { get; }
+
+    public bool IsCritical { get; }
 
     public string Method { get; }
 

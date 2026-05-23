@@ -22,4 +22,10 @@ public class SubscribeEvent : Attribute
     public EventPriority Priority { get; set; }
 
     public Type? EventType { get; set; }
+
+    /// <summary>
+    ///     If true, an exception in this handler propagates out of <see cref="IEventManager.SendAsync"/> and stops the event loop.
+    ///     If false, the exception is caught and logged, and the next handler runs.
+    /// </summary>
+    public bool IsCritical { get; set; } = true;
 }
