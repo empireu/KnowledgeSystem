@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 
-namespace KnowledgeSystem.Discord;
+namespace KnowledgeSystem.Agent.Config;
 
 public class ChatOptions
 {

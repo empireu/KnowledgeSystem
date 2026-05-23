@@ -6,14 +6,9 @@ using NetCord.Services.ApplicationCommands;
 
 // ReSharper disable UnusedMember.Global
 
-namespace KnowledgeSystem.Discord;
+namespace KnowledgeSystem.Discord.Integration;
 
-public class MqrModule(
-    ILogger<MqrModule> logger,
-    IConversationManager conversationManager,
-    DiscordObserverFactory factory,
-    ActiveRunTracker activeRunTracker
-) : ApplicationCommandModule<ApplicationCommandContext>
+public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversationManager, ResponseTracker responseTracker ) : ApplicationCommandModule<ApplicationCommandContext>
 {
     private static readonly TimeSpan AgentTimeout = TimeSpan.FromMinutes(14);
 
@@ -25,7 +20,7 @@ public class MqrModule(
         var target = new InteractionMessageTarget(Context.Interaction);
 
         var cts = new CancellationTokenSource(AgentTimeout);
-        activeRunTracker.Add(Context.Interaction.Id, new ActiveRunTracker.ActiveRunInfo
+        responseTracker.Add(Context.Interaction.Id, new ResponseTracker.ActiveRunInfo
         {
             Cts = cts,
             OnCloseAction = stopCts => target.UpdateContentAsync("Question was cancelled", stopCts)
@@ -76,7 +71,7 @@ public class MqrModule(
             var target = new ChannelMessageTarget(Context.Client.Rest, thread.Id, statusMessage.Id);
 
             var cts = new CancellationTokenSource(AgentTimeout);
-            activeRunTracker.Add(thread.Id, new ActiveRunTracker.ActiveRunInfo
+            responseTracker.Add(thread.Id, new ResponseTracker.ActiveRunInfo
             {
                 Cts = cts
             });
@@ -127,7 +122,7 @@ public class MqrModule(
         }
         finally
         {
-            activeRunTracker.Remove(runKey);
+            responseTracker.Remove(runKey);
         }
     }
 }

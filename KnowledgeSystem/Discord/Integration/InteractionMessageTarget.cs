@@ -1,7 +1,7 @@
 using NetCord;
 using NetCord.Rest;
 
-namespace KnowledgeSystem.Discord;
+namespace KnowledgeSystem.Discord.Integration;
 
 /// <summary>
 ///     Message target that modifies an interaction response.

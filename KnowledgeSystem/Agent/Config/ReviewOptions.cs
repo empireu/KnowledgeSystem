@@ -1,6 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace KnowledgeSystem.Discord;
+// ReSharper disable ClassNeverInstantiated.Global
+
+namespace KnowledgeSystem.Agent.Config;
 
 public class ReviewOptions
 {

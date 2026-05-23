@@ -1,8 +1,9 @@
-using KnowledgeSystem.Agent.AgentEvents;
+using KnowledgeSystem.Agent.Events;
 using KnowledgeSystem.Agent.Tools;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Events.Api;
 using Microsoft.Extensions.AI;
+using ChatOptions = KnowledgeSystem.Agent.Config.ChatOptions;
 
 namespace KnowledgeSystem.Agent;
 
@@ -10,7 +11,7 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 {
     private readonly IEventManager _eventManager;
 
-    public ConversationalAgent(IEventManager eventManager, string agentId, IServiceProvider serviceProvider, Discord.ChatOptions options) : base(agentId)
+    public ConversationalAgent(IEventManager eventManager, string agentId, IServiceProvider serviceProvider, ChatOptions options) : base(agentId)
     {
         _eventManager = eventManager;
         

@@ -1,15 +1,16 @@
-using KnowledgeSystem.Ai;
 using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Discord.Integration;
 using KnowledgeSystem.Events.Implementation;
+using KnowledgeSystem.Provider;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NetCord.Rest;
+using ChatOptions = KnowledgeSystem.Agent.Config.ChatOptions;
 
 namespace KnowledgeSystem.Discord.Conversation;
 
@@ -288,7 +289,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         );
 
         // Handles the discord integration:
-        var observer = ActivatorUtilities.CreateInstance<DiscordAgentIntegration>(
+        var observer = ActivatorUtilities.CreateInstance<DiscordMessageIntegration>(
             _serviceProvider,
             runner,
             target

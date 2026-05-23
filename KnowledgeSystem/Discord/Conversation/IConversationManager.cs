@@ -1,6 +1,7 @@
 ﻿using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
+using KnowledgeSystem.Discord.Integration;
 
 namespace KnowledgeSystem.Discord.Conversation;
 

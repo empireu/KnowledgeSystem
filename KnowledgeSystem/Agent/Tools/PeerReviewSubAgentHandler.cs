@@ -1,11 +1,12 @@
 ﻿using System.Text;
+using KnowledgeSystem.Agent.Config;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
-using KnowledgeSystem.Ai;
 using KnowledgeSystem.Discord;
 using KnowledgeSystem.Events.Implementation;
+using KnowledgeSystem.Provider;
 using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach

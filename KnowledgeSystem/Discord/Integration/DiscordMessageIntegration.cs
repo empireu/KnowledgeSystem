@@ -1,6 +1,7 @@
 using System.Text;
 using KnowledgeSystem.Agent;
-using KnowledgeSystem.Agent.AgentEvents;
+using KnowledgeSystem.Agent.Config;
+using KnowledgeSystem.Agent.Events;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
@@ -24,9 +25,9 @@ namespace KnowledgeSystem.Discord.Integration;
 ///         <item><description></description></item>
 ///     </list>
 /// </summary>
-public sealed class DiscordAgentIntegration(
+public sealed class DiscordMessageIntegration(
     AgentRunner<ConversationalContext> runner,
-    ILogger<DiscordAgentIntegration> logger,
+    ILogger<DiscordMessageIntegration> logger,
     IConversationManager conversationManager,
     IDiscordMessageTarget target,
     IOptions<ChatOptions> options

@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Hosting;
 
-namespace KnowledgeSystem.Discord;
+namespace KnowledgeSystem.Discord.Conversation;
 
-public class ActiveRunTracker : IHostedService
+public class ResponseTracker : IHostedService
 {
     public sealed class ActiveRunInfo
     {

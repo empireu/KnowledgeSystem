@@ -13,5 +13,5 @@ public sealed class DiscordOrchestrationLayer
 {
     public required ConversationalAgent RootAgent { get; init; }
     public required AgentRunner<ConversationalContext> RootRunner { get; init; }
-    public required DiscordAgentIntegration DiscordIntegration { get; init; }
+    public required DiscordMessageIntegration DiscordIntegration { get; init; }
 }

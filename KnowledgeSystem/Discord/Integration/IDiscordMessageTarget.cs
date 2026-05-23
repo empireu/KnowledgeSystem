@@ -1,6 +1,6 @@
 using NetCord.Rest;
 
-namespace KnowledgeSystem.Discord;
+namespace KnowledgeSystem.Discord.Integration;
 
 /// <summary>
 ///     Abstraction over a Discord message whose content can be updated in-place.

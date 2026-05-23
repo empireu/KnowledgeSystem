@@ -1,6 +1,6 @@
-using KnowledgeSystem.Ai;
-using KnowledgeSystem.Discord;
+using KnowledgeSystem.Agent.Config;
 using KnowledgeSystem.Discord.Conversation;
+using KnowledgeSystem.Discord.Integration;
 using KnowledgeSystem.Retrieval;
 using KnowledgeSystem.Retrieval.Engine;
 using KnowledgeSystem.Retrieval.Telemetry;
@@ -45,9 +45,8 @@ var builder = Host.CreateDefaultBuilder(args)
     })
     .ConfigureServices(services =>
     {
-        services.AddSingleton<DiscordObserverFactory>();
-        services.AddSingleton<ActiveRunTracker>();
-        services.AddHostedService<ActiveRunTracker>(sp => sp.GetRequiredService<ActiveRunTracker>());
+        services.AddSingleton<ResponseTracker>();
+        services.AddHostedService<ResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
     })
     .ConfigureServices(services =>
     {

@@ -1,5 +1,6 @@
 ﻿using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context;
+using KnowledgeSystem.Discord.Integration;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using NetCord.Rest;

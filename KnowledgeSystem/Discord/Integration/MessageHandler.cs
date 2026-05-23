@@ -4,14 +4,9 @@ using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 using NetCord.Rest;
 
-namespace KnowledgeSystem.Discord;
+namespace KnowledgeSystem.Discord.Integration;
 
-public class MessageHandler(
-    ILogger<MessageHandler> logger,
-    IConversationManager conversationManager,
-    DiscordObserverFactory factory,
-    RestClient restClient
-) : IMessageCreateGatewayHandler
+public class MessageHandler(ILogger<MessageHandler> logger, IConversationManager conversationManager, RestClient restClient ) : IMessageCreateGatewayHandler
 {
     public async ValueTask HandleAsync(Message message)
     {

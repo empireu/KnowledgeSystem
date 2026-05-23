@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.Events.Api;
 
-namespace KnowledgeSystem.Agent.AgentEvents;
+namespace KnowledgeSystem.Agent.Events;
 
 /// <summary>
 ///     Dispatched when the agent produces a message that passed peer-review.

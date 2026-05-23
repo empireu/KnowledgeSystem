@@ -2,7 +2,7 @@ using System.ClientModel;
 using Microsoft.Extensions.AI;
 using OpenAI;
 
-namespace KnowledgeSystem.Ai;
+namespace KnowledgeSystem.Provider;
 
 /// <summary>
 ///     Centralizes construction of OpenAI-backed chat clients.
