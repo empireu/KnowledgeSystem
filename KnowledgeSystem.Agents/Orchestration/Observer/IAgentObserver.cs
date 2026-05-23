@@ -1,5 +1,6 @@
 ﻿using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agents.Orchestration.Observer;
 
@@ -27,7 +28,7 @@ public interface IAgentObserver
     /// <summary>
     ///     Called when the agent outputs a message.
     /// </summary>
-    Task OnAssistantMessageAsync(AgentRunner runner, string message, CancellationToken cancellationToken) => Task.CompletedTask;
+    Task OnAssistantMessageAsync(AgentRunner runner, ChatResponse response, CancellationToken cancellationToken) => Task.CompletedTask;
     
     /// <summary>
     ///     Called when the agent finishes its execution.

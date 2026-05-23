@@ -239,13 +239,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         }
         
         // Non-tool completion. Continue with result and notify:
-        var textContent = response.Text;
-
-        if (!string.IsNullOrEmpty(textContent))
-        {
-            await Observer.OnAssistantMessageAsync(this, textContent, CancellationToken);
-        }
-
+        await Observer.OnAssistantMessageAsync(this, response, CancellationToken);
         return await HandleCallbackResult(() => Agent.HandleCompletion(this, response)) ?? TurnStatus.CompletionHandled;
     }
 

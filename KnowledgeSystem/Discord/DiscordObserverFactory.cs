@@ -9,4 +9,9 @@ public class DiscordObserverFactory(IServiceProvider serviceProvider)
     {
         return ActivatorUtilities.CreateInstance<DiscordObserver>(serviceProvider, target);
     }
+
+    public DiscordObserver2 CreateV2(IDiscordMessageTarget target)
+    {
+        return ActivatorUtilities.CreateInstance<DiscordObserver2>(serviceProvider, target);
+    }
 }

@@ -62,7 +62,7 @@ public class MessageHandler(
             });
 
             var target = new ChannelMessageTarget(restClient, message.ChannelId, statusMessage.Id);
-            var observer = factory.Create(target);
+            var observer = factory.CreateV2(target);
             await conversation.RunToCompletionAsync(message.Content, observer);
         }
         catch (Exception ex)

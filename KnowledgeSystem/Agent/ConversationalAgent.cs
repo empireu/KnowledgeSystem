@@ -38,8 +38,10 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 
             if (proxy.ReviewContext.FinalStatus == PeerReviewContext.Status.Approved)
             {
-                await runner.Observer.OnAssistantMessageAsync(runner, proxy.ReviewContext.Report, runner.CancellationToken);
-        
+                // FIXME update architecture
+                var temp = new ChatResponse(new ChatMessage(ChatRole.Assistant, proxy.ReviewContext.Report));
+                await runner.Observer.OnAssistantMessageAsync(runner, temp, runner.CancellationToken);
+                
                 return AgentCallbackResult.Break;
             }
         }

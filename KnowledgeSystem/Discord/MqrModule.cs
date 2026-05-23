@@ -23,7 +23,7 @@ public class MqrModule(
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
 
         var target = new InteractionMessageTarget(Context.Interaction);
-        var observer = factory.Create(target);
+        var observer = factory.CreateV2(target);
 
         var cts = new CancellationTokenSource(AgentTimeout);
         activeRunTracker.Add(Context.Interaction.Id, new ActiveRunTracker.ActiveRunInfo
@@ -75,7 +75,7 @@ public class MqrModule(
             });
 
             var target = new ChannelMessageTarget(Context.Client.Rest, thread.Id, statusMessage.Id);
-            var observer = factory.Create(target);
+            var observer = factory.CreateV2(target);
 
             var cts = new CancellationTokenSource(AgentTimeout);
             activeRunTracker.Add(thread.Id, new ActiveRunTracker.ActiveRunInfo
