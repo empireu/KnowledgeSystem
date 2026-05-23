@@ -1,9 +1,12 @@
+using System.Diagnostics;
 using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Discord.Integration;
 using KnowledgeSystem.Events.Implementation;
 using KnowledgeSystem.Provider;
+using KnowledgeSystem.Telemetry;
+using KnowledgeSystems.Extensions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -238,6 +241,9 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
     public async Task AskAsync(string message, IDiscordMessageTarget target, CancellationToken cancellationToken = default)
     {
+        using var activity = KnowledgeSystemTelemetry.AgentChat.StartInternalActivity("AgentAsk");
+        activity?.SetTag("user_query", message);
+        
         var context = new ConversationalContext();
         context.ChatContext.InsertSystem(_systemPrompt);
         context.ChatContext.InsertUser(message);
@@ -246,7 +252,8 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
         try
         {
-            await orchestration.RootRunner.RunAsync();
+            var turns = await orchestration.RootRunner.RunAsync();
+            activity?.SetTag("turns", turns);
         }
         catch (OperationCanceledException)
         {
@@ -256,13 +263,20 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         catch (Exception ex)
         {
             _logger.LogError(ex, "One-shot query failed with error");
+            activity?.SetTag("exception", ex.Message);
+            activity?.SetStatus(ActivityStatusCode.Error);
             return;
         }
 
         if (orchestration.RootRunner.FinishError != null)
         {
             _logger.LogWarning("One-shot query completed with error: {Error}", orchestration.RootRunner.FinishError);
+            activity?.SetTag("finish_error", orchestration.RootRunner.FinishError.Message);
+            activity?.SetStatus(ActivityStatusCode.Error);
+            return;
         }
+
+        activity?.SetStatus(ActivityStatusCode.Ok);
     }
 
     public DiscordOrchestrationLayer CreateResponseOrchestrator(string name, ConversationalContext context, IDiscordMessageTarget target, CancellationToken cancellationToken)

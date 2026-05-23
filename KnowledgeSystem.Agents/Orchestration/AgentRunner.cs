@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
 using KnowledgeSystem.Agents.Orchestration.Tools;
@@ -173,13 +174,17 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
     /// <summary>
     ///     Runs the agent to completion, looping <see cref="ExecuteTurn"/> until finished.
     /// </summary>
-    public async Task RunAsync()
+    public async Task<int> RunAsync()
     {
+        var turns = 0;
         while (!IsFinished)
         {
             CancellationToken.ThrowIfCancellationRequested();
             await ExecuteTurn();
+            ++turns;
         }
+
+        return turns;
     }
     
     /// <summary>
@@ -219,39 +224,47 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         
         // Executes the LLM call and raises the error and completion events:
         ChatResponse response;
-        try
+        using (var requestTelemetry = AgentTelemetry.Agent.StartInternalActivity("GetResponse"))
         {
-            using var requestTelemetry = AgentTelemetry.Agent.StartInternalActivity("GetResponse");
-
-            requestTelemetry?.SetTag("agent", Agent.AgentId);
-
-            response = await Client.GetResponseAsync(
-                ExecutionContext.ChatMessages,
-                chatOptions,
-                CancellationToken
-            );
-
-            var usage = response.Usage;
-            
-            if (usage != null)
+            try
             {
-                if (usage.InputTokenCount.HasValue) { requestTelemetry?.SetTag("input_tokens", usage.InputTokenCount.Value); }
-                if (usage.CachedInputTokenCount.HasValue) { requestTelemetry?.SetTag("cached_input_tokens", usage.CachedInputTokenCount.Value); }
-                if (usage.ReasoningTokenCount.HasValue) { requestTelemetry?.SetTag("reasoning_tokens", usage.ReasoningTokenCount.Value); }
-                if (usage.OutputTokenCount.HasValue) { requestTelemetry?.SetTag("output_tokens", usage.OutputTokenCount.Value); }
-                if (usage.TotalTokenCount.HasValue) { requestTelemetry?.SetTag("total_tokens", usage.TotalTokenCount.Value); }
+
+                requestTelemetry?.SetTag("agent", Agent.AgentId);
+
+                response = await Client.GetResponseAsync(
+                    ExecutionContext.ChatMessages,
+                    chatOptions,
+                    CancellationToken
+                );
+
+                var usage = response.Usage;
+            
+                if (usage != null)
+                {
+                    if (usage.InputTokenCount.HasValue) { requestTelemetry?.SetTag("input_tokens", usage.InputTokenCount.Value); }
+                    if (usage.CachedInputTokenCount.HasValue) { requestTelemetry?.SetTag("cached_input_tokens", usage.CachedInputTokenCount.Value); }
+                    if (usage.ReasoningTokenCount.HasValue) { requestTelemetry?.SetTag("reasoning_tokens", usage.ReasoningTokenCount.Value); }
+                    if (usage.OutputTokenCount.HasValue) { requestTelemetry?.SetTag("output_tokens", usage.OutputTokenCount.Value); }
+                    if (usage.TotalTokenCount.HasValue) { requestTelemetry?.SetTag("total_tokens", usage.TotalTokenCount.Value); }
+                }
+
+                requestTelemetry?.SetStatus(ActivityStatusCode.Ok);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                FinishError = new AgentExecutionError($"Chat request failed: {ex.Message}", true);
+                IsFinished = true;
+
+                await _eventManager.SendAsync(new AgentErrorEvent(FinishError), CancellationToken);
+                await _eventManager.SendAsync(new AgentCompletedEvent(), CancellationToken);
+
+                requestTelemetry?.SetTag("exception", ex.Message);
+                requestTelemetry?.SetStatus(ActivityStatusCode.Error);
+                
+                return TurnStatus.CompletedWithError;
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            FinishError = new AgentExecutionError($"Chat request failed: {ex.Message}", true);
-            IsFinished = true;
-
-            await _eventManager.SendAsync(new AgentErrorEvent(FinishError), CancellationToken);
-            await _eventManager.SendAsync(new AgentCompletedEvent(), CancellationToken);
-            
-            return TurnStatus.CompletedWithError;
-        }
+     
         
         // Tool calls required:
         if (response.FinishReason == ChatFinishReason.ToolCalls)

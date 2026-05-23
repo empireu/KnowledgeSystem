@@ -62,6 +62,7 @@ var builder = Host.CreateDefaultBuilder(args)
                 tracing.AddSource(RagTelemetry.Rag.Name);
                 tracing.AddSource(KnowledgeSystemTelemetry.AgentTools.Name);
                 tracing.AddSource(AgentTelemetry.Agent.Name);
+                tracing.AddSource(KnowledgeSystemTelemetry.AgentChat.Name);
                 
                 tracing.AddOtlpExporter(options => 
                 {

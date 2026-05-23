@@ -21,27 +21,43 @@ public sealed class ContextCompactor(
     int preservedRecentTurns = 4
 )
 {
+    public readonly struct CompactionInfo
+    {
+        public required int ToolsCompacted { get; init; }
+        
+        public required bool InvokedSummarizer { get; init; }
+    }
+    
     /// <summary>
     ///     Compacts the context if needed. Call this after each agent run completes.
     /// </summary>
-    public async Task CompactAsync(AgentContext context, CancellationToken cancellationToken = default)
+    public async Task<CompactionInfo> CompactAsync(AgentContext context, CancellationToken cancellationToken = default)
     {
-        CompactToolResults(context);
+        var toolsCompacted = CompactToolResults(context);
 
+        var invokedSummary = false;
         if (summaryClient != null)
         {
             await SummarizeOldTurnsAsync(context, cancellationToken);
+            invokedSummary = true;
         }
+
+        return new CompactionInfo
+        {
+            ToolsCompacted = toolsCompacted,
+            InvokedSummarizer = invokedSummary
+        };
     }
 
     /// <summary>
     ///     Replaces tool results exceeding the character threshold with compact stubs.
     ///     Only compacts results already "consumed" by a subsequent assistant message.
     /// </summary>
-    internal void CompactToolResults(AgentContext context)
+    internal int CompactToolResults(AgentContext context)
     {
         var elements = context.MutableElements;
 
+        var toolsCompacted = 0;
         for (var i = 0; i < elements.Count; i++)
         {
             if (elements[i] is not ChatElement toolElement || toolElement.Message.Role != ChatRole.Tool)
@@ -49,8 +65,7 @@ public sealed class ContextCompactor(
                 continue;
             }
 
-            if (!ChatMessageHelpers.TryGetToolResultText(toolElement.Message, out var originalText, out var callId) ||
-                originalText.Length <= toolResultCharThreshold)
+            if (!ChatMessageHelpers.TryGetToolResultText(toolElement.Message, out var originalText, out var callId) || originalText.Length <= toolResultCharThreshold)
             {
                 continue;
             }
@@ -72,7 +87,7 @@ public sealed class ContextCompactor(
             }
 
             var stub = CompactToolResultText(originalText);
-
+            
             var replacementContents = new List<AIContent>();
             if (callId != null)
             {
@@ -83,8 +98,15 @@ public sealed class ContextCompactor(
                 replacementContents.Add(new TextContent(stub));
             }
             
-            elements[i] = new ChatElement(new ChatMessage(ChatRole.Tool, replacementContents) { AuthorName = toolElement.Message.AuthorName });
+            elements[i] = new ChatElement(new ChatMessage(ChatRole.Tool, replacementContents)
+            {
+                AuthorName = toolElement.Message.AuthorName
+            });
+            
+            ++toolsCompacted;
         }
+
+        return toolsCompacted;
     }
 
     /// <summary>
