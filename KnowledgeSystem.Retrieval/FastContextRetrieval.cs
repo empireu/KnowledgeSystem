@@ -184,14 +184,23 @@ public sealed class FastContextRetrieval
         activity?.SetTag("fetch_count", fetchCount);
 
         VectorSearchResult[] vectorResults;
-        using (RagTelemetry.Rag.StartInternalActivity("VectorSearch"))
+        using (var vectorSearchActivity = RagTelemetry.Rag.StartInternalActivity("VectorSearch"))
         {
-            vectorResults = _engine.Search(
-                _embedding, 
-                fetchCount,
-                efSearch: 1000,
-                predicate: SemanticSearchPredicate
+            const int efSearch = 1000;
+            Predicate<int> predicate = SemanticSearchPredicate;
+            var instrumentation = new MutableHnswIndex.SearchInstrumentation();
+            
+            vectorResults = _engine.Hnsw.Search(
+                (ReadOnlySpan<float>)_embedding, 
+                fetchCount, 
+                efSearch,
+                predicate,
+                instrumentation
             );
+            
+            vectorSearchActivity?.SetTag("ef_search", efSearch);
+            vectorSearchActivity?.SetTag("descent_resize_operations", instrumentation.DescentResizeOperations);
+            instrumentation.SearchLayer.SetAsTags(vectorSearchActivity);
         }
 
         if (vectorResults.Length == 0)
