@@ -19,11 +19,14 @@ public class ReviewFlagToolHandler<TContext>(AgentTool tool, Func<TContext, stri
     
     public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<TContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
-        if (runner.ActiveToolCalls.Count > 1)
+        try
         {
-            return Task.FromResult(Error("Cannot set multiple flags!"));
+            return Task.FromResult(Success(resultProvider(runner.ExecutionContext)));
         }
-        
-        return Task.FromResult(Success(resultProvider(runner.ExecutionContext)));
+        catch (InvalidOperationException ex)
+        {
+            // Contradictory flag (e.g. reject then approve, or approve then reject)
+            return Task.FromResult(Error(ex.Message));
+        }
     }
 }

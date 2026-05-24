@@ -37,19 +37,63 @@ public sealed class PeerReviewAgent : Agent<PeerReviewContext>
         return "Flagged. Now, please write your feedback for the USER.";
     }
     
+    public override Task<AgentCallbackResult> HandleToolCompletion(AgentRunner<PeerReviewContext> runner, ChatResponse response)
+    {
+        // Capture any text the LLM wrote alongside the tool call (e.g. review feedback with reject)
+        if (!string.IsNullOrWhiteSpace(response.Text))
+        {
+            runner.ExecutionContext.PendingFeedback = response.Text;
+        }
+        
+        return Task.FromResult(AgentCallbackResult.Continue);
+    }
+    
     public override Task<AgentCallbackResult> HandleToolFinish(AgentRunner<PeerReviewContext> runner)
     {
-        if (runner.ExecutionContext.FinalStatus == PeerReviewContext.Status.Approved)
+        var status = runner.ExecutionContext.FinalStatus;
+        
+        if (status == PeerReviewContext.Status.Invalid)
+        {
+            // No flag tool was called yet, continue to let the LLM decide:
+            return Task.FromResult(AgentCallbackResult.Continue);
+        }
+        
+        if (status == PeerReviewContext.Status.Approved)
         {
             // End execution immediately:
             return Task.FromResult(AgentCallbackResult.Break);
         }
         
-        return base.HandleToolFinish(runner);
+        // Rejected: if feedback was already captured alongside the tool call, promote it and end.
+        // Otherwise, continue so the LLM can write feedback.
+        if (runner.ExecutionContext.PendingFeedback is { } feedback)
+        {
+            runner.ExecutionContext.Feedback = feedback;
+            return Task.FromResult(AgentCallbackResult.Break);
+        }
+        
+        return Task.FromResult(AgentCallbackResult.Continue);
     }
     
     public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<PeerReviewContext> runner, ChatResponse response)
     {
+        var status = runner.ExecutionContext.FinalStatus;
+        
+        if (status == PeerReviewContext.Status.Invalid)
+        {
+            // LLM output text without calling approve/reject first.
+            //Prompt it to use a tool:
+            runner.ExecutionContext.ChatContext.InsertAssistant("I must call either approve or reject before writing my final output.");
+            return Task.FromResult(AgentCallbackResult.Continue);
+        }
+        
+        if (status == PeerReviewContext.Status.Approved)
+        {
+            // Already approved, no feedback needed:
+            return Task.FromResult(AgentCallbackResult.Break);
+        }
+        
+        // Rejected: capture feedback and end:
         runner.ExecutionContext.Feedback = response.Text;
         return Task.FromResult(AgentCallbackResult.Break);
     }

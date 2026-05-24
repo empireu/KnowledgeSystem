@@ -48,7 +48,6 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 
     public override async Task<AgentCallbackResult> HandleToolFinish(AgentRunner<ConversationalContext> runner)
     {
-        // P.S. alternatively, we can strong-link the handler. Maybe do
         if (runner.TryGetUniqueActiveSubAgentProxyForHandler<PeerReviewSubAgentHandler>(out var peerReviewProxy))
         {
             var proxy = (PeerReviewSubAgentHandler.Proxy)peerReviewProxy;

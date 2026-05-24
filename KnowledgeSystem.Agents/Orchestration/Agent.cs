@@ -18,6 +18,15 @@ public abstract class Agent<TContext>(string agentId) : Agent(agentId) where TCo
     public AgentToolRegistry<TContext> ToolRegistry { get; } = new();
 
     /// <summary>
+    ///     Called when a completion arrives, that has tool calls. Called just before the tool calls are started.
+    ///     Meant for handling any other content the LLM sent.
+    /// </summary>
+    public virtual Task<AgentCallbackResult> HandleToolCompletion(AgentRunner<TContext> runner, ChatResponse response)
+    {
+        return Task.FromResult(AgentCallbackResult.Continue);
+    }
+    
+    /// <summary>
     ///     Called when a completion arrives, that isn't a tool call.
     ///     Completion should be done on the runner if needed.
     /// </summary>

@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-
-namespace KnowledgeSystem.Agent;
+﻿namespace KnowledgeSystem.Agent;
 
 public sealed class PeerReviewContext : ConversationalContext
 {
@@ -13,30 +11,32 @@ public sealed class PeerReviewContext : ConversationalContext
         Approved,
         Rejected
     }
-    
+
     public Status FinalStatus
     {
-        get
+        get;
+        set
         {
             if (field == Status.Invalid)
             {
-                throw new InvalidOperationException("Cannot get results from peer review agent before it's done.");
+                field = value;
             }
-
-            return field;
-        }
-        set
-        {
-            if (field != Status.Invalid)
+            else if (field != value)
             {
-                throw new Exception("Multiple set peer review status");
+                throw new InvalidOperationException($"Peer review status already set to {field}, cannot change to {value}.");
             }
-
-            field = value;
+            
+            // Same value as already set
         }
     }
 
-    public string Feedback
+    /// <summary>
+    ///     Text the LLM wrote alongside a flag tool call, captured before the tool executes.
+    ///     Promoted to <see cref="Feedback"/> in <see cref="PeerReviewAgent.HandleToolFinish"/> if rejected.
+    /// </summary>
+    public string? PendingFeedback { get; set; }
+
+    public string? Feedback
     {
         get
         {
@@ -45,21 +45,11 @@ public sealed class PeerReviewContext : ConversationalContext
                 throw new InvalidOperationException("Cannot get feedback from peer review agent that approved the report.");
             }
             
-            Debug.Assert(field != null);
-            
             return field;
         }
-        set
-        {
-            if (field != null)
-            {
-                throw new Exception("Multiple set peer review feedback");
-            }
-
-            field = value;
-        }
+        set;
     }
-    
+
     public PeerReviewContext(string toolCallId, string systemPrompt, string report)
     {
         ToolCallId = toolCallId;

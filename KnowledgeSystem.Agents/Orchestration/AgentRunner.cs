@@ -268,6 +268,7 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         if (response.FinishReason == ChatFinishReason.ToolCalls)
         {
             ExecutionContext.InsertAssistantCompletion(response);
+            await Agent.HandleToolCompletion(this, response);
             var toolCalls = ChatMessageHelpers.GetFunctionCalls(response);
             await BeginToolCalls(response, toolCalls);
             return TurnStatus.ToolCallsReceived;

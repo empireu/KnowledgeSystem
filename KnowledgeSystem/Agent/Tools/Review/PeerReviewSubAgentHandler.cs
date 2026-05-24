@@ -130,6 +130,9 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
         private readonly PeerReviewSubAgentHandler _subAgentHandler;
         private readonly ReviewOptions _options;
         private readonly AgentRunner<PeerReviewContext> _runner;
+        private int _turnCount;
+        
+        private const int MaxTurns = 5;
 
         public Proxy(
             AgentRunner<ConversationalContext> parentRunner,
@@ -164,6 +167,11 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
                 return _subAgentHandler.Error("Cannot execute review in parallel with other tools!");
             }
             
+            if (++_turnCount > MaxTurns)
+            {
+                return _subAgentHandler.Error($"Review agent exceeded maximum turn limit ({MaxTurns}).");
+            }
+            
             var result = await _runner.ExecuteTurn();
 
             if (result == AgentRunner.TurnStatus.CompletedSuccessfully)
@@ -173,15 +181,16 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
                     case PeerReviewContext.Status.Approved:
                         return _subAgentHandler.Success("Review passed. Your report has been shown to the user.");
                     case PeerReviewContext.Status.Rejected:
-                        return _subAgentHandler.Error(ReviewContext.Feedback);
+                        return _subAgentHandler.Error(ReviewContext.Feedback ?? "No feedback provided.");
+                    case PeerReviewContext.Status.Invalid:
                     default:
-                        throw new Exception($"Invalid review status {ReviewContext.FinalStatus}");
+                        return _subAgentHandler.Error("Review agent completed without calling approve or reject.");
                 }
             }
 
             if (result == AgentRunner.TurnStatus.CompletedWithError)
             {
-                throw new Exception($"Review agent error: {_runner.FinishError}");
+                return _subAgentHandler.Error($"Review agent error: {_runner.FinishError?.Message ?? "Unknown error"}");
             }
 
             return null;

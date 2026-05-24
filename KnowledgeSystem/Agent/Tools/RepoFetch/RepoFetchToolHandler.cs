@@ -20,8 +20,8 @@ public sealed class RepoFetchToolHandler(
     public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, RepoFetchToolConfig config)
     {
         var fetchTool = new ToolBuilder("repo_fetch")
-            .WithDescription("Fetches the content of a specific repository reference (file, definition, directory, or offsets).")
-            .WithRequiredStringArgument("reference", "The reference to fetch. Formats: 'path/to/file.md@Heading' (section under heading), 'path/to/file.md:100,200' (slice between offsets), or 'path/to/dir/' (directory listing).", out var referenceArg)
+            .WithDescription("Fetches the content of a specific repository reference (file, definition, or offsets).")
+            .WithRequiredStringArgument("reference", "The reference to fetch. Formats: 'path/to/file.md' (entire file, for small files only), 'path/to/file.md@Heading' (section under heading), 'path/to/file.md:100,200' (slice between offsets).", out var referenceArg)
             .Build();
 
         var handler = ActivatorUtilities.CreateInstance<RepoFetchToolHandler>(
