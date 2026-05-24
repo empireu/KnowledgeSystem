@@ -146,6 +146,11 @@ public sealed class RepoFetchToolHandler(
             return Error($"repo_fetch: offsets {refPath.StartOffset},{refPath.EndOffset} are invalid! Offsets are zero-based. The first one is the start offset and is inclusive; the second one is the end offset and is exclusive.");
         }
 
+        if (refPath.StartOffset >= document.Content.Length)
+        {
+            return Error($"repo_fetch: start offset {refPath.StartOffset} is beyond the end of the document (length {document.Content.Length}).");
+        }
+
         var end = refPath.EndOffset;
 
         if (end > document.Content.Length)
@@ -166,9 +171,11 @@ public sealed class RepoFetchToolHandler(
         
         context.InsertElement(new RepositoryFetchedTextMarker
         {
+            Document = document,
+            FetchedRanges = [(refPath.StartOffset, end)],
             Content = output
         });
-        
+
         return Success(output);
     }
 }

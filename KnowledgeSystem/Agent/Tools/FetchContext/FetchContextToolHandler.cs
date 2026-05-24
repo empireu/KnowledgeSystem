@@ -57,6 +57,7 @@ public sealed class FetchContextToolHandler(
         var repo = engine.Repo;
         var totalChars = 0;
         var sb = new StringBuilder();
+        var fetchedDocumentData = new List<(EmdDocument Document, List<(int Start, int End)> Ranges, string Content)>();
 
         // Group by document to batch context per file:
         var documentGroups = parsedRefs
@@ -83,6 +84,10 @@ public sealed class FetchContextToolHandler(
 
             sb.AppendLine($"# Document: {document.Path}");
             sb.AppendLine();
+
+            var documentSb = new StringBuilder();
+            documentSb.AppendLine($"# Document: {document.Path}");
+            documentSb.AppendLine();
 
             // Collect content ranges to fetch, deduplicating and merging overlaps:
             var ranges = new List<(int Start, int End, string Label)>();
@@ -121,7 +126,9 @@ public sealed class FetchContextToolHandler(
                         else
                         {
                             sb.AppendLine($"  Definition '{refPath.Definition}' not found in this file.");
+                            documentSb.AppendLine($"  Definition '{refPath.Definition}' not found in this file.");
                             sb.AppendLine();
+                            documentSb.AppendLine();
                         }
 
                         break;
@@ -134,7 +141,9 @@ public sealed class FetchContextToolHandler(
                     case EmdReferencePath.ReferenceType.Directory:
                     {
                         sb.AppendLine($"  Cannot fetch context for directory '{raw}'.");
+                        documentSb.AppendLine($"  Cannot fetch context for directory '{raw}'.");
                         sb.AppendLine();
+                        documentSb.AppendLine();
                         break;
                     }
                 }
@@ -170,12 +179,15 @@ public sealed class FetchContextToolHandler(
 
             merged.Add((currentStart, currentEnd, currentLabels));
 
+            var documentFetchedRanges = new List<(int Start, int End)>();
+
             // Append each merged range:
             foreach (var (start, end, labels) in merged)
             {
                 if (totalChars >= config.MaxChars)
                 {
                     sb.AppendLine("... (truncated)");
+                    documentSb.AppendLine("... (truncated)");
                     break;
                 }
 
@@ -189,18 +201,31 @@ public sealed class FetchContextToolHandler(
                 }
 
                 // Show which references are covered by this block:
-                var labelStr = labels.Count == 1 ? labels[0] : $"[{string.Join(", ", labels)}]";
+                var labelStr = labels.Count == 1
+                    ? labels[0] 
+                    : $"[{string.Join(", ", labels)}]";
+                
                 sb.AppendLine($"  {start},{end} — {labelStr}");
+                documentSb.AppendLine($"  {start},{end} — {labelStr}");
                 sb.AppendLine();
+                documentSb.AppendLine();
 
                 // Indent the content slightly for readability:
                 foreach (var line in content.Split('\n'))
                 {
                     sb.AppendLine($"  {line}");
+                    documentSb.AppendLine($"  {line}");
                 }
 
                 sb.AppendLine();
+                documentSb.AppendLine();
                 totalChars += content.Length;
+                documentFetchedRanges.Add((start, end));
+            }
+
+            if (documentFetchedRanges.Count > 0)
+            {
+                fetchedDocumentData.Add((document, documentFetchedRanges, documentSb.ToString()));
             }
         }
 
@@ -211,10 +236,15 @@ public sealed class FetchContextToolHandler(
 
         var result = sb.ToString();
 
-        runner.ExecutionContext.ChatContext.InsertElement(new RepositoryFetchedTextMarker
+        foreach (var (document, ranges, content) in fetchedDocumentData)
         {
-            Content = result
-        });
+            runner.ExecutionContext.ChatContext.InsertElement(new RepositoryFetchedTextMarker
+            {
+                Document = document,
+                FetchedRanges = ranges,
+                Content = content
+            });
+        }
 
         return Task.FromResult(Success(result));
     }

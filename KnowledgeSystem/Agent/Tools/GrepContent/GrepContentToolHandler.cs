@@ -4,6 +4,7 @@ using KnowledgeSystem.Agent.Tools.Markers;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Retrieval.Engine;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -61,7 +62,7 @@ public sealed class GrepContentToolHandler(
         }
 
         // Group matching chunks by document path, collecting offset ranges:
-        var documentGroups = new Dictionary<string, List<(int Start, int End, float Score, string Snippet)>>();
+        var documentGroups = new Dictionary<string, (EmdDocument Document, List<(int Start, int End, float Score, string Snippet)> Ranges)>();
 
         try
         {
@@ -89,13 +90,13 @@ public sealed class GrepContentToolHandler(
                     : rawContent[..(config.SnippetLength - 1)] + "...";
                 snippet = snippet.Replace("\r", "").Replace("\n", " ");
 
-                if (!documentGroups.TryGetValue(documentPath, out var ranges))
+                if (!documentGroups.TryGetValue(documentPath, out var entry))
                 {
-                    ranges = [];
-                    documentGroups[documentPath] = ranges;
+                    entry = (chunk.Node.Document, []);
+                    documentGroups[documentPath] = entry;
                 }
 
-                ranges.Add((absStart, absEnd, bm25Result.Score, snippet));
+                entry.Ranges.Add((absStart, absEnd, bm25Result.Score, snippet));
             }
         }
         catch (RegexMatchTimeoutException ex)
@@ -111,20 +112,21 @@ public sealed class GrepContentToolHandler(
 
         // Sort documents by their best matching score, take top N:
         var sortedDocs = documentGroups
-            .OrderByDescending(kv => kv.Value.Max(r => r.Score))
+            .OrderByDescending(kv => kv.Value.Ranges.Max(r => r.Score))
             .Take(config.MaxResults)
             .ToList();
 
         var sb = new StringBuilder();
+        var contentRanges = new List<ContentRange>();
         var suffix2 = pathFilter != null ? $" (filter: '{pathFilter}')" : "";
         sb.AppendLine($"# grep_content: {sortedDocs.Count} file(s) matching '{query}'{suffix2}");
 
         string? currentDir = null;
-        foreach (var (docPath, ranges) in sortedDocs)
+        foreach (var (documentPath, (document, ranges)) in sortedDocs)
         {
-            var lastSlash = docPath.LastIndexOf('/');
-            var dir = lastSlash >= 0 ? docPath[..lastSlash] : "";
-            var fileName = lastSlash >= 0 ? docPath[(lastSlash + 1)..] : docPath;
+            var lastSlash = documentPath.LastIndexOf('/');
+            var dir = lastSlash >= 0 ? documentPath[..lastSlash] : "";
+            var fileName = lastSlash >= 0 ? documentPath[(lastSlash + 1)..] : documentPath;
 
             if (dir != currentDir)
             {
@@ -145,6 +147,7 @@ public sealed class GrepContentToolHandler(
             foreach (var (start, end, _, snippet) in sortedRanges)
             {
                 sb.AppendLine($"    {start},{end} — '{snippet}'");
+                contentRanges.Add(new ContentRange(document, start, end, $"{documentPath}:{start},{end} — '{snippet}'"));
             }
 
             if (ranges.Count > config.MaximumRanges)
@@ -163,7 +166,8 @@ public sealed class GrepContentToolHandler(
 
         runner.ExecutionContext.ChatContext.InsertElement(new GrepContentMarker
         {
-            Output = result
+            Output = result,
+            Ranges = contentRanges
         });
 
         return Task.FromResult(Success(result));

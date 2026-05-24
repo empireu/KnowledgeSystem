@@ -125,7 +125,7 @@ public sealed class FastContextToolHandler(
         var results = retrieval.ReferencedDocuments.Values.ToList();
         results.Sort((a, b) => b.AverageScore.CompareTo(a.AverageScore));
         
-        CompactExtraction(sb, query, results);
+        var ranges = CompactExtraction(sb, query, results);
         var result = sb.ToString();
         
         activity?.SetTag("result_size", result.Length);
@@ -133,7 +133,8 @@ public sealed class FastContextToolHandler(
         
         runner.ExecutionContext.ChatContext.InsertElement(new FastContextMarker
         {
-            Output = result
+            Output = result,
+            Ranges = ranges
         });
         
         return Success(result);
@@ -141,8 +142,9 @@ public sealed class FastContextToolHandler(
 
     /// <summary>
     ///     Pulls and formats references so the content can be inspected with other tools.
+    ///     Returns structured <see cref="ContentRange"/> list for deduplication in the peer review sub-agent.
     /// </summary>
-    private void CompactExtraction(StringBuilder sb, string query, List<FastContextRetrieval.ReferencedDocument> results)
+    private List<ContentRange> CompactExtraction(StringBuilder sb, string query, List<FastContextRetrieval.ReferencedDocument> results)
     {
         var totalTrees = results.Sum(r => r.BoundingTreesSorted.Count);
         if (results.Count > 3 || totalTrees > 10)
@@ -155,6 +157,7 @@ public sealed class FastContextToolHandler(
         }
 
         var tokens = Tokenizer.TokenizeQuery(query, true);
+        var ranges = new List<ContentRange>();
 
         string? currentDir = null;
         foreach (var referencedDocument in results)
@@ -181,9 +184,14 @@ public sealed class FastContextToolHandler(
                 var start = root.StartOffset;
                 var end = root.EndOffset;
 
+                // Build per-range formatted text for the reviewer:
+                var rangeSb = new StringBuilder();
+                rangeSb.AppendLine($"{path}:{start},{end}");
+
                 if (root.NodeType.IsHeading())
                 {
                     sb.AppendLine($"    {start},{end} (@{root.Text})");
+                    rangeSb.AppendLine($"  @{root.Text}");
                 }
                 else
                 {
@@ -193,8 +201,13 @@ public sealed class FastContextToolHandler(
                 var nodeText = content[start..end];
 
                 AppendSnippets(sb, nodeText, start, tokens, config.SnippetContext, config.MaxWindows, config.DesiredSnippets);
+                AppendSnippets(rangeSb, nodeText, start, tokens, config.SnippetContext, config.MaxWindows, config.DesiredSnippets);
+
+                ranges.Add(new ContentRange(referencedDocument.Document, start, end, rangeSb.ToString()));
             }
         }
+
+        return ranges;
     }
 
     /// <summary>
