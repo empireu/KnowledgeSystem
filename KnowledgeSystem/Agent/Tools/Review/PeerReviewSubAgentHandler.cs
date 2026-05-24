@@ -377,7 +377,7 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
         private readonly AgentRunner<PeerReviewContext> _runner;
         private int _turnCount;
         
-        private const int MaxTurns = 5;
+        private const int MaxTurns = 7;
 
         public Proxy(
             AgentRunner<ConversationalContext> parentRunner,
