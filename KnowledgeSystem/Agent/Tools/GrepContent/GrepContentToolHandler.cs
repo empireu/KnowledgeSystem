@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using KnowledgeSystem.Agent.Tools.Markers;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
@@ -44,7 +45,7 @@ public sealed class GrepContentToolHandler(
         {
             try
             {
-                filterRegex = new Regex(pathFilter, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                filterRegex = new Regex(pathFilter, RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1.0));
             }
             catch (ArgumentException ex)
             {
@@ -62,37 +63,44 @@ public sealed class GrepContentToolHandler(
         // Group matching chunks by document path, collecting offset ranges:
         var documentGroups = new Dictionary<string, List<(int Start, int End, float Score, string Snippet)>>();
 
-        foreach (var bm25Result in bm25Results)
+        try
         {
-            if (!engine.ChunkByHnswId.TryGetValue(bm25Result.HnswId, out var chunk))
+            foreach (var bm25Result in bm25Results)
             {
-                continue;
+                if (!engine.ChunkByHnswId.TryGetValue(bm25Result.HnswId, out var chunk))
+                {
+                    continue;
+                }
+
+                var documentPath = chunk.Node.Document.Path;
+
+                if (filterRegex != null && !filterRegex.IsMatch(documentPath))
+                {
+                    continue;
+                }
+
+                var absStart = chunk.Node.RawNode.StartOffset + chunk.StartOffset;
+                var absEnd = absStart + chunk.Length;
+
+                // Build a compact snippet from the raw content:
+                var rawContent = chunk.RawContent;
+                var snippet = rawContent.Length <= config.SnippetLength
+                    ? rawContent
+                    : rawContent[..(config.SnippetLength - 1)] + "...";
+                snippet = snippet.Replace("\r", "").Replace("\n", " ");
+
+                if (!documentGroups.TryGetValue(documentPath, out var ranges))
+                {
+                    ranges = [];
+                    documentGroups[documentPath] = ranges;
+                }
+
+                ranges.Add((absStart, absEnd, bm25Result.Score, snippet));
             }
-
-            var documentPath = chunk.Node.Document.Path;
-
-            if (filterRegex != null && !filterRegex.IsMatch(documentPath))
-            {
-                continue;
-            }
-
-            var absStart = chunk.Node.RawNode.StartOffset + chunk.StartOffset;
-            var absEnd = absStart + chunk.Length;
-
-            // Build a compact snippet from the raw content:
-            var rawContent = chunk.RawContent;
-            var snippet = rawContent.Length <= config.SnippetLength
-                ? rawContent
-                : rawContent[..(config.SnippetLength - 1)] + "...";
-            snippet = snippet.Replace("\r", "").Replace("\n", " ");
-
-            if (!documentGroups.TryGetValue(documentPath, out var ranges))
-            {
-                ranges = [];
-                documentGroups[documentPath] = ranges;
-            }
-
-            ranges.Add((absStart, absEnd, bm25Result.Score, snippet));
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            return Task.FromResult(Error($"grep_content: Regex timed out: {ex.Message}"));
         }
 
         if (documentGroups.Count == 0)
@@ -129,8 +137,9 @@ public sealed class GrepContentToolHandler(
 
             // Show up to N offset ranges per file with snippets:
             var sortedRanges = ranges
-                .OrderBy(r => r.Start)
+                .OrderByDescending(r => r.Score)
                 .Take(config.MaximumRanges)
+                .OrderBy(r => r.Start)
                 .ToList();
             
             foreach (var (start, end, _, snippet) in sortedRanges)
@@ -150,6 +159,13 @@ public sealed class GrepContentToolHandler(
             sb.AppendLine($"... and {documentGroups.Count - config.MaxResults} more files. Narrow your query or use pathFilter.");
         }
 
-        return Task.FromResult(Success(sb.ToString()));
+        var result = sb.ToString();
+
+        runner.ExecutionContext.ChatContext.InsertElement(new GrepContentMarker
+        {
+            Output = result
+        });
+
+        return Task.FromResult(Success(result));
     }
 }

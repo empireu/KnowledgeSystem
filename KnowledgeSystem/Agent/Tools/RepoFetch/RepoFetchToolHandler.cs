@@ -20,7 +20,7 @@ public sealed class RepoFetchToolHandler(
     public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, RepoFetchToolConfig config)
     {
         var fetchTool = new ToolBuilder("repo_fetch")
-            .WithDescription("Fetches the content of a specific repository reference (file, definition, or offsets).")
+            .WithDescription("Fetches a single repository reference (file, heading section, or offset range). Simple and direct: no expansion or deduplication. Use fetch_context instead when you have multiple references or want surrounding context expanded to containing paragraphs/sections.")
             .WithRequiredStringArgument("reference", "The reference to fetch. Formats: 'path/to/file.md' (entire file, for small files only), 'path/to/file.md@Heading' (section under heading), 'path/to/file.md:100,200' (slice between offsets).", out var referenceArg)
             .Build();
 

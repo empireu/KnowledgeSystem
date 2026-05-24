@@ -20,7 +20,7 @@ public sealed class FetchContextToolHandler(
     public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, FetchContextToolConfig config)
     {
         var fetchTool = new ToolBuilder("fetch_context")
-            .WithDescription("Fetches the full surrounding context for one or more references. Expands each offset to its containing paragraph or section, shows the heading path, and deduplicates overlapping ranges. Use this to understand acronyms, definitions, or surrounding prose around search hits.")
+            .WithDescription("Fetches full surrounding context for one or more references. Expands each offset to its containing paragraph or section, shows the heading path, and deduplicates overlapping ranges. Prefer this over repo_fetch when you have multiple references or need expanded context.")
             .WithRequiredArrayArgument("references", "Array of references to fetch context for. Formats: 'path/to/file.md:start,end' (offsets from fast_context/grep_content), 'path/to/file.md@Heading' (section), or 'path/to/file.md' (full file). Pass multiple to batch-fetch.", out var refsArg)
             .Build();
 

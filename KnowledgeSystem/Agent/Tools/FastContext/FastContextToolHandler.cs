@@ -123,7 +123,7 @@ public sealed class FastContextToolHandler(
         }
         
         var results = retrieval.ReferencedDocuments.Values.ToList();
-        results.Sort((a, b) => a.AverageScore.CompareTo(b.AverageScore));
+        results.Sort((a, b) => b.AverageScore.CompareTo(a.AverageScore));
         
         CompactExtraction(sb, query, results);
         var result = sb.ToString();
@@ -144,7 +144,15 @@ public sealed class FastContextToolHandler(
     /// </summary>
     private void CompactExtraction(StringBuilder sb, string query, List<FastContextRetrieval.ReferencedDocument> results)
     {
-        sb.AppendLine("fast_context: Too much content found. Here are the paths, offsets `a,b`, sections written as `@XXX` (if they exist), and snippets with their offsets `'...and the query is...':x,y` of the most relevant results for targeted inspection:");
+        var totalTrees = results.Sum(r => r.BoundingTreesSorted.Count);
+        if (results.Count > 3 || totalTrees > 10)
+        {
+            sb.AppendLine("fast_context: Too much content found. Here are the paths, offsets `a,b`, sections written as `@XXX` (if they exist), and snippets with their offsets `'...and the query is...':x,y` of the most relevant results for targeted inspection:");
+        }
+        else
+        {
+            sb.AppendLine("fast_context: Here are the paths, offsets `a,b`, sections written as `@XXX` (if they exist), and snippets with their offsets `'...and the query is...':x,y` of the most relevant results:");
+        }
 
         var tokens = Tokenizer.TokenizeQuery(query, true);
 

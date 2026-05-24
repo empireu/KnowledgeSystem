@@ -114,6 +114,12 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
                     sb.AppendLine("---");
                     break;
                 }
+                case GrepContentMarker grepContentMarker:
+                {
+                    sb.AppendLine(grepContentMarker.Output);
+                    sb.AppendLine("---");
+                    break;
+                }
             }
         }
         

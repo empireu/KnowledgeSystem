@@ -686,7 +686,7 @@ public sealed class FastContextRetrieval
                 characterCount += root.EndOffset - root.StartOffset;
             }
             
-            _boundingTreesSorted.Sort((a, b) => a.AverageScore.CompareTo(b.AverageScore));
+            _boundingTreesSorted.Sort((a, b) => b.AverageScore.CompareTo(a.AverageScore));
         }
         
         /// <summary>

@@ -13,7 +13,6 @@ namespace KnowledgeSystem.Agent.Tools.FindFiles;
 public sealed class FindFilesToolHandler(
     AgentTool tool,
     StringArgument patternArgument,
-    StringArgument pathFilterArgument,
     RagEngine engine,
     FindFilesToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
@@ -22,18 +21,16 @@ public sealed class FindFilesToolHandler(
     {
         var findTool = new ToolBuilder("find_files")
             .WithDescription("Searches for files by name using a case-insensitive regex pattern on the full file path. Use this to locate files when you know part of the filename or path.")
-            .WithRequiredStringArgument("pattern", "Regex pattern to match against file paths. Examples: 'navos' matches any file with 'navos' in its path; '.*stats\\.md$' matches files ending in 'stats.md'; 'guides/' matches files inside any 'guides' directory.", out var patternArg)
-            .WithStringArgument("pathFilter", "Optional path prefix to narrow the search. Only files under this prefix are considered (e.g. 'SDX/Data/').", out var filterArg)
+            .WithRequiredStringArgument("pattern", "Regex pattern to match against file paths. Examples: 'navos' matches any file with 'navos' in its path; '.*stats\\.md$' matches files ending in 'stats.md'; 'SDX/Data.*\\.md$' matches markdown files under SDX/Data.", out var patternArg)
             .Build();
 
-        var handler = ActivatorUtilities.CreateInstance<FindFilesToolHandler>(serviceProvider, findTool, patternArg, filterArg, config);
+        var handler = ActivatorUtilities.CreateInstance<FindFilesToolHandler>(serviceProvider, findTool, patternArg, config);
         registry.RegisterTool(findTool, handler);
     }
 
     public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var pattern = patternArgument.GetValue(args);
-        var pathFilter = pathFilterArgument.GetValueOrNull(args);
 
         if (string.IsNullOrWhiteSpace(pattern))
         {
@@ -43,7 +40,7 @@ public sealed class FindFilesToolHandler(
         Regex regex;
         try
         {
-            regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromSeconds(1.0));
         }
         catch (ArgumentException ex)
         {
@@ -53,34 +50,32 @@ public sealed class FindFilesToolHandler(
         var repo = engine.Repo;
         var results = new List<string>();
 
-        foreach (var key in repo.Documents.Keys)
+        try
         {
-            var documentPath = key.RepositoryRelativePath;
-
-            if (!string.IsNullOrEmpty(pathFilter) &&
-                !documentPath.StartsWith(pathFilter.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase) &&
-                !documentPath.Equals(pathFilter.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+            foreach (var key in repo.Documents.Keys)
             {
-                continue;
-            }
+                var documentPath = key.RepositoryRelativePath;
 
-            if (regex.IsMatch(documentPath))
-            {
-                results.Add(documentPath);
+                if (regex.IsMatch(documentPath))
+                {
+                    results.Add(documentPath);
+                }
             }
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            return Task.FromResult(Error($"find_files: Regex timed out: {ex.Message}"));
         }
 
         if (results.Count == 0)
         {
-            var suffix = pathFilter != null ? $" under '{pathFilter}'" : "";
-            return Task.FromResult(Error($"find_files: No files matching '{pattern}'{suffix}"));
+            return Task.FromResult(Error($"find_files: No files matching '{pattern}'"));
         }
 
         results.Sort(StringComparer.OrdinalIgnoreCase);
 
         var sb = new StringBuilder();
-        var suffix2 = pathFilter != null ? $" under '{pathFilter}'" : "";
-        sb.AppendLine($"# find_files: {results.Count} file(s) matching '{pattern}'{suffix2}");
+        sb.AppendLine($"# find_files: {results.Count} file(s) matching '{pattern}'");
 
         string? currentDir = null;
         var count = 0;
@@ -89,7 +84,7 @@ public sealed class FindFilesToolHandler(
             if (count >= config.MaxResults)
             {
                 sb.AppendLine();
-                sb.AppendLine($"... and {results.Count - config.MaxResults} more. Narrow your pattern or use pathFilter.");
+                sb.AppendLine($"... and {results.Count - config.MaxResults} more. Narrow your pattern.");
                 break;
             }
 
