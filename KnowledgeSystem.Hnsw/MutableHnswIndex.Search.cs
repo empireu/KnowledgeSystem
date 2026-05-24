@@ -112,7 +112,7 @@ public sealed partial class MutableHnswIndex
             
             // Bounds for the search:
             // If the best candidate is worse than the current worst result, and the results queue is full, the search ends.
-            if (resultsQueue.Count >= explorationFactor &&
+            if (//resultsQueue.Count >= 0 && -> Bad filters could cause this to blow up.
                 resultsQueue.TryPeek(out _, out var inverseWorstScore) && // Always passes. Peek doesn't give the value
                 currentScore > -inverseWorstScore)
             {
