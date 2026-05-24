@@ -13,14 +13,9 @@ public sealed class FastContextToolConfig
     public float Parameter { get; set; }= 5;
 
     /// <summary>
-    ///     The number of results to pull with each turn.
+    ///     The maximum number of vector search results to retrieve from HNSW.
     /// </summary>
-    public int BatchSize { get; set; } = 10;
-
-    /// <summary>
-    ///     Hard cap on the number of turns.
-    /// </summary>
-    public int MaxTurns { get; set; } = 5;
+    public int MaxResults { get; set; } = 100;
 
     /// <summary>
     ///     Max number of matches to search for per body.

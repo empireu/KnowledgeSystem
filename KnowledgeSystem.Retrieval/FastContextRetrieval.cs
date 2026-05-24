@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Hnsw;
@@ -25,26 +24,14 @@ public sealed class FastContextRetrieval
     private readonly int _bootstrapCount;
     private readonly float _parameter;
     private readonly int _bm25Count;
-    private readonly FileFilter? _filePathFilter;
+    private readonly int _maxResults;
 
     private float[] _embedding = [];
     private bool _preparedForRun;
     
     private float[] _centroid = [];
     private float _coherenceThreshold;
-    private bool _firstStepDone;
 
-    /// <summary>
-    ///     Set to true when a Step fetches results but none pass the coherence filter, or when the search returns no results at all.
-    ///     The caller should stop stepping when true.
-    /// </summary>
-    public bool IsExhausted { get; private set; }
-
-    /// <summary>
-    ///     All vectors fetched by retrieval.
-    /// </summary>
-    public readonly HashSet<int> VisitedVectors = [];
-    
     /// <summary>
     ///     The resulting document trees.
     /// </summary>
@@ -58,18 +45,7 @@ public sealed class FastContextRetrieval
         _bootstrapCount = description.BootstrapCount;
         _parameter = description.Parameter;
         _bm25Count = description.Bm25Results;
-        
-        // P.S. If we ever use this in some other place, we need to change the error handling.
-        if (!string.IsNullOrWhiteSpace(description.FilePathPattern))
-        {
-            var regex = new Regex(
-                description.FilePathPattern, 
-                RegexOptions.Compiled | RegexOptions.IgnoreCase,
-                TimeSpan.FromSeconds(1.0)
-            );
-            
-            _filePathFilter = new FileFilter(regex);
-        }
+        _maxResults = description.MaxResults;
     }
 
     /// <summary>
@@ -94,30 +70,6 @@ public sealed class FastContextRetrieval
         activity?.SetStatus(ActivityStatusCode.Ok);
     }
 
-    private bool FileFilterPredicate(int vector)
-    {
-        var filter = _filePathFilter;
-       
-        if (filter == null)
-        {
-            return true;
-        }
-
-        if (!filter.MemoizedResults.TryGetValue(vector, out var result))
-        {
-            var chunk = _engine.ChunkByHnswId[vector];
-            var path = chunk.Node.Document.Path;
-            result = filter.Matcher.IsMatch(path);
-            filter.MemoizedResults.Add(vector, result);
-        }
-
-        return result;
-    }
-    
-    private bool SemanticSearchPredicate(int vector)
-    {
-        return !VisitedVectors.Contains(vector) && FileFilterPredicate(vector);
-    }
 
     /// <summary>
     ///     Gets the fixed number of results using BM25 ranking.
@@ -133,12 +85,6 @@ public sealed class FastContextRetrieval
         for (var index = 0; index < bm25Results.Length && passedCount < _bm25Count; index++)
         {
             var bm25Result = bm25Results[index];
-
-            if (!FileFilterPredicate(bm25Result.HnswId))
-            {
-                continue;
-            }
-            
             ++passedCount;
                 
             var chunk = _engine.GetChunkByHnswId(bm25Result.HnswId);
@@ -163,42 +109,36 @@ public sealed class FastContextRetrieval
     }
     
     /// <summary>
-    ///     Fetches more results for the query and updates the bounding tree of the results.
-    ///     Results that fail the semantic coherence filter are silently dropped.
+    ///     Runs the full retrieval pipeline: single HNSW search at the upper bound, BM25, coherence bootstrap,
+    ///     then applies coherence filter to select results. Call <see cref="FuseScoresAndFinish"/> after this.
     /// </summary>
-    /// <param name="count">The number of top results to fetch. If not bootstrapped, it will first fetch the number of results needed for bootstrapping.</param>
-    /// <returns>The total character count of all bounding trees so far.</returns>
-    public int Step(int count)
+    /// <returns>The total character count of all bounding trees.</returns>
+    public int Run()
     {
         if (!_preparedForRun)
         {
-            throw new InvalidOperationException("Not prepared for step!");
+            throw new InvalidOperationException("Not prepared for run!");
         }
      
-        using var activity = RagTelemetry.Rag.StartInternalActivity("Step");
-        
-        var fetchCount = _firstStepDone 
-            ? count 
-            : _bootstrapCount;
+        using var activity = RagTelemetry.Rag.StartInternalActivity("Run");
 
-        activity?.SetTag("fetch_count", fetchCount);
-
+        // Single HNSW search at the upper bound:
         VectorSearchResult[] vectorResults;
         using (var vectorSearchActivity = RagTelemetry.Rag.StartInternalActivity("VectorSearch"))
         {
             const int efSearch = 1000;
-            Predicate<int> predicate = SemanticSearchPredicate;
             var instrumentation = new MutableHnswIndex.SearchInstrumentation();
             
             vectorResults = _engine.Hnsw.Search(
                 (ReadOnlySpan<float>)_embedding, 
-                fetchCount, 
+                _maxResults, 
                 efSearch,
-                predicate,
+                null,
                 instrumentation
             );
             
             vectorSearchActivity?.SetTag("ef_search", efSearch);
+            vectorSearchActivity?.SetTag("result_count", vectorResults.Length);
             vectorSearchActivity?.SetTag("descent_resize_operations", instrumentation.DescentResizeOperations);
             instrumentation.SearchLayer.SetAsTags(vectorSearchActivity);
         }
@@ -206,25 +146,18 @@ public sealed class FastContextRetrieval
         if (vectorResults.Length == 0)
         {
             activity?.SetStatus(ActivityStatusCode.Ok);
-            IsExhausted = true;
-            return UpdateTreesAndGetChars();
+            return 0;
         }
 
-        if (!_firstStepDone)
-        {
-            Bm25();
-            Bootstrap(vectorResults);
-            
-            _firstStepDone = true;
-        }
+        // BM25 and coherence bootstrap from the top results:
+        Bm25();
+        Bootstrap(vectorResults.AsSpan(0, Math.Min(_bootstrapCount, vectorResults.Length)));
 
         // Apply coherence filter and add accepted results:
         var accepted = 0;
         for (var resultIndex = 0; resultIndex < vectorResults.Length; resultIndex++)
         {
             var vectorSearchResult = vectorResults[resultIndex];
-            VisitedVectors.Add(vectorSearchResult.Index);
-
             var vector = _engine.Hnsw.Vectors[vectorSearchResult.Index]!.VectorView;
             var coherence = VectorObjective.AdjustedCosineSimilarity(vector, _centroid);
 
@@ -275,13 +208,7 @@ public sealed class FastContextRetrieval
             }
         }
 
-        if (_firstStepDone && accepted == 0)
-        {
-            IsExhausted = true;
-        }
-        
         activity?.SetTag("accepted", accepted);
-        activity?.SetTag("exhausted", IsExhausted);
         activity?.SetStatus(ActivityStatusCode.Ok);
         
         return UpdateTreesAndGetChars();
@@ -289,7 +216,7 @@ public sealed class FastContextRetrieval
 
     /// <summary>
     ///     Computes Reciprocal Rank Fusion scores for all references across BM25 and vector results, then recomputes bounding trees with the fused scores.
-    ///     Should be called after all <see cref="Step"/> calls are done (either exhausted or caller chose to stop).
+    ///     Should be called after <see cref="Run"/>.
     /// </summary>
     public int FuseScoresAndFinish(int k = 60)
     {
@@ -472,7 +399,7 @@ public sealed class FastContextRetrieval
     }
 
     /// <summary>
-    ///     Computes a weighted centroid using the first (best) <see cref="_bootstrapCount"/> results and sets the <see cref="_coherenceThreshold"/>. 
+    ///     Computes a weighted centroid using the first (best) <see cref="_bootstrapCount"/> results and sets the coherence threshold. 
     /// </summary>
     private void Bootstrap(ReadOnlySpan<VectorSearchResult> results)
     {
@@ -581,9 +508,10 @@ public sealed class FastContextRetrieval
         public float Parameter { get; init; } = 5;
         
         /// <summary>
-        ///     Regex filter applied to the file paths.
+        ///     The maximum number of vector search results to retrieve from HNSW.
+        ///     This is the upper bound for the single search call.
         /// </summary>
-        public string? FilePathPattern { get; init; }
+        public int MaxResults { get; init; } = 100;
 
         /// <summary>
         ///     The fixed number of BM25 results to pull.
@@ -591,27 +519,20 @@ public sealed class FastContextRetrieval
         public int Bm25Results { get; init; } = 30;
     }
 
-    private sealed class FileFilter(Regex matcher)
-    {
-        public readonly Regex Matcher = matcher;
-
-        public readonly Dictionary<int, bool> MemoizedResults = [];
-    }
-    
     public sealed class ReferencedDocument(EmdDocument document)
     {
         public readonly EmdDocument Document = document;
         
         /// <summary>
         ///     All the search results found.
-        ///     Populated by <see cref="Step"/>.
+        ///     Populated by <see cref="Run"/>.
         /// </summary>
         public readonly Dictionary<int, Reference> References = [];
         
         /// <summary>
         ///     Nodes one level higher than the found nodes.
         ///     These will usually be headings.
-        ///     Populated by <see cref="Step"/>.
+        ///     Populated by <see cref="Run"/>.
         /// </summary>
         public readonly HashSet<MarkdownNode> LogicalParents = [];
         

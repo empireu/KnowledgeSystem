@@ -20,7 +20,6 @@ public sealed class FastContextToolHandler(
     ILogger<FastContextToolHandler> logger,
     AgentTool tool,
     StringArgument queryArgument,
-    StringArgument pathFilterArgument,
     IServiceProvider serviceProvider,
     FastContextToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
@@ -28,16 +27,14 @@ public sealed class FastContextToolHandler(
     public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, FastContextToolConfig config)
     {
         var searchTool = new ToolBuilder("fast_context")
-            .WithDescription("Searches the knowledge base for all information related to the topic. Provide a rich sentence to maximize recall! Optionally filter by file path.")
+            .WithDescription("Searches the knowledge base for all information related to the topic. Provide a rich sentence to maximize recall!")
             .WithRequiredStringArgument("query", "A rich, descriptive sentence describing the information needed. More detail improves recall.", out var queryArg)
-            .WithStringArgument("pathFilter", "Optional case-insensitive regex that filters which file paths to include (e.g., 'docs' or '\\.md$'). Only use when the query targets specific files or directories.", out var filterArg)
             .Build();
         
         var handler = ActivatorUtilities.CreateInstance<FastContextToolHandler>(
             serviceProvider,
             searchTool,
             queryArg,
-            filterArg,
             config
         );
         
@@ -47,7 +44,6 @@ public sealed class FastContextToolHandler(
     public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var query = queryArgument.GetValue(args);
-        var pathFilter = pathFilterArgument.GetValueOrNull(args);
         
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -56,43 +52,26 @@ public sealed class FastContextToolHandler(
 
         using var activity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("FastContext");
         activity?.SetTag("query", query);
-        activity?.SetTag("pathFilter", pathFilter);
-        
-        FastContextRetrieval retrieval;
-        
-        try
+
+        var retrieval = ActivatorUtilities.CreateInstance<FastContextRetrieval>(serviceProvider, new FastContextRetrieval.Description
         {
-            retrieval = ActivatorUtilities.CreateInstance<FastContextRetrieval>(serviceProvider, new FastContextRetrieval.Description
-            {
-                Query = query,
-                BootstrapCount = config.BootstrapCount,
-                Parameter = config.Parameter,
-                Bm25Results = config.Bm25Results,
-                FilePathPattern = pathFilter
-            });
-        }
-        catch (ArgumentException ex)
-        {
-            return Error($"fast_context: Failed to construct regex: {ex.Message}");
-        }
+            Query = query,
+            BootstrapCount = config.BootstrapCount,
+            Parameter = config.Parameter,
+            Bm25Results = config.Bm25Results,
+            MaxResults = config.MaxResults
+        });
 
         using (KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("PrepareForRun"))
         {
             await retrieval.PrepareForRun(cancellationToken);
         }
 
-        var turns = 0;
-        using (var loopActivity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("Retrieval"))
+        int chars;
+        using (var runActivity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("Retrieval"))
         {
-            int chars;
-            do
-            {
-                chars = retrieval.Step(config.BatchSize);
-                ++turns;
-            } while (!retrieval.IsExhausted && turns < config.MaxTurns);
-
-            loopActivity?.SetTag("turns", turns);
-            loopActivity?.SetTag("chars", chars);
+            chars = retrieval.Run();
+            runActivity?.SetTag("chars", chars);
         }
 
         using (KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("Evaluate"))
