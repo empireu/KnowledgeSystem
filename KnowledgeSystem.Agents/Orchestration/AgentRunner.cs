@@ -228,7 +228,6 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
         {
             try
             {
-
                 requestTelemetry?.SetTag("agent", Agent.AgentId);
 
                 response = await Client.GetResponseAsync(
@@ -264,7 +263,6 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
                 return TurnStatus.CompletedWithError;
             }
         }
-     
         
         // Tool calls required:
         if (response.FinishReason == ChatFinishReason.ToolCalls)

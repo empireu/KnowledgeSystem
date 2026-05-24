@@ -45,5 +45,5 @@ public sealed class FastContextToolConfig
     /// <summary>
     ///     The significance level for <see cref="KnowledgeSystem.Retrieval.FastContextRetrieval.ExtractGapTokens"/>.
     /// </summary>
-    public float SignificanceLevel = 0.05f;
+    public float SignificanceLevel { get; set; }= 0.05f;
 }

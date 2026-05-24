@@ -13,7 +13,7 @@ public sealed class InteractionMessageTarget(Interaction interaction) : IDiscord
     {
         if (content.Length > 2000)
         {
-            content = content[..1999] + "…";
+            content = content[..1997] + "...";
         }
 
         await interaction.ModifyResponseAsync(m => m.Content = content, cancellationToken: cancellationToken);

@@ -432,7 +432,7 @@ public sealed class DiscordMessageIntegration(
         {
             if (lineCount >= maxLines)
             {
-                sb.AppendLine("> … *(truncated)*");
+                sb.AppendLine("> ... *(truncated)*");
                 break;
             }
 
@@ -466,8 +466,8 @@ public sealed class DiscordMessageIntegration(
         // Status indicator:
         var hasRunning = _rounds.Any(r => r.ToolCalls.Any(t => t.State == ToolState.Running));
         sb.AppendLine(hasRunning
-            ? "> · Working…"
-            : "> ▸ Processing…"
+            ? "> · Working..."
+            : "> ▸ Processing..."
         );
 
         return sb.ToString();
@@ -535,7 +535,7 @@ public sealed class DiscordMessageIntegration(
                 {
                     if (toolSummary.Length >= 900)
                     {
-                        toolSummary.Append('…');
+                        toolSummary.Append("...");
                         break;
                     }
 
@@ -714,7 +714,7 @@ public sealed class DiscordMessageIntegration(
             return value;
         }
         
-        return value[..(maxLength - 1)] + "…";
+        return value[..(maxLength - 3)] + "...";
     }
 
     private static string EscapeNewlines(string str)

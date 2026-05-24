@@ -11,4 +11,9 @@ public sealed class GrepContentToolConfig
     ///     Maximum length of each inline snippet in characters.
     /// </summary>
     public int SnippetLength { get; set; } = 60;
+
+    /// <summary>
+    ///     Maximum number of ranges to show.
+    /// </summary>
+    public int MaximumRanges { get; set; } = 3;
 }

@@ -105,7 +105,7 @@ public sealed class FastContextToolHandler(
         
         var sb = new StringBuilder();
         
-        var gaps = retrieval.ExtractGapTokens();
+        var gaps = retrieval.ExtractGapTokens(config.SignificanceLevel);
       
         if (gaps.Count > 0)
         {
@@ -144,7 +144,7 @@ public sealed class FastContextToolHandler(
     /// </summary>
     private void CompactExtraction(StringBuilder sb, string query, List<FastContextRetrieval.ReferencedDocument> results)
     {
-        sb.AppendLine("fast_context: Too much content found. Here are the paths, offsets `a,b`, sections written as `@XXX` (if they exist), and snippets with their offsets `'…and the query is…':x,y` of the most relevant results for targeted inspection:");
+        sb.AppendLine("fast_context: Too much content found. Here are the paths, offsets `a,b`, sections written as `@XXX` (if they exist), and snippets with their offsets `'...and the query is...':x,y` of the most relevant results for targeted inspection:");
 
         var tokens = Tokenizer.TokenizeQuery(query, true);
 
@@ -404,8 +404,8 @@ public sealed class FastContextToolHandler(
             }
 
             var snippet = nodeText[start..end];
-            var prefix = start > 0 ? "…" : "";
-            var suffix = end < nodeText.Length ? "…" : "";
+            var prefix = start > 0 ? "..." : "";
+            var suffix = end < nodeText.Length ? "..." : "";
 
             // Convert back to document offsets for fetch:
             var docStart = nodeStartOffset + start;

@@ -83,7 +83,7 @@ public sealed class GrepContentToolHandler(
             var rawContent = chunk.RawContent;
             var snippet = rawContent.Length <= config.SnippetLength
                 ? rawContent
-                : rawContent[..(config.SnippetLength - 1)] + "…";
+                : rawContent[..(config.SnippetLength - 1)] + "...";
             snippet = snippet.Replace("\r", "").Replace("\n", " ");
 
             if (!documentGroups.TryGetValue(documentPath, out var ranges))
@@ -127,16 +127,20 @@ public sealed class GrepContentToolHandler(
 
             sb.AppendLine($"  {fileName} (score: {ranges.Max(r => r.Score):F2})");
 
-            // Show up to 3 offset ranges per file with snippets:
-            var sortedRanges = ranges.OrderBy(r => r.Start).Take(3).ToList();
+            // Show up to N offset ranges per file with snippets:
+            var sortedRanges = ranges
+                .OrderBy(r => r.Start)
+                .Take(config.MaximumRanges)
+                .ToList();
+            
             foreach (var (start, end, _, snippet) in sortedRanges)
             {
                 sb.AppendLine($"    {start},{end} — '{snippet}'");
             }
 
-            if (ranges.Count > 3)
+            if (ranges.Count > config.MaximumRanges)
             {
-                sb.AppendLine($"    ... and {ranges.Count - 3} more ranges");
+                sb.AppendLine($"    ... and {ranges.Count - config.MaximumRanges} more ranges");
             }
         }
 

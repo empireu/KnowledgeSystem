@@ -10,9 +10,9 @@ public sealed class ChannelMessageTarget(RestClient restClient, ulong channelId,
 {
     public async Task UpdateContentAsync(string content, CancellationToken cancellationToken = default)
     {
-        if (content.Length > 2000)
+        if (content.Length > 1997)
         {
-            content = content[..1999] + "…";
+            content = content[..1997] + "...";
         }
 
         await restClient.ModifyMessageAsync(channelId, messageId, m => m.Content = content, cancellationToken: cancellationToken);
