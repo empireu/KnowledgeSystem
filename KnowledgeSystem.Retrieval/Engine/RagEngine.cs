@@ -61,11 +61,6 @@ public sealed class RagEngine
     /// </summary>
     public LexicalIndex LexicalIndex { get; } = new();
 
-    /// <summary>
-    ///     Attempts to get the HNSW vector index for a given chunk.
-    /// </summary>
-    public bool TryGetHnswId(EmdChunk chunk, out int hnswId) => _hnswIdByChunkHash.TryGetValue(chunk.Hash, out hnswId);
-
     #region Setup
     
     /// <summary>
@@ -414,6 +409,28 @@ public sealed class RagEngine
     
     #endregion
 
+    public void Warmup()
+    {
+        if (_hnsw == null || _hnsw.Vectors.Count == 0)
+        {
+            return;
+        }
+ 
+        var query = new float[_hnsw.Dimension];
+        var random = new Random();
+        for (var q = 0; q < 100; q++)
+        {
+            for (var i = 0; i < query.Length; i++)
+            {
+                query[i] = (float)random.NextDouble();
+            }
+            
+            IEmbeddingService.SanitizeNetworkResult(query);
+            
+            _hnsw.Search(query, 100, 1000);
+        }
+    }
+    
     #region API
 
     /// <summary>

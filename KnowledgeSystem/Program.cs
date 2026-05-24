@@ -76,6 +76,7 @@ var host = builder.Build();
 
 var engine = host.Services.GetRequiredService<RagEngine>();
 await engine.InitializeAsync();
+engine.Warmup();
 
 host.AddApplicationCommandModule<MqrModule>();
 

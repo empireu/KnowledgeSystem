@@ -27,7 +27,7 @@ public interface IEmbeddingService : IDisposable
     ///     Sanitizes the raw embedding by clamping near-zero components to zero, then normalizing.
     ///     Very small components might cause issues with SIMD calculations.
     /// </summary>
-    protected static void SanitizeNetworkResult(Span<float> vector)
+    public static void SanitizeNetworkResult(Span<float> vector)
     {
         var normSqr = 0.0f;
     
