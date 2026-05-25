@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Vector.Reranking;
+﻿namespace KnowledgeSystem.Reranking;
 
 public readonly struct RerankResult(int index, double relevanceScore)
 {

@@ -1,5 +1,5 @@
+using KnowledgeSystem.Embedding;
 using KnowledgeSystem.Retrieval.Data;
-using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Engine;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

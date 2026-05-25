@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace KnowledgeSystem.Retrieval.Embeddings;
+namespace KnowledgeSystem.Embedding;
 
 /// <summary>
 ///     Abstraction over an embedding generation service.

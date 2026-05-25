@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
+using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Lexical;
 using KnowledgeSystem.Vector.Hnsw;
 using KnowledgeSystem.Retrieval.Data;
-using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Vector;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;

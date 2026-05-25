@@ -1,11 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
+using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Lexical;
 using KnowledgeSystem.Vector.Hnsw;
-using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Engine;
 using KnowledgeSystem.Retrieval.Telemetry;
 using KnowledgeSystem.Vector;

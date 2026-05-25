@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 
-namespace KnowledgeSystem.Retrieval.Embeddings;
+namespace KnowledgeSystem.Embedding;
 
 /// <summary>
 ///     An embedding service that uses the OpenAI API.

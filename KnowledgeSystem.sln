@@ -22,7 +22,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Vector", "Vector", "{2C2734
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Lexical", "KnowledgeSystem.Lexical\KnowledgeSystem.Lexical.csproj", "{D5E4D5F3-FC09-47A2-AC5C-D2C23F721292}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Vector.Reranking", "KnowledgeSystem.Vector.Reranking\KnowledgeSystem.Vector.Reranking.csproj", "{841D64B6-4086-4459-9110-D75122FE2616}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Reranking", "KnowledgeSystem.Reranking\KnowledgeSystem.Reranking.csproj", "{841D64B6-4086-4459-9110-D75122FE2616}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Embedding", "KnowledgeSystem.Embedding\KnowledgeSystem.Embedding.csproj", "{C4F8538D-A683-4006-8AA0-32EECBCFF923}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -74,10 +76,15 @@ Global
 		{841D64B6-4086-4459-9110-D75122FE2616}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{841D64B6-4086-4459-9110-D75122FE2616}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{841D64B6-4086-4459-9110-D75122FE2616}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C4F8538D-A683-4006-8AA0-32EECBCFF923}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4F8538D-A683-4006-8AA0-32EECBCFF923}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4F8538D-A683-4006-8AA0-32EECBCFF923}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4F8538D-A683-4006-8AA0-32EECBCFF923}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
 		{F9CA74D3-CC07-465B-81C1-31786C40097F} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
 		{841D64B6-4086-4459-9110-D75122FE2616} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
+		{C4F8538D-A683-4006-8AA0-32EECBCFF923} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
 	EndGlobalSection
 EndGlobal

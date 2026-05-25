@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 // ReSharper disable UnusedAutoPropertyAccessor.Global
 // ReSharper disable once ClassNeverInstantiated.Global
 
-namespace KnowledgeSystem.Vector.Reranking;
+namespace KnowledgeSystem.Reranking;
 
 public sealed class RawRestRerankingService : IRerankingService
 {
