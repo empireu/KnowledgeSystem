@@ -3,12 +3,12 @@
 public sealed class FastContextToolConfig
 {
     /// <summary>
-    ///     Parameter for: <see cref="KnowledgeSystem.Retrieval.FastContextRetrieval.Description.BootstrapCount"/>.
+    ///     Parameter for: <see cref="FastContextRetrievalPipeline.Description.BootstrapCount"/>.
     /// </summary>
     public int BootstrapCount { get; set; } = 15;
 
     /// <summary>
-    ///     Parameter for: <see cref="KnowledgeSystem.Retrieval.FastContextRetrieval.Description.Parameter"/>.
+    ///     Parameter for: <see cref="FastContextRetrievalPipeline.Description.Parameter"/>.
     /// </summary>
     public float Parameter { get; set; }= 5;
 
@@ -33,12 +33,12 @@ public sealed class FastContextToolConfig
     public int DesiredSnippets { get; set; } = 4;
 
     /// <summary>
-    ///     Parameter for: <see cref="KnowledgeSystem.Retrieval.FastContextRetrieval.Description.Bm25Results"/>.
+    ///     Parameter for: <see cref="FastContextRetrievalPipeline.Description.Bm25Results"/>.
     /// </summary>
     public int Bm25Results { get; set; } = 30;
 
     /// <summary>
-    ///     The significance level for <see cref="KnowledgeSystem.Retrieval.FastContextRetrieval.ExtractGapTokens"/>.
+    ///     The significance level for <see cref="FastContextRetrievalPipeline.ExtractGapTokens"/>.
     /// </summary>
     public float SignificanceLevel { get; set; }= 0.05f;
 }

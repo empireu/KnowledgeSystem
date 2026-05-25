@@ -51,7 +51,7 @@ public sealed class FastContextToolHandler(
         using var activity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("FastContext");
         activity?.SetTag("query", query);
 
-        var retrieval = ActivatorUtilities.CreateInstance<FastContextRetrieval>(serviceProvider, new FastContextRetrieval.Description
+        var retrieval = ActivatorUtilities.CreateInstance<FastContextRetrievalPipeline>(serviceProvider, new FastContextRetrievalPipeline.Description
         {
             Query = query,
             BootstrapCount = config.BootstrapCount,
@@ -121,7 +121,7 @@ public sealed class FastContextToolHandler(
     ///     Pulls and formats references so the content can be inspected with other tools.
     ///     Returns structured <see cref="ContentRange"/> list for deduplication in the peer review sub-agent.
     /// </summary>
-    private List<ContentRange> CompactExtraction(StringBuilder sb, string query, List<FastContextRetrieval.ReferencedDocument> results)
+    private List<ContentRange> CompactExtraction(StringBuilder sb, string query, List<FastContextRetrievalPipeline.ReferencedDocument> results)
     {
         var totalTrees = results.Sum(r => r.BoundingTreesSorted.Count);
         if (results.Count > 3 || totalTrees > 10)

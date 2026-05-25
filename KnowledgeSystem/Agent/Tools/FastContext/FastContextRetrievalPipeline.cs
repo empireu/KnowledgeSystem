@@ -5,19 +5,19 @@ using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Lexical;
-using KnowledgeSystem.Vector.Hnsw;
 using KnowledgeSystem.Retrieval.Engine;
 using KnowledgeSystem.Retrieval.Telemetry;
 using KnowledgeSystem.Vector;
+using KnowledgeSystem.Vector.Hnsw;
 using KnowledgeSystems.Extensions;
 
 // ReSharper disable ForeachCanBeConvertedToQueryUsingAnotherGetEnumerator
 // ReSharper disable ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Retrieval;
+namespace KnowledgeSystem.Agent.Tools.FastContext;
 
-public sealed class FastContextRetrieval
+public sealed class FastContextRetrievalPipeline
 {
     private readonly IEmbeddingService _embeddingService;
     private readonly RagEngine _engine;
@@ -38,7 +38,7 @@ public sealed class FastContextRetrieval
     /// </summary>
     public readonly Dictionary<EmdDocument, ReferencedDocument> ReferencedDocuments = [];
     
-    public FastContextRetrieval(IEmbeddingService embeddingService, RagEngine engine, Description description)
+    public FastContextRetrievalPipeline(IEmbeddingService embeddingService, RagEngine engine, Description description)
     {
         _embeddingService = embeddingService;
         _engine = engine;
@@ -483,7 +483,7 @@ public sealed class FastContextRetrieval
     }
 
     /// <summary>
-    ///     Configuration for a <see cref="FastContextRetrieval"/> run (on a single query).
+    ///     Configuration for a <see cref="FastContextRetrievalPipeline"/> run (on a single query).
     /// </summary>
     public sealed class Description
     {
@@ -646,7 +646,7 @@ public sealed class FastContextRetrieval
             public float Bm25Score;
 
             /// <summary>
-            ///     The final fused score computed by <see cref="FastContextRetrieval.FuseScoresAndFinish"/>.
+            ///     The final fused score computed by <see cref="FastContextRetrievalPipeline.FuseScoresAndFinish"/>.
             ///     Zero until RRF is called.
             /// </summary>
             public double FusedScore;
