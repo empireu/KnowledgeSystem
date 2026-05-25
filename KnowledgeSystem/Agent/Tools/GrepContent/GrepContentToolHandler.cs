@@ -68,7 +68,7 @@ public sealed class GrepContentToolHandler(
         {
             foreach (var bm25Result in bm25Results)
             {
-                if (!engine.ChunkByHnswId.TryGetValue(bm25Result.HnswId, out var chunk))
+                if (!engine.TryGetChunkByHnswId(bm25Result.HnswId, out var chunk))
                 {
                     continue;
                 }
