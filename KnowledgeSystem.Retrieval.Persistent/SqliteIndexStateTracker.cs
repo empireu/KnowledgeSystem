@@ -1,4 +1,6 @@
-namespace KnowledgeSystem.Retrieval.Data;
+using KnowledgeSystem.Retrieval.Api;
+
+namespace KnowledgeSystem.Retrieval.Persistent;
 
 /// <summary>
 ///     SQLite-backed index state tracker. Persists sync state across restarts.
@@ -69,10 +71,18 @@ public sealed class SqliteIndexStateTracker(RagDbContext db) : IIndexStateTracke
         }
     }
 
-    public IReadOnlyList<(string HashHex, int ChunkId, string DocumentPath)> GetAllChunkRecords()
+    public List<TrackedChunkRecord> ReadAllChunkRecords()
     {
         return db.Chunks
-            .Select(c => new ValueTuple<string, int, string>(c.HashHex, c.ChunkId, c.DocumentPath))
+            .Select(c => new TrackedChunkRecord(c.HashHex, c.ChunkId, c.DocumentPath))
+            .ToList();
+    }
+
+    public List<TrackedChunkRecord> ReadAllChunkRecords(string documentPath)
+    {
+        return db.Chunks
+            .Where(c => c.DocumentPath == documentPath)
+            .Select(c => new TrackedChunkRecord(c.HashHex, c.ChunkId, c.DocumentPath))
             .ToList();
     }
 

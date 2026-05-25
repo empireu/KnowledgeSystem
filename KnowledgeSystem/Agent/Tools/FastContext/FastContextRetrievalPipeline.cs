@@ -5,7 +5,7 @@ using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Lexical;
-using KnowledgeSystem.Retrieval.Api.Capabilities;
+using KnowledgeSystem.Retrieval.Api.Store;
 using KnowledgeSystem.Retrieval.Telemetry;
 using KnowledgeSystem.Vector;
 using KnowledgeSystem.Vector.Hnsw;
@@ -67,7 +67,7 @@ public sealed class FastContextRetrievalPipeline
             throw new InvalidOperationException("Already prepared for run!");
         }
 
-        using var activity = RagTelemetry.Rag.StartInternalActivity("Embed");
+        using var activity = RetrievalTelemetry.Retrieval.StartInternalActivity("Embed");
         
         var results = await _vectorStore.EmbeddingService.EmbedAsync(_query, cancellationToken);
 
@@ -84,7 +84,7 @@ public sealed class FastContextRetrievalPipeline
     /// </summary>
     private void Bm25()
     {
-        using var activity = RagTelemetry.Rag.StartInternalActivity("BM25");
+        using var activity = RetrievalTelemetry.Retrieval.StartInternalActivity("BM25");
         
         var bm25Results = _lexicalStore.SearchBm25(_query);
         var passedCount = 0;
@@ -127,11 +127,11 @@ public sealed class FastContextRetrievalPipeline
             throw new InvalidOperationException("Not prepared for run!");
         }
      
-        using var activity = RagTelemetry.Rag.StartInternalActivity("Run");
+        using var activity = RetrievalTelemetry.Retrieval.StartInternalActivity("Run");
 
         // Single HNSW search at the upper bound:
         VectorSearchResult[] vectorResults;
-        using (var vectorSearchActivity = RagTelemetry.Rag.StartInternalActivity("VectorSearch"))
+        using (var vectorSearchActivity = RetrievalTelemetry.Retrieval.StartInternalActivity("VectorSearch"))
         {
             const int efSearch = 1000;
             var instrumentation = new MutableHnswIndex.SearchInstrumentation();

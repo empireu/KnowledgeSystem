@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 
-namespace KnowledgeSystem.Retrieval.Api;
+namespace KnowledgeSystem.Retrieval.Api.Store;
 
 public interface IDocumentStore : IReadOnlyDocumentStore
 {

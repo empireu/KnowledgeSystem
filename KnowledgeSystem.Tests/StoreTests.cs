@@ -1,8 +1,9 @@
 using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
-using KnowledgeSystem.Retrieval.Api;
-using KnowledgeSystem.Retrieval.Api.Capabilities;
-using KnowledgeSystem.Retrieval.Data;
+using KnowledgeSystem.Retrieval.Api.Store;
+using KnowledgeSystem.Retrieval.InMemory;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -12,6 +13,17 @@ public class StoreTests
 {
     private readonly NullLoggerFactory _loggerFactory = NullLoggerFactory.Instance;
 
+    private readonly IServiceProvider _serviceProvider = Host.CreateDefaultBuilder()
+        .ConfigureServices(service =>
+        {
+            service.AddLogging(_ =>
+            {
+                // Empty
+            });
+        })
+        .Build()
+        .Services;
+    
     #region Helpers
 
     private static EmdDocument CreateTestDocument(string path, string content)
@@ -296,7 +308,7 @@ public class StoreTests
         tracker.AddChunk("hash1", 1, "doc1.md");
         tracker.AddChunk("hash2", 2, "doc2.md");
 
-        var records = tracker.GetAllChunkRecords();
+        var records = tracker.ReadAllChunkRecords();
         Assert.Equal(2, records.Count);
     }
 
@@ -308,9 +320,9 @@ public class StoreTests
     public async Task StoreManager_CreateInMemoryStore_ReturnsWritableStore()
     {
         var embeddingService = new MockEmbeddingService();
-        var manager = new StoreManager(null!, embeddingService, _loggerFactory);
+        var manager = new StoreManager(_serviceProvider, embeddingService);
 
-        var store = await manager.CreateInMemoryStoreAsync(new InMemoryStoreConfiguration { StoreId = "test" });
+        var store = await manager.CreateInMemoryStoreAsync(new InMemoryStoreDescription { StoreId = "test" });
 
         Assert.NotNull(store);
         Assert.Equal("test", store.StoreId);
@@ -321,9 +333,9 @@ public class StoreTests
     public async Task StoreManager_GetStore_ReturnsCreatedStore()
     {
         var embeddingService = new MockEmbeddingService();
-        var manager = new StoreManager(null!, embeddingService, _loggerFactory);
+        var manager = new StoreManager(_serviceProvider, embeddingService);
 
-        await manager.CreateInMemoryStoreAsync(new InMemoryStoreConfiguration { StoreId = "my-store" });
+        await manager.CreateInMemoryStoreAsync(new InMemoryStoreDescription { StoreId = "my-store" });
 
         var store = manager.GetStore("my-store");
         Assert.NotNull(store);
@@ -336,7 +348,7 @@ public class StoreTests
         try
         {
             var embeddingService = new MockEmbeddingService();
-            var manager = new StoreManager(null!, embeddingService, _loggerFactory);
+            var manager = new StoreManager(_serviceProvider, embeddingService);
 
             Assert.Throws<KeyNotFoundException>(() => manager.GetRequiredStore("nonexistent"));
             return Task.CompletedTask;
@@ -351,21 +363,21 @@ public class StoreTests
     public async Task StoreManager_CreateStore_DuplicateIdThrows()
     {
         var embeddingService = new MockEmbeddingService();
-        var manager = new StoreManager(null!, embeddingService, _loggerFactory);
+        var manager = new StoreManager(_serviceProvider, embeddingService);
 
-        await manager.CreateInMemoryStoreAsync(new InMemoryStoreConfiguration { StoreId = "dup" });
+        await manager.CreateInMemoryStoreAsync(new InMemoryStoreDescription { StoreId = "dup" });
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            manager.CreateInMemoryStoreAsync(new InMemoryStoreConfiguration { StoreId = "dup" }));
+            manager.CreateInMemoryStoreAsync(new InMemoryStoreDescription { StoreId = "dup" }));
     }
 
     [Fact]
     public async Task StoreManager_RemoveStore_NoLongerAccessible()
     {
         var embeddingService = new MockEmbeddingService();
-        var manager = new StoreManager(null!, embeddingService, _loggerFactory);
+        var manager = new StoreManager(_serviceProvider, embeddingService);
 
-        await manager.CreateInMemoryStoreAsync(new InMemoryStoreConfiguration { StoreId = "temp" });
+        await manager.CreateInMemoryStoreAsync(new InMemoryStoreDescription { StoreId = "temp" });
         Assert.NotNull(manager.GetStore("temp"));
 
         await manager.RemoveStoreAsync("temp");
@@ -376,10 +388,10 @@ public class StoreTests
     public async Task StoreManager_GetActiveStoreIds_ReturnsAllIds()
     {
         var embeddingService = new MockEmbeddingService();
-        var manager = new StoreManager(null!, embeddingService, _loggerFactory);
+        var manager = new StoreManager(_serviceProvider, embeddingService);
 
-        await manager.CreateInMemoryStoreAsync(new InMemoryStoreConfiguration { StoreId = "a" });
-        await manager.CreateInMemoryStoreAsync(new InMemoryStoreConfiguration { StoreId = "b" });
+        await manager.CreateInMemoryStoreAsync(new InMemoryStoreDescription { StoreId = "a" });
+        await manager.CreateInMemoryStoreAsync(new InMemoryStoreDescription { StoreId = "b" });
 
         var ids = manager.GetActiveStoreIds();
         Assert.Equal(2, ids.Count);

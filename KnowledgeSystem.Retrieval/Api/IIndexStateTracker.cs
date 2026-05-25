@@ -1,4 +1,4 @@
-namespace KnowledgeSystem.Retrieval.Data;
+namespace KnowledgeSystem.Retrieval.Api;
 
 /// <summary>
 ///     Tracks the sync state of indexed documents and chunks.
@@ -48,10 +48,15 @@ public interface IIndexStateTracker
     void RemoveChunk(string hashHex);
 
     /// <summary>
-    ///     Gets all chunk records (hash → chunkId + documentPath).
+    ///     Reads all tracked chunk records into a new list.
     /// </summary>
-    IReadOnlyList<(string HashHex, int ChunkId, string DocumentPath)> GetAllChunkRecords();
+    List<TrackedChunkRecord> ReadAllChunkRecords();
 
+    /// <summary>
+    ///     Reads all tracked chunk records for the given document into a new list.
+    /// </summary>
+    List<TrackedChunkRecord> ReadAllChunkRecords(string documentPath);
+    
     /// <summary>
     ///     Persists changes. No-op for in-memory implementations.
     /// </summary>

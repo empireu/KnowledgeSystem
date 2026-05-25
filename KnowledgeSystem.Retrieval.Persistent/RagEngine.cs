@@ -4,23 +4,22 @@ using System.Threading.Channels;
 using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Lexical;
-using KnowledgeSystem.Vector.Hnsw;
 using KnowledgeSystem.Retrieval.Api;
-using KnowledgeSystem.Retrieval.Api.Capabilities;
-using KnowledgeSystem.Retrieval.Data;
+using KnowledgeSystem.Retrieval.Api.Store;
 using KnowledgeSystem.Vector;
+using KnowledgeSystem.Vector.Hnsw;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Retrieval.Engine;
+namespace KnowledgeSystem.Retrieval.Persistent;
 
 /// <summary>
 ///     The RAG engine handles embedding queries and retrieving extracts from the repo using the HNSW.
 /// </summary>
-public sealed class RagEngine : IReadOnlyDocumentStore, IVectorSearchStore, ILexicalSearchStore
+public sealed class RagEngine : IVectorSearchStore, ILexicalSearchStore
 {
     private readonly ILogger<RagEngine> _logger;
     private readonly IIndexStateTracker _stateTracker;
@@ -164,7 +163,7 @@ public sealed class RagEngine : IReadOnlyDocumentStore, IVectorSearchStore, ILex
         
         _chunkById.Clear();
         
-        var allChunkRecords = _stateTracker.GetAllChunkRecords();
+        var allChunkRecords = _stateTracker.ReadAllChunkRecords();
         foreach (var record in allChunkRecords)
         {
             var fileKey = EmdReferencePath.CreateFile(record.DocumentPath);
@@ -479,7 +478,7 @@ public sealed class RagEngine : IReadOnlyDocumentStore, IVectorSearchStore, ILex
 
     public ValueTask DisposeAsync()
     {
-        // EMpty
+        // Empty
 
         return ValueTask.CompletedTask;
     }

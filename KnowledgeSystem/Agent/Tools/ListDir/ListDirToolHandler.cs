@@ -3,6 +3,7 @@ using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Retrieval.Api;
+using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent.Tools.ListDir;

@@ -5,7 +5,7 @@ using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
-using KnowledgeSystem.Retrieval.Api.Capabilities;
+using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent.Tools.GrepContent;

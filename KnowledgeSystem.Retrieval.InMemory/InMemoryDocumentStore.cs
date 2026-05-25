@@ -2,13 +2,13 @@ using System.Diagnostics.CodeAnalysis;
 using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Lexical;
-using KnowledgeSystem.Retrieval.Api.Capabilities;
-using KnowledgeSystem.Retrieval.Data;
+using KnowledgeSystem.Retrieval.Api;
+using KnowledgeSystem.Retrieval.Api.Store;
 using KnowledgeSystem.Vector;
 using KnowledgeSystem.Vector.Hnsw;
 using Microsoft.Extensions.Logging;
 
-namespace KnowledgeSystem.Retrieval.Api;
+namespace KnowledgeSystem.Retrieval.InMemory;
 
 // TODO we need brute force for small number and then HNSW. Also would be good to have the insertion pipeline. Overall, this PoC needs to be rewritten
 
@@ -73,7 +73,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IVectorSearchStore, 
         _documentsByPath.Remove(document.Path);
 
         // Remove all chunks for this document from HNSW and state tracker:
-        var chunkRecords = _stateTracker.GetAllChunkRecords()
+        var chunkRecords = _stateTracker.ReadAllChunkRecords()
             .Where(record => record.DocumentPath == document.Path)
             .ToList();
 

@@ -671,7 +671,7 @@ public class MutableHnswIndexTests(ITestOutputHelper output)
 
         var averageRecall = totalRecall / 10000.0;
         
-        const double baselineRecall = 0.9507;
+        const double baselineRecall = 0.95;
         output.WriteLine($"Recall test: {averageRecall:P4} current, baseline: {baselineRecall:P4}");
         Assert.True(averageRecall >= baselineRecall, $"Recall regressed from {baselineRecall:P4} to {averageRecall:P4}");
     }

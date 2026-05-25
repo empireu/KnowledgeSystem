@@ -1,7 +1,7 @@
 ﻿using KnowledgeSystem.Embedding;
 using KnowledgeSystem.Vector;
 
-namespace KnowledgeSystem.Retrieval.Api.Capabilities;
+namespace KnowledgeSystem.Retrieval.Api.Store;
 
 public interface IVectorSearchStore : IReadOnlyDocumentStore
 {

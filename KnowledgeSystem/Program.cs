@@ -1,9 +1,10 @@
+using KnowledgeSystem;
 using KnowledgeSystem.Agent.Config;
 using KnowledgeSystem.Agents.Telemetry;
 using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Discord.Integration;
 using KnowledgeSystem.Retrieval;
-using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Persistent;
 using KnowledgeSystem.Retrieval.Telemetry;
 using KnowledgeSystem.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,7 +60,7 @@ var builder = Host.CreateDefaultBuilder(args)
             })
             .WithTracing(tracing =>
             {
-                tracing.AddSource(RagTelemetry.Rag.Name);
+                tracing.AddSource(RetrievalTelemetry.Retrieval.Name);
                 tracing.AddSource(KnowledgeSystemTelemetry.AgentTools.Name);
                 tracing.AddSource(AgentTelemetry.Agent.Name);
                 tracing.AddSource(KnowledgeSystemTelemetry.AgentChat.Name);

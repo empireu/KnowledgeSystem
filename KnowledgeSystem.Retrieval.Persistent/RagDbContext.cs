@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace KnowledgeSystem.Retrieval.Data;
+namespace KnowledgeSystem.Retrieval.Persistent;
 
 /// <summary>
 ///     Database context for the RAG system.

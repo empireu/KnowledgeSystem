@@ -1,19 +1,19 @@
 using KnowledgeSystem.Embedding;
 using KnowledgeSystem.Retrieval.Api;
-using KnowledgeSystem.Retrieval.Api.Capabilities;
-using KnowledgeSystem.Retrieval.Data;
-using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Api.Store;
+using KnowledgeSystem.Retrieval.Persistent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Retrieval;
+namespace KnowledgeSystem;
 
 /// <summary>
 ///     Extension methods for registering RAG services with the DI container.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    // TODO refactor
     public static IServiceCollection AddRagServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<RagOptions>()
@@ -44,7 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IReadOnlyDocumentStore>(sp => sp.GetRequiredService<RagEngine>());
         services.AddSingleton<IVectorSearchStore>(sp => sp.GetRequiredService<RagEngine>());
         services.AddSingleton<ILexicalSearchStore>(sp => sp.GetRequiredService<RagEngine>());
-        services.AddSingleton<IStoreManager, StoreManager>();
+        services.AddSingleton<StoreManager>();
         
         return services;
     }

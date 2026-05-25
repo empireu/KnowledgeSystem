@@ -3,7 +3,7 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 // ReSharper disable EntityFramework.ModelValidation.UnlimitedStringLength
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
-namespace KnowledgeSystem.Retrieval.Data;
+namespace KnowledgeSystem.Retrieval.Persistent;
 
 /// <summary>
 ///     Represents a single chunk tracked in the RAG database.

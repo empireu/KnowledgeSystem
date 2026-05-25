@@ -2,7 +2,7 @@
 
 using System.ComponentModel.DataAnnotations;
 
-namespace KnowledgeSystem.Retrieval.Engine;
+namespace KnowledgeSystem.Retrieval.Persistent;
 
 // TODO refactor
 

@@ -6,6 +6,7 @@ using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Retrieval.Api;
+using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent.Tools.FetchContext;

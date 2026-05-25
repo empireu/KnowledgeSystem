@@ -1,4 +1,6 @@
-namespace KnowledgeSystem.Retrieval.Data;
+using KnowledgeSystem.Retrieval.Api;
+
+namespace KnowledgeSystem.Retrieval.InMemory;
 
 public sealed class InMemoryIndexStateTracker : IIndexStateTracker
 {
@@ -75,10 +77,19 @@ public sealed class InMemoryIndexStateTracker : IIndexStateTracker
         }
     }
 
-    public IReadOnlyList<(string HashHex, int ChunkId, string DocumentPath)> GetAllChunkRecords()
+    public List<TrackedChunkRecord> ReadAllChunkRecords()
     {
         return _chunkRecordByChunkId
-            .Select(kv => (kv.Value.HashHex, kv.Key, kv.Value.DocumentPath))
+            .Select(kv => new TrackedChunkRecord(kv.Value.HashHex, kv.Key, kv.Value.DocumentPath))
+            .ToList();
+    }
+
+    // P.S. We expect a very small number of chunks for in-memory usage, but we could upgrade this to be indexed in the future.
+    public List<TrackedChunkRecord> ReadAllChunkRecords(string documentPath)
+    {
+        return _chunkRecordByChunkId
+            .Where(kv => kv.Value.DocumentPath == documentPath)
+            .Select(kv => new TrackedChunkRecord(kv.Value.HashHex, kv.Key, kv.Value.DocumentPath))
             .ToList();
     }
 

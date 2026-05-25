@@ -1,11 +1,9 @@
-namespace KnowledgeSystem.Retrieval.Api;
-
-// TODO increase these configs, they are incomplete
+﻿namespace KnowledgeSystem.Retrieval.Persistent;
 
 /// <summary>
 ///     Configuration for creating a disk-backed store.
 /// </summary>
-public sealed class DiskStoreConfiguration
+public sealed class DiskStoreConfig
 {
     /// <summary>
     ///     Unique ID for the store.
@@ -26,15 +24,4 @@ public sealed class DiskStoreConfiguration
     ///     Path to the HNSW index file.
     /// </summary>
     public required string HnswIndexPath { get; init; }
-}
-
-/// <summary>
-///     Configuration for creating an in-memory store.
-/// </summary>
-public sealed class InMemoryStoreConfiguration
-{
-    /// <summary>
-    ///     Unique ID for the store.
-    /// </summary>
-    public required string StoreId { get; init; }
 }
