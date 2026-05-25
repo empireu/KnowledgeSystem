@@ -17,8 +17,14 @@
 
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Lexical\KnowledgeSystem.Lexical.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Vector.Hnsw\KnowledgeSystem.Vector.Hnsw.csproj" />
       <ProjectReference Include="..\KnowledgeSystems.Extensions\KnowledgeSystems.Extensions.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Lexical\" />
+      <Folder Include="Reranking\" />
     </ItemGroup>
 
 </Project>

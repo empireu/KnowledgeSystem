@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<RagDbContext>(o => o.UseSqlite($"Data Source={options.DatabasePath}"));
 
+        // P.S. needs move
         services.AddSingleton<IEmbeddingService>(_ =>
             new OpenAiEmbeddingService(
                 options.EmbeddingEndpoint,

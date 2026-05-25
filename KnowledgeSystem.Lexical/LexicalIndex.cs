@@ -4,7 +4,7 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Retrieval.Lexical;
+namespace KnowledgeSystem.Lexical;
 
 /// <summary>
 ///     Inverted index for keyword search over chunks.

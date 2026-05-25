@@ -1,4 +1,4 @@
-﻿using KnowledgeSystem.Retrieval.Lexical;
+﻿using KnowledgeSystem.Lexical;
 
 namespace KnowledgeSystem.Tests;
 

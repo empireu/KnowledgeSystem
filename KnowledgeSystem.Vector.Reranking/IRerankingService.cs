@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Retrieval.Reranking;
+﻿namespace KnowledgeSystem.Vector.Reranking;
 
 /// <summary>
 ///     Abstraction over a result reranking service.

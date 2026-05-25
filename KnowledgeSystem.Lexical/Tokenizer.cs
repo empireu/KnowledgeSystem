@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Retrieval.Lexical;
+﻿namespace KnowledgeSystem.Lexical;
 
 public static class Tokenizer
 {

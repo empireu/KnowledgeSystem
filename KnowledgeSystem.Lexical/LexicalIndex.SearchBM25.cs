@@ -1,6 +1,6 @@
 ﻿// ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Retrieval.Lexical;
+namespace KnowledgeSystem.Lexical;
 
 public sealed partial class LexicalIndex
 {

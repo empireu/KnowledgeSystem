@@ -5,19 +5,17 @@ using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.MarkdownTree;
+using KnowledgeSystem.Lexical;
 using KnowledgeSystem.Retrieval;
-using KnowledgeSystem.Retrieval.Lexical;
 using KnowledgeSystem.Telemetry;
 using KnowledgeSystems.Extensions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Agent.Tools.FastContext;
 
 public sealed class FastContextToolHandler(
-    ILogger<FastContextToolHandler> logger,
     AgentTool tool,
     StringArgument queryArgument,
     IServiceProvider serviceProvider,
