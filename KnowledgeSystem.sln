@@ -18,6 +18,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Events", "K
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Vector", "KnowledgeSystem.Vector\KnowledgeSystem.Vector.csproj", "{F9CA74D3-CC07-465B-81C1-31786C40097F}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Vector", "Vector", "{2C273406-3A89-4CB7-BDA1-DE04898CAE76}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,5 +62,9 @@ Global
 		{F9CA74D3-CC07-465B-81C1-31786C40097F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F9CA74D3-CC07-465B-81C1-31786C40097F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F9CA74D3-CC07-465B-81C1-31786C40097F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
+		{F9CA74D3-CC07-465B-81C1-31786C40097F} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
 	EndGlobalSection
 EndGlobal
