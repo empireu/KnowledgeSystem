@@ -3,7 +3,7 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 
 namespace KnowledgeSystem.Retrieval.Api;
 
-public interface IReadOnlyDocumentStore
+public interface IReadOnlyDocumentStore : IAsyncDisposable
 {
     /// <summary>
     ///     Unique ID for this store.
@@ -37,16 +37,16 @@ public interface IReadOnlyDocumentStore
     ///     Tries to get a chunk by its unique ID.
     /// </summary>
     /// <returns>True if the chunk was found. Otherwise, false.</returns>
-    public bool TryGetChunk(int id, [NotNullWhen(true)] out EmdChunk? chunk);
+    public bool TryGetChunk(int chunkId, [NotNullWhen(true)] out EmdChunk? chunk);
 
     /// <summary>
     ///     Gets a chunk by its ID.
     /// </summary>
     /// <exception cref="KeyNotFoundException">Thrown if the chunk was not found.</exception>
-    public EmdChunk GetChunk(int id)
+    public EmdChunk GetChunk(int chunkId)
     {
-        return TryGetChunk(id, out var chunk)
+        return TryGetChunk(chunkId, out var chunk)
             ? chunk
-            : throw new KeyNotFoundException($"Chunk with ID {id} not found");
+            : throw new KeyNotFoundException($"Chunk with ID {chunkId} not found");
     }
 }

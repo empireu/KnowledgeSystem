@@ -4,6 +4,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace KnowledgeSystem.Retrieval.Engine;
 
+// TODO refactor
+
 /// <summary>
 ///     Configuration options for the RAG system, bound from IConfiguration.
 /// </summary>
@@ -13,6 +15,11 @@ public class RagOptions
 
     [Required]
     public string RepositoryPath { get; set; } = null!;
+
+    /// <summary>
+    ///     Unique ID for this store.
+    /// </summary>
+    public string StoreId { get; set; } = "wiki";
     
     [Required]
     public string DatabasePath { get; set; } = null!;

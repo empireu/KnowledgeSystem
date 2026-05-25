@@ -5,7 +5,7 @@ using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
-using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Api;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent.Tools.RepoFetch;
@@ -13,7 +13,7 @@ namespace KnowledgeSystem.Agent.Tools.RepoFetch;
 public sealed class RepoFetchToolHandler(
     AgentTool tool, 
     StringArgument referenceArgument,
-    RagEngine engine,
+    IReadOnlyDocumentStore store,
     RepoFetchToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
@@ -75,7 +75,7 @@ public sealed class RepoFetchToolHandler(
     private ToolExecutionResult RepoFetchFile(AgentContext context, EmdReferencePath refPath)
     {
         var fileRef = refPath.GetFile();
-        if (!engine.Repo.Documents.TryGetValue(fileRef, out var document))
+        if (!store.TryGetDocumentByPath(fileRef.RepositoryRelativePath, out var document))
         {
             return Error($"repo_fetch: document {fileRef.RepositoryRelativePath} not found!");
         }
@@ -99,7 +99,7 @@ public sealed class RepoFetchToolHandler(
     private ToolExecutionResult RepoFetchDefinition(AgentContext context, EmdReferencePath refPath)
     {
         var fileRef = refPath.GetFile();
-        if (!engine.Repo.Documents.TryGetValue(fileRef, out var document))
+        if (!store.TryGetDocumentByPath(fileRef.RepositoryRelativePath, out var document))
         {
             return Error($"repo_fetch: document {fileRef.RepositoryRelativePath} not found!");
         }
@@ -136,7 +136,7 @@ public sealed class RepoFetchToolHandler(
     private ToolExecutionResult RepoFetchOffsets(AgentContext context, EmdReferencePath refPath)
     {
         var fileRef = refPath.GetFile();
-        if (!engine.Repo.Documents.TryGetValue(fileRef, out var document))
+        if (!store.TryGetDocumentByPath(fileRef.RepositoryRelativePath, out var document))
         {
             return Error($"repo_fetch: document {fileRef.RepositoryRelativePath} not found!");
         }

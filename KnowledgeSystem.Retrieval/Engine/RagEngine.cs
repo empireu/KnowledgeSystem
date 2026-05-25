@@ -5,9 +5,10 @@ using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.Lexical;
 using KnowledgeSystem.Vector.Hnsw;
+using KnowledgeSystem.Retrieval.Api;
+using KnowledgeSystem.Retrieval.Api.Capabilities;
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Vector;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -19,31 +20,34 @@ namespace KnowledgeSystem.Retrieval.Engine;
 /// <summary>
 ///     The RAG engine handles embedding queries and retrieving extracts from the repo using the HNSW.
 /// </summary>
-public sealed class RagEngine
+public sealed class RagEngine : IReadOnlyDocumentStore, IVectorSearchStore, ILexicalSearchStore
 {
     private readonly ILogger<RagEngine> _logger;
-    private readonly RagDbContext _db;
+    private readonly IIndexStateTracker _stateTracker;
     private readonly IEmbeddingService _embeddingService;
     private readonly RagOptions _options;
     private readonly Chunker _chunker;
 
     private MutableHnswIndex? _hnsw;
+    private HnswVectorStoreAdapter? _vectorStoreAdapter;
     private EmdRepository? _repo;
 
     /// <summary>
-    ///     Maps HNSW vector index to the corresponding chunk.
+    ///     Maps chunk ID to the corresponding chunk.
     ///     Populated during <see cref="SynchronizeAsync"/>.
     /// </summary>
-    private readonly Dictionary<int, EmdChunk> _chunkByHnswId = new();
+    private readonly Dictionary<int, EmdChunk> _chunkById = new();
 
-    public RagEngine(ILogger<RagEngine> logger, RagDbContext db, IEmbeddingService embeddingService, IOptions<RagOptions> options)
+    public RagEngine(ILogger<RagEngine> logger, IIndexStateTracker stateTracker, IEmbeddingService embeddingService, IOptions<RagOptions> options)
     {
         _logger = logger;
-        _db = db;
+        _stateTracker = stateTracker;
         _embeddingService = embeddingService;
         _options = options.Value;
         _chunker = new Chunker(_options.MaxChunkLength);
     }
+
+    public string StoreId => _options.StoreId;
 
     /// <summary>
     ///     The loaded HNSW index. Available after calling <see cref="InitializeAsync"/>.
@@ -75,7 +79,7 @@ public sealed class RagEngine
     {
         _logger.LogInformation("Initializing RAG Engine");
         
-        await _db.Database.EnsureCreatedAsync(cancellationToken);
+        await _stateTracker.PrepareForUseAsync(cancellationToken);
         
         // We accept the synchronous call in here.
         if (File.Exists(_options.HnswIndexPath))
@@ -98,6 +102,8 @@ public sealed class RagEngine
         {
             throw new InvalidDataException("Stored HNSW doesn't match the configured embedding service");
         }
+
+        _vectorStoreAdapter = new HnswVectorStoreAdapter(_hnsw);
         
         await SynchronizeAsync(cancellationToken);
     }
@@ -122,9 +128,7 @@ public sealed class RagEngine
             .Select(k => k.RepositoryRelativePath)
             .ToHashSet();
         
-        var dbPaths = await _db.Documents
-            .Select(d => d.Path)
-            .ToHashSetAsync(cancellationToken);
+        var dbPaths = _stateTracker.GetKnownDocumentPaths();
 
         _logger.LogInformation("Repo paths: {repo}, DB paths: {db}", repoPaths.Count, dbPaths.Count);
         
@@ -154,53 +158,51 @@ public sealed class RagEngine
         if (changed)
         {
             _logger.LogInformation("Freezing DB. Vectors: {vec}", _hnsw?.Vectors.Sum(x => x == null ? 0 : 1));
-            await _db.SaveChangesAsync(cancellationToken);
+            await _stateTracker.SaveChangesAsync(cancellationToken);
             _hnsw?.Save(_options.HnswIndexPath);
         }
         
-        _chunkByHnswId.Clear();
+        _chunkById.Clear();
         
-        var allChunkRecords = await _db.Chunks.ToListAsync(cancellationToken);
+        var allChunkRecords = _stateTracker.GetAllChunkRecords();
         foreach (var record in allChunkRecords)
         {
             var fileKey = EmdReferencePath.CreateFile(record.DocumentPath);
         
             if (_repo.Documents.TryGetValue(fileKey, out var document) && document.ChunksByHexHash.TryGetValue(record.HashHex, out var chunk))
             {
-                _chunkByHnswId[record.HnswId] = chunk;
+                _chunkById[record.ChunkId] = chunk;
             }
         }
 
-        _logger.LogInformation("Building lexical index from {count} chunks", _chunkByHnswId.Count);
+        _logger.LogInformation("Building lexical index from {count} chunks", _chunkById.Count);
       
-        LexicalIndex.Build(_repo.Documents.Count, _chunkByHnswId);
+        LexicalIndex.Build(_repo.Documents.Count, _chunkById);
     }
     
-    private async Task RemoveDeletedFilesAsync(List<string> deletedPaths, CancellationToken cancellationToken)
+    private Task RemoveDeletedFilesAsync(List<string> deletedPaths, CancellationToken cancellationToken)
     {
         foreach (var path in deletedPaths)
         {
             _logger.LogInformation("Deleting {path}", path);
-            
-            var chunks = await _db.Chunks
-                .Where(c => c.DocumentPath == path)
-                .ToListAsync(cancellationToken);
 
-            foreach (var chunk in chunks)
+            var chunkHashes = _stateTracker.GetKnownChunkHashes(path);
+            foreach (var hashHex in chunkHashes)
             {
-                var vector = Hnsw.Vectors[chunk.HnswId];
-                if (vector != null)
+                if (_stateTracker.TryGetChunkIdByHash(hashHex, out var chunkId))
                 {
-                    Hnsw.Remove(vector);
+                    var vector = Hnsw.Vectors[chunkId];
+                    if (vector != null)
+                    {
+                        Hnsw.Remove(vector);
+                    }
                 }
             }
 
-            _db.Chunks.RemoveRange(chunks);
-            _db.Documents.Remove(new DocumentRecord
-            {
-                Path = path
-            });
+            _stateTracker.RemoveDocument(path);
         }
+        
+        return Task.CompletedTask;
     }
 
     private async Task AddNewFilesAsync(EmdRepository repo, List<string> newPaths, CancellationToken cancellationToken)
@@ -212,10 +214,7 @@ public sealed class RagEngine
             var key = EmdReferencePath.CreateFile(path);
             var document = repo.Documents[key];
 
-            _db.Documents.Add(new DocumentRecord
-            {
-                Path = path
-            });
+            _stateTracker.AddDocument(path);
             
             await EmbedAndAddChunksAsync(document, cancellationToken);
         }
@@ -235,10 +234,7 @@ public sealed class RagEngine
                 .Select(c => c.Hash.ToHexString())
                 .ToHashSet();
 
-            var dbHashes = await _db.Chunks
-                .Where(c => c.DocumentPath == path)
-                .Select(c => c.HashHex)
-                .ToHashSetAsync(cancellationToken);
+            var dbHashes = _stateTracker.GetKnownChunkHashes(path);
 
             // Removed chunks: in DB but not in repo
             var removedHashes = dbHashes.Except(repoHashes).ToList();
@@ -268,26 +264,24 @@ public sealed class RagEngine
         return changed;
     }
 
-    private async Task RemoveChunksAsync(List<string> removedHashes, CancellationToken cancellationToken)
+    private Task RemoveChunksAsync(List<string> removedHashes, CancellationToken cancellationToken)
     {
         foreach (var hashHex in removedHashes)
         {
-            var chunk = await _db.Chunks.FindAsync([hashHex], cancellationToken);
-            
-            if (chunk == null)
+            if (_stateTracker.TryGetChunkIdByHash(hashHex, out var chunkId))
             {
-                continue;
+                var vector = Hnsw.Vectors[chunkId];
+                
+                if (vector != null)
+                {
+                    Hnsw.Remove(vector);
+                }
             }
 
-            var vector = Hnsw.Vectors[chunk.HnswId];
-            
-            if (vector != null)
-            {
-                Hnsw.Remove(vector);
-            }
-
-            _db.Chunks.Remove(chunk);
+            _stateTracker.RemoveChunk(hashHex);
         }
+        
+        return Task.CompletedTask;
     }
 
     private async Task EmbedAndAddChunksAsync(EmdDocument document, CancellationToken cancellationToken)
@@ -322,7 +316,7 @@ public sealed class RagEngine
             FullMode = BoundedChannelFullMode.Wait
         });
         
-        var dbChunkRecords = new ConcurrentBag<ChunkRecord>();
+        var dbChunkRecords = new ConcurrentBag<(string HashHex, int ChunkId, string DocumentPath)>();
 
         var producerTask = ProduceEmbeddingsTransfers(chunks, channel.Writer, cancellationToken);
        
@@ -336,7 +330,7 @@ public sealed class RagEngine
 
         foreach (var record in dbChunkRecords)
         {
-            _db.Chunks.Add(record);
+            _stateTracker.AddChunk(record.HashHex, record.ChunkId, record.DocumentPath);
         }
     }
 
@@ -383,7 +377,7 @@ public sealed class RagEngine
         }
     }
 
-    private async Task ConsumeEmbeddingTransfers(ChannelReader<EmbeddingTransfer> reader, ConcurrentBag<ChunkRecord> databaseRecords, string documentPath, CancellationToken cancellationToken)
+    private async Task ConsumeEmbeddingTransfers(ChannelReader<EmbeddingTransfer> reader, ConcurrentBag<(string HashHex, int ChunkId, string DocumentPath)> databaseRecords, string documentPath, CancellationToken cancellationToken)
     {
         while (await reader.WaitToReadAsync(cancellationToken))
         {
@@ -392,12 +386,11 @@ public sealed class RagEngine
                 var vector = transfer.Embedding.ToArray();
                 var storedVector = Hnsw.Insert(vector);
 
-                databaseRecords.Add(new ChunkRecord
-                {
-                    HashHex = transfer.Chunk.Hash.ToHexString(),
-                    HnswId = storedVector.Index,
-                    DocumentPath = documentPath
-                });
+                databaseRecords.Add((
+                    transfer.Chunk.Hash.ToHexString(),
+                    storedVector.Index,
+                    documentPath
+                ));
             }   
         }
     }
@@ -430,38 +423,64 @@ public sealed class RagEngine
     
     #region API
     
-    public bool TryGetChunkByHnswId(int hnswId, [NotNullWhen(true)] out EmdChunk? chunk)
+    public IReadOnlySet<EmdDocument> ListDocuments()
     {
-        return _chunkByHnswId.TryGetValue(hnswId, out chunk);
+        return Repo.Documents.Values.ToHashSet();
+    }
+
+    public bool TryGetDocumentByPath(string path, [NotNullWhen(true)] out EmdDocument? document)
+    {
+        var fileKey = EmdReferencePath.CreateFile(path);
+        return Repo.Documents.TryGetValue(fileKey, out document);
+    }
+
+    public bool TryGetChunk(int chunkId, [NotNullWhen(true)] out EmdChunk? chunk)
+    {
+        return _chunkById.TryGetValue(chunkId, out chunk);
     }
     
-    public EmdChunk GetChunkByHnswId(int hnswId)
+    public EmdChunk GetChunk(int chunkId)
     {
-        return _chunkByHnswId.TryGetValue(hnswId, out var chunk)
+        return _chunkById.TryGetValue(chunkId, out var chunk)
             ? chunk 
-            : throw new KeyNotFoundException($"No chunk found for HNSW id {hnswId}");
+            : throw new KeyNotFoundException($"No chunk found for chunk ID {chunkId}");
     }
 
     /// <summary>
-    ///     Searches for the <paramref name="k"/> chunks most similar to the query text.
+    ///     Gets a chunk by its chunk ID. Alias for <see cref="GetChunk"/>.
     /// </summary>
-    public async Task<VectorSearchResult[]> SearchAsync(string query, int k, int efSearch = 200, Predicate<int>? predicate = null, CancellationToken cancellationToken = default)
+    public EmdChunk GetChunkByHnswId(int chunkId) => GetChunk(chunkId);
+
+    public IEmbeddingService EmbeddingService => _embeddingService;
+
+    IReadOnlyVectorStore IVectorSearchStore.VectorStore => _vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
+
+    public async Task<VectorSearchResult[]> SearchAsync(string query, int k, CancellationToken cancellationToken = default)
     {
         var queryVector = await _embeddingService.EmbedAsync(query, cancellationToken);
-        return Hnsw.Search(queryVector.Span, k, efSearch, predicate);
+        var vectorStore = _vectorStoreAdapter ??  throw new InvalidOperationException("RAG engine not initialized");
+        return vectorStore.Search(queryVector.Span, k);
     }
     
-    /// <summary>
-    ///     Searches for the <paramref name="k"/> chunks most similar to the query text batch.
-    /// </summary>
-    public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, int efSearch = 200, Predicate<int>? predicate = null, CancellationToken cancellationToken = default)
+    public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, CancellationToken cancellationToken = default)
     {
         var queryVectors = await _embeddingService.EmbedBatchAsync(queries, cancellationToken);
-       
-        // Synchronous, compute-heavy in this async?
-        // We may want to fix that at some point.
-        return queryVectors.Select(x => Hnsw.Search(x.Span, k, efSearch, predicate)).ToArray();
+        var vectorStore = _vectorStoreAdapter ??  throw new InvalidOperationException("RAG engine not initialized");
+        return queryVectors.Select(x => vectorStore.Search(x.Span, k)).ToArray();
     }
+
+    public int GetChunkFrequency(string term) => LexicalIndex.GetChunkFrequency(term);
+
+    public IReadOnlyDictionary<string, int> GetChunkTokenSet(int chunkId) => LexicalIndex.GetChunkTokenSet(chunkId);
+
+    public Bm25Result[] SearchBm25(string query) => LexicalIndex.SearchBm25(query);
     
     #endregion
+
+    public ValueTask DisposeAsync()
+    {
+        // EMpty
+
+        return ValueTask.CompletedTask;
+    }
 }

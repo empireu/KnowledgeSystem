@@ -1,4 +1,6 @@
 using KnowledgeSystem.Embedding;
+using KnowledgeSystem.Retrieval.Api;
+using KnowledgeSystem.Retrieval.Api.Capabilities;
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Retrieval.Engine;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +25,9 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<RagDbContext>(o => o.UseSqlite($"Data Source={options.DatabasePath}"));
 
+        // Register the SQLite-backed index state tracker:
+        services.AddSingleton<IIndexStateTracker, SqliteIndexStateTracker>();
+
         // P.S. needs move
         services.AddSingleton<IEmbeddingService>(_ =>
             new OpenAiEmbeddingService(
@@ -34,6 +39,12 @@ public static class ServiceCollectionExtensions
             ));
         
         services.AddSingleton<RagEngine>();
+        
+        // TODO Move to manager
+        services.AddSingleton<IReadOnlyDocumentStore>(sp => sp.GetRequiredService<RagEngine>());
+        services.AddSingleton<IVectorSearchStore>(sp => sp.GetRequiredService<RagEngine>());
+        services.AddSingleton<ILexicalSearchStore>(sp => sp.GetRequiredService<RagEngine>());
+        services.AddSingleton<IStoreManager, StoreManager>();
         
         return services;
     }

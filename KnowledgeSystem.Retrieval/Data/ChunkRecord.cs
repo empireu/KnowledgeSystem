@@ -18,9 +18,9 @@ public class ChunkRecord
     public string HashHex { get; set; } = null!;
 
     /// <summary>
-    ///     The integer ID of this chunk's vector in the HNSW index.
+    ///     The integer ID of this chunk, unique within the store.
     /// </summary>
-    public int HnswId { get; set; }
+    public int ChunkId { get; set; }
 
     /// <summary>
     ///     The repository-relative path of the document containing this chunk.

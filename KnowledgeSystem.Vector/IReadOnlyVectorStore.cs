@@ -13,7 +13,7 @@ public interface IReadOnlyVectorStore
     public IStoredVector GetVector(int index);
     
     /// <summary>
-    ///     Searches for the approximate <see cref="k"/> vectrs most similar to <see cref="query"/>.
+    ///     Searches for the approximate <see cref="k"/> vectors most similar to <see cref="query"/>.
     /// </summary>
     /// <param name="query">A vector matching the <see cref="Dimension"/>.</param>
     /// <param name="k">The maximum number of vectors to explore.</param>

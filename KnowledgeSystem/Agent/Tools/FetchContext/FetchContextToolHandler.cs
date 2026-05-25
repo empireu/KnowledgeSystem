@@ -5,7 +5,7 @@ using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
-using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Api;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent.Tools.FetchContext;
@@ -13,7 +13,7 @@ namespace KnowledgeSystem.Agent.Tools.FetchContext;
 public sealed class FetchContextToolHandler(
     AgentTool tool,
     ArrayArgument referencesArgument,
-    RagEngine engine,
+    IReadOnlyDocumentStore store,
     FetchContextToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
@@ -54,7 +54,7 @@ public sealed class FetchContextToolHandler(
             parsedRefs.Add((refPath, raw));
         }
 
-        var repo = engine.Repo;
+        var repo = store;
         var totalChars = 0;
         var sb = new StringBuilder();
         var fetchedDocumentData = new List<(EmdDocument Document, List<(int Start, int End)> Ranges, string Content)>();
@@ -75,7 +75,7 @@ public sealed class FetchContextToolHandler(
 
             var fileKey = group.Key;
 
-            if (!repo.Documents.TryGetValue(fileKey, out var document))
+            if (!store.TryGetDocumentByPath(fileKey.RepositoryRelativePath, out var document))
             {
                 sb.AppendLine($"fetch_context: Document '{fileKey.RepositoryRelativePath}' not found.");
                 sb.AppendLine();

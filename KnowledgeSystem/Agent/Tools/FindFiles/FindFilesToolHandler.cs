@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
-using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Api;
 using Microsoft.Extensions.DependencyInjection;
 
 // ReSharper disable ForeachCanBeConvertedToQueryUsingAnotherGetEnumerator
@@ -13,7 +13,7 @@ namespace KnowledgeSystem.Agent.Tools.FindFiles;
 public sealed class FindFilesToolHandler(
     AgentTool tool,
     StringArgument patternArgument,
-    RagEngine engine,
+    IReadOnlyDocumentStore store,
     FindFilesToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
@@ -47,14 +47,14 @@ public sealed class FindFilesToolHandler(
             return Task.FromResult(Error($"find_files: Invalid regex pattern: {ex.Message}"));
         }
 
-        var repo = engine.Repo;
+        var documents = store.ListDocuments();
         var results = new List<string>();
 
         try
         {
-            foreach (var key in repo.Documents.Keys)
+            foreach (var document in documents)
             {
-                var documentPath = key.RepositoryRelativePath;
+                var documentPath = document.Path;
 
                 if (regex.IsMatch(documentPath))
                 {

@@ -2,7 +2,7 @@ using System.Text;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
-using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Api;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent.Tools.ListDir;
@@ -10,7 +10,7 @@ namespace KnowledgeSystem.Agent.Tools.ListDir;
 public sealed class ListDirToolHandler(
     AgentTool tool,
     StringArgument pathArgument,
-    RagEngine engine,
+    IReadOnlyDocumentStore store,
     ListDirToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
@@ -31,13 +31,13 @@ public sealed class ListDirToolHandler(
         var path = pathArgument.GetValue(args).Trim('/');
         var prefix = string.IsNullOrEmpty(path) ? "" : path + "/";
 
-        var repo = engine.Repo;
+        var documents = store.ListDocuments();
         var files = new HashSet<string>();
         var dirs = new HashSet<string>();
 
-        foreach (var key in repo.Documents.Keys)
+        foreach (var document in documents)
         {
-            var docPath = key.RepositoryRelativePath;
+            var docPath = document.Path;
             if (!docPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
                 continue;

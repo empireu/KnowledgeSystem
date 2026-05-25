@@ -38,22 +38,22 @@ public sealed partial class LexicalIndex
                 var tfNorm = posting.TermFrequency * (K1 + 1.0f) / (posting.TermFrequency + K1 * (1.0f - B + B * posting.DocumentLength / _averageChunkLengthTokens));
                 var score = idf * tfNorm * frequency;
                 
-                if (!scores.TryGetValue(posting.HnswId, out var existingScore))
+                if (!scores.TryGetValue(posting.ChunkId, out var existingScore))
                 {
-                    scores[posting.HnswId] = score;
+                    scores[posting.ChunkId] = score;
                 }
                 else
                 {
-                    scores[posting.HnswId] = existingScore + score;
+                    scores[posting.ChunkId] = existingScore + score;
                 }
             }
         }
 
         var results = new Bm25Result[scores.Count];
         var index = 0;
-        foreach (var (hnswId, score) in scores)
+        foreach (var (chunkId, score) in scores)
         {
-            results[index++] = new Bm25Result(hnswId, score);
+            results[index++] = new Bm25Result(chunkId, score);
         }
 
         // Sort descending by score, like the other algorithms:

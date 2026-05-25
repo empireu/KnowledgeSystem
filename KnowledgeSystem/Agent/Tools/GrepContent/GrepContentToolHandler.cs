@@ -5,7 +5,7 @@ using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
-using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Api.Capabilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Agent.Tools.GrepContent;
@@ -14,7 +14,7 @@ public sealed class GrepContentToolHandler(
     AgentTool tool,
     StringArgument queryArgument,
     StringArgument pathFilterArgument,
-    RagEngine engine,
+    ILexicalSearchStore store,
     GrepContentToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
@@ -54,7 +54,7 @@ public sealed class GrepContentToolHandler(
             }
         }
 
-        var bm25Results = engine.LexicalIndex.SearchBm25(query);
+        var bm25Results = store.SearchBm25(query);
 
         if (bm25Results.Length == 0)
         {
@@ -68,7 +68,7 @@ public sealed class GrepContentToolHandler(
         {
             foreach (var bm25Result in bm25Results)
             {
-                if (!engine.TryGetChunkByHnswId(bm25Result.HnswId, out var chunk))
+                if (!store.TryGetChunk(bm25Result.ChunkId, out var chunk))
                 {
                     continue;
                 }

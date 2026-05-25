@@ -35,7 +35,7 @@ public class RagDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(c => c.DocumentPath);
-            entity.HasIndex(c => c.HnswId);
+            entity.HasIndex(c => c.ChunkId);
         });
     }
 }

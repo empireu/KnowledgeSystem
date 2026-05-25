@@ -5,7 +5,7 @@ using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Lexical;
-using KnowledgeSystem.Retrieval.Engine;
+using KnowledgeSystem.Retrieval.Api.Capabilities;
 using KnowledgeSystem.Retrieval.Telemetry;
 using KnowledgeSystem.Vector;
 using KnowledgeSystem.Vector.Hnsw;
@@ -19,13 +19,16 @@ namespace KnowledgeSystem.Agent.Tools.FastContext;
 
 public sealed class FastContextRetrievalPipeline
 {
-    private readonly IEmbeddingService _embeddingService;
-    private readonly RagEngine _engine;
+    private readonly IVectorSearchStore _vectorStore;
+    private readonly ILexicalSearchStore _lexicalStore;
     private readonly string _query;
     private readonly int _bootstrapCount;
     private readonly float _parameter;
     private readonly int _bm25Count;
     private readonly int _maxResults;
+
+    // TODO refactor
+    private readonly MutableHnswIndex _hnsw;
 
     private float[] _embedding = [];
     private bool _preparedForRun;
@@ -38,15 +41,18 @@ public sealed class FastContextRetrievalPipeline
     /// </summary>
     public readonly Dictionary<EmdDocument, ReferencedDocument> ReferencedDocuments = [];
     
-    public FastContextRetrievalPipeline(IEmbeddingService embeddingService, RagEngine engine, Description description)
+    public FastContextRetrievalPipeline(IVectorSearchStore vectorStore, ILexicalSearchStore lexicalStore, Description description)
     {
-        _embeddingService = embeddingService;
-        _engine = engine;
+        _vectorStore = vectorStore;
+        _lexicalStore = lexicalStore;
         _query = description.Query;
         _bootstrapCount = description.BootstrapCount;
         _parameter = description.Parameter;
         _bm25Count = description.Bm25Results;
         _maxResults = description.MaxResults;
+
+        // Cache the HNSW index for instrumented search if available
+        _hnsw = (vectorStore.VectorStore as HnswVectorStoreAdapter)?.Index;
     }
 
     /// <summary>
@@ -63,7 +69,7 @@ public sealed class FastContextRetrievalPipeline
 
         using var activity = RagTelemetry.Rag.StartInternalActivity("Embed");
         
-        var results = await _embeddingService.EmbedAsync(_query, cancellationToken);
+        var results = await _vectorStore.EmbeddingService.EmbedAsync(_query, cancellationToken);
 
         _embedding = results.ToArray();
         _preparedForRun = true;
@@ -80,7 +86,7 @@ public sealed class FastContextRetrievalPipeline
     {
         using var activity = RagTelemetry.Rag.StartInternalActivity("BM25");
         
-        var bm25Results = _engine.LexicalIndex.SearchBm25(_query);
+        var bm25Results = _lexicalStore.SearchBm25(_query);
         var passedCount = 0;
 
         for (var index = 0; index < bm25Results.Length && passedCount < _bm25Count; index++)
@@ -88,7 +94,7 @@ public sealed class FastContextRetrievalPipeline
             var bm25Result = bm25Results[index];
             ++passedCount;
                 
-            var chunk = _engine.GetChunkByHnswId(bm25Result.HnswId);
+            var chunk = _vectorStore.GetChunk(bm25Result.ChunkId);
             
             if (!ReferencedDocuments.TryGetValue(chunk.Node.Document, out var referencedDocument))
             {
@@ -96,10 +102,10 @@ public sealed class FastContextRetrievalPipeline
                 ReferencedDocuments.Add(chunk.Node.Document, referencedDocument);
             }
 
-            referencedDocument.References.Add(bm25Result.HnswId, new ReferencedDocument.Reference
+            referencedDocument.References.Add(bm25Result.ChunkId, new ReferencedDocument.Reference
             {
                 Chunk = chunk,
-                HnswId = bm25Result.HnswId,
+                ChunkId = bm25Result.ChunkId,
                 HasBm25 = true,
                 Bm25Score = bm25Result.Score
             });
@@ -130,7 +136,7 @@ public sealed class FastContextRetrievalPipeline
             const int efSearch = 1000;
             var instrumentation = new MutableHnswIndex.SearchInstrumentation();
             
-            vectorResults = _engine.Hnsw.Search(
+            vectorResults = _hnsw!.Search(
                 (ReadOnlySpan<float>)_embedding, 
                 _maxResults, 
                 efSearch,
@@ -159,7 +165,7 @@ public sealed class FastContextRetrievalPipeline
         for (var resultIndex = 0; resultIndex < vectorResults.Length; resultIndex++)
         {
             var vectorSearchResult = vectorResults[resultIndex];
-            var vector = _engine.Hnsw.Vectors[vectorSearchResult.Index]!.VectorView;
+            var vector = _vectorStore.VectorStore.GetVector(vectorSearchResult.Index).VectorView;
             var coherence = VectorObjective.AdjustedCosineSimilarity(vector, _centroid);
 
             if (coherence > _coherenceThreshold)
@@ -168,7 +174,7 @@ public sealed class FastContextRetrievalPipeline
             }
 
             accepted++;
-            var chunk = _engine.GetChunkByHnswId(vectorSearchResult.Index);
+            var chunk = _vectorStore.GetChunk(vectorSearchResult.Index);
 
             if (!ReferencedDocuments.TryGetValue(chunk.Node.Document, out var referencedDocument))
             {
@@ -188,7 +194,7 @@ public sealed class FastContextRetrievalPipeline
                 referencedDocument.References.Add(vectorSearchResult.Index, new ReferencedDocument.Reference
                 {
                     Chunk = chunk,
-                    HnswId = vectorSearchResult.Index,
+                    ChunkId = vectorSearchResult.Index,
                     HasVectorResult = true,
                     VectorScore = vectorSearchResult.Score
                 });
@@ -249,13 +255,13 @@ public sealed class FastContextRetrievalPipeline
         var vectorRanks = new Dictionary<int, int>(vectorRefs.Count);
         for (var i = 0; i < vectorRefs.Count; i++)
         {
-            vectorRanks[vectorRefs[i].HnswId] = i + 1;
+            vectorRanks[vectorRefs[i].ChunkId] = i + 1;
         }
 
         var bm25Ranks = new Dictionary<int, int>(bm25Refs.Count);
         for (var i = 0; i < bm25Refs.Count; i++)
         {
-            bm25Ranks[bm25Refs[i].HnswId] = i + 1;
+            bm25Ranks[bm25Refs[i].ChunkId] = i + 1;
         }
 
         // Compute RRF:
@@ -308,13 +314,13 @@ public sealed class FastContextRetrievalPipeline
             return [];
         }
 
-        // Collect all referenced HNSW IDs and their tokens:
-        var referencedChunks = new List<(int HnswId, Dictionary<string, int> Tokens)>();
+        // Collect all referenced chunk IDs and their tokens:
+        var referencedChunks = new List<(int ChunkId, IReadOnlyDictionary<string, int> Tokens)>();
         foreach (var document in ReferencedDocuments.Values)
         {
-            foreach (var hnswId in document.References.Keys)
+            foreach (var chunkId in document.References.Keys)
             {
-                referencedChunks.Add((hnswId, _engine.LexicalIndex.GetChunkTokenSet(hnswId)));
+                referencedChunks.Add((chunkId, _lexicalStore.GetChunkTokenSet(chunkId)));
             }
         }
 
@@ -331,7 +337,7 @@ public sealed class FastContextRetrievalPipeline
                 }
             }
             
-            var inCorpus = _engine.LexicalIndex.GetChunkFrequency(token);
+            var inCorpus = _lexicalStore.GetChunkFrequency(token);
             tokenCounts.Add((token, inResults, inCorpus));
         }
 
@@ -404,11 +410,11 @@ public sealed class FastContextRetrievalPipeline
     /// </summary>
     private void Bootstrap(ReadOnlySpan<VectorSearchResult> results)
     {
-        var dimension = _engine.Hnsw.Dimension;
+        var dimension = _vectorStore.VectorStore.Dimension;
         var centroid = new float[dimension];
         var weightSum = 0.0f;
 
-        var vectors = _engine.Hnsw.Vectors;
+        var vectorStore = _vectorStore.VectorStore;
 
         for (var resultIndex = 0; resultIndex < results.Length; resultIndex++)
         {
@@ -417,7 +423,7 @@ public sealed class FastContextRetrievalPipeline
 
             weightSum += weight;
             
-            var vector = vectors[result.Index]!.VectorView;
+            var vector = vectorStore.GetVector(result.Index).VectorView;
             for (var i = 0; i < dimension; i++)
             {
                 centroid[i] += vector[i] * weight;
@@ -440,7 +446,7 @@ public sealed class FastContextRetrievalPipeline
         var coherenceScores = new float[results.Length];
         for (var resultIndex = 0; resultIndex < results.Length; resultIndex++)
         {
-            var vector = vectors[results[resultIndex].Index]!.VectorView;
+            var vector = vectorStore.GetVector(results[resultIndex].Index).VectorView;
             coherenceScores[resultIndex] = VectorObjective.AdjustedCosineSimilarity(vector, centroid);
         }
         
@@ -629,9 +635,9 @@ public sealed class FastContextRetrievalPipeline
             public required EmdChunk Chunk { get; init; }
 
             /// <summary>
-            ///     The HNSW index for this chunk.
+            ///     The chunk ID for this chunk.
             /// </summary>
-            public required int HnswId { get; init; }
+            public required int ChunkId { get; init; }
 
             /// <summary>
             ///     The adjusted cosine similarity.

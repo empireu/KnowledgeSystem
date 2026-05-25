@@ -20,11 +20,11 @@ public sealed partial class LexicalIndex
     private float _averageChunkLengthTokens;
 
     // Pre-tokenized raw chunk text.
-    private readonly Dictionary<int, Dictionary<string, int>> _chunkTokensByHnswId = [];
+    private readonly Dictionary<int, Dictionary<string, int>> _chunkTokensByChunkId = [];
 
-    private readonly struct ChunkEntry(int hnswId, int termFrequency, int documentLength)
+    private readonly struct ChunkEntry(int chunkId, int termFrequency, int documentLength)
     {
-        public readonly int HnswId = hnswId;
+        public readonly int ChunkId = chunkId;
         public readonly int TermFrequency = termFrequency;
         public readonly int DocumentLength = documentLength;
     }
@@ -39,23 +39,23 @@ public sealed partial class LexicalIndex
     /// <summary>
     ///     Builds the inverted index from the given chunks.
     /// </summary>
-    public void Build(int documentCount, IReadOnlyDictionary<int, EmdChunk> chunksByHnswId)
+    public void Build(int documentCount, IReadOnlyDictionary<int, EmdChunk> chunksByChunkId)
     {
         _invertedIndexForChunks.Clear();
         _globalDocumentFrequencies.Clear();
-        _chunkTokensByHnswId.Clear();
+        _chunkTokensByChunkId.Clear();
 
         TotalDocumentCount = documentCount;
-        TotalChunkCount = chunksByHnswId.Count;
+        TotalChunkCount = chunksByChunkId.Count;
         
         var totalDocumentLengthTokens = 0;
         var parentDocuments = new Dictionary<string, HashSet<EmdDocument>>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (hnswId, chunk) in chunksByHnswId)
+        foreach (var (chunkId, chunk) in chunksByChunkId)
         {
             var frequencies = Tokenizer.TokenizeWithFrequency(chunk.RawContent, false);
             
-            _chunkTokensByHnswId.Add(hnswId, frequencies);
+            _chunkTokensByChunkId.Add(chunkId, frequencies);
             
             var chunkLength = 0;
             foreach (var frequency in frequencies.Values)
@@ -74,7 +74,7 @@ public sealed partial class LexicalIndex
                     _invertedIndexForChunks.Add(term, postings);
                 }
 
-                postings.Add(new ChunkEntry(hnswId, frequency, chunkLength));
+                postings.Add(new ChunkEntry(chunkId, frequency, chunkLength));
                 
                 // Global document frequency:
                 if (!parentDocuments.TryGetValue(term, out var documentSet))
@@ -107,5 +107,5 @@ public sealed partial class LexicalIndex
     /// <summary>
     ///     Returns the tokens for the given chunk.
     /// </summary>
-    public Dictionary<string, int> GetChunkTokenSet(int hnswId) => _chunkTokensByHnswId[hnswId];
+    public Dictionary<string, int> GetChunkTokenSet(int chunkId) => _chunkTokensByChunkId[chunkId];
 }

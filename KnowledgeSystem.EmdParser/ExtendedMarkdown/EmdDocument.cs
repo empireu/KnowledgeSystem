@@ -8,11 +8,6 @@ namespace KnowledgeSystem.EmdParser.ExtendedMarkdown;
 public sealed class EmdDocument
 {
     /// <summary>
-    ///     The repository that owns the document.
-    /// </summary>
-    public readonly EmdRepository Repository;
-    
-    /// <summary>
     ///     The path to the file.
     /// </summary>
     public readonly string Path;
@@ -48,7 +43,6 @@ public sealed class EmdDocument
     public readonly Dictionary<string, EmdChunk> ChunksByHexHash = new();
 
     private EmdDocument(
-        EmdRepository repository,
         string path,
         string content,
         EmdNode rootNode,
@@ -56,7 +50,6 @@ public sealed class EmdDocument
         Dictionary<EmdReferencePath, EmdNode> nodesWithDefinition
         )
     {
-        Repository = repository;
         Path = path;
         Content = content;
         RootNode = rootNode;
@@ -87,9 +80,7 @@ public sealed class EmdDocument
         InitializeTreeAndParseTags(root, data);
         ParseRefs(data);
 
-        var document = new EmdDocument(
-            repository,
-            path, content,
+        var document = new EmdDocument(path, content,
             data.Attachments[root],
             data.Attachments, 
             data.Refs
