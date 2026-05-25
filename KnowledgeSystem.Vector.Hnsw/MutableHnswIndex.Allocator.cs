@@ -1,6 +1,6 @@
 ﻿// ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Hnsw;
+namespace KnowledgeSystem.Vector.Hnsw;
 
 public sealed partial class MutableHnswIndex
 {

@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
-using KnowledgeSystem.Hnsw;
+using KnowledgeSystem.Vector.Hnsw;
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Lexical;

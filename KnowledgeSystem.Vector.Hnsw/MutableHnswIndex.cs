@@ -5,7 +5,7 @@
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.ObjectPool;
 
-namespace KnowledgeSystem.Hnsw;
+namespace KnowledgeSystem.Vector.Hnsw;
 
 public sealed partial class MutableHnswIndex
 {

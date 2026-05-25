@@ -1,7 +1,7 @@
 ﻿using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
 
-namespace KnowledgeSystem.Hnsw;
+namespace KnowledgeSystem.Vector.Hnsw;
 
 public static class VectorObjective
 {

@@ -21,7 +21,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
-      <ProjectReference Include="..\KnowledgeSystem.Hnsw\KnowledgeSystem.Hnsw.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Vector.Hnsw\KnowledgeSystem.Vector.Hnsw.csproj" />
       <ProjectReference Include="..\KnowledgeSystem\KnowledgeSystem.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />

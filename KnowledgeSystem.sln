@@ -6,7 +6,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Tests", "Kn
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.EmdParser", "KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj", "{736172DE-1841-4A2D-ACEA-C6CB3EBFDFFF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Hnsw", "KnowledgeSystem.Hnsw\KnowledgeSystem.Hnsw.csproj", "{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Vector.Hnsw", "KnowledgeSystem.Vector.Hnsw\KnowledgeSystem.Vector.Hnsw.csproj", "{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Retrieval", "KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj", "{574786EA-13DE-427E-ACEE-87E5C29EE4DD}"
 EndProject

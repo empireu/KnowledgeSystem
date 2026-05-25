@@ -3,7 +3,7 @@ using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
-using KnowledgeSystem.Hnsw;
+using KnowledgeSystem.Vector.Hnsw;
 using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Engine;
 using KnowledgeSystem.Retrieval.Lexical;

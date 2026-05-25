@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
-using KnowledgeSystem.Hnsw;
+using KnowledgeSystem.Vector.Hnsw;
 using Xunit.Abstractions;
-using MutableHnswIndex = KnowledgeSystem.Hnsw.MutableHnswIndex;
+using MutableHnswIndex = KnowledgeSystem.Vector.Hnsw.MutableHnswIndex;
 
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
