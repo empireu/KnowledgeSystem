@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Vector.Hnsw;
+﻿namespace KnowledgeSystem.Vector;
 
 /// <summary>
 ///     Result for the vector query.

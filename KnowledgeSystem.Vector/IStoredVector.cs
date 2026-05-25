@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Vector.Hnsw;
+﻿namespace KnowledgeSystem.Vector;
 
 public interface IStoredVector
 {

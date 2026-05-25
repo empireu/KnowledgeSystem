@@ -8,6 +8,7 @@ using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Engine;
 using KnowledgeSystem.Retrieval.Lexical;
 using KnowledgeSystem.Retrieval.Telemetry;
+using KnowledgeSystem.Vector;
 using KnowledgeSystems.Extensions;
 
 // ReSharper disable ForeachCanBeConvertedToQueryUsingAnotherGetEnumerator

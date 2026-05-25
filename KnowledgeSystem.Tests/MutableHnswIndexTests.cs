@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using KnowledgeSystem.Vector;
 using KnowledgeSystem.Vector.Hnsw;
 using Xunit.Abstractions;
 using MutableHnswIndex = KnowledgeSystem.Vector.Hnsw.MutableHnswIndex;

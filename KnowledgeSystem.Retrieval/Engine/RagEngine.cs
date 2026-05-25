@@ -6,6 +6,7 @@ using KnowledgeSystem.Vector.Hnsw;
 using KnowledgeSystem.Retrieval.Data;
 using KnowledgeSystem.Retrieval.Embeddings;
 using KnowledgeSystem.Retrieval.Lexical;
+using KnowledgeSystem.Vector;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

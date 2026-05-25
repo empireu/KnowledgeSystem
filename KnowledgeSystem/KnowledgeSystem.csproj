@@ -27,7 +27,7 @@
       <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
       <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1-dev-02346" />
       <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
-      <PackageReference Include="System.Numerics.Tensors" Version="11.0.0-preview.3.26207.106" />
+      <PackageReference Include="System.Numerics.Tensors" Version="11.0.0-preview.4.26230.115" />
     </ItemGroup>
 
     <ItemGroup>
