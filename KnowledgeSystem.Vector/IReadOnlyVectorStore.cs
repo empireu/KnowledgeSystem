@@ -6,6 +6,11 @@ public interface IReadOnlyVectorStore
     ///     Gets the dimension of the vector space.
     /// </summary>
     public int Dimension { get; }
+
+    /// <summary>
+    ///     Gets the vector by index.
+    /// </summary>
+    public IStoredVector GetVector(int index);
     
     /// <summary>
     ///     Searches for the approximate <see cref="k"/> vectrs most similar to <see cref="query"/>.
