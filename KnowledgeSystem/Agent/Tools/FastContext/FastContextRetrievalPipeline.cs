@@ -8,7 +8,6 @@ using KnowledgeSystem.Lexical;
 using KnowledgeSystem.Retrieval.Api.Store;
 using KnowledgeSystem.Retrieval.Telemetry;
 using KnowledgeSystem.Vector;
-using KnowledgeSystem.Vector.Hnsw;
 using KnowledgeSystems.Extensions;
 
 // ReSharper disable ForeachCanBeConvertedToQueryUsingAnotherGetEnumerator
@@ -27,9 +26,6 @@ public sealed class FastContextRetrievalPipeline
     private readonly float _parameter;
     private readonly int _bm25Count;
     private readonly int _maxResults;
-
-    // TODO refactor
-    private readonly MutableHnswIndex _hnsw;
 
     private float[] _embedding = [];
     private bool _preparedForRun;
@@ -52,9 +48,6 @@ public sealed class FastContextRetrievalPipeline
         _parameter = description.Parameter;
         _bm25Count = description.Bm25Results;
         _maxResults = description.MaxResults;
-
-        // Cache the HNSW index for instrumented search if available
-        _hnsw = (vectorStore.VectorStore as HnswVectorStoreAdapter)?.Index;
     }
 
     /// <summary>
@@ -135,21 +128,9 @@ public sealed class FastContextRetrievalPipeline
         VectorSearchResult[] vectorResults;
         using (var vectorSearchActivity = RetrievalTelemetry.Retrieval.StartInternalActivity("VectorSearch"))
         {
-            const int efSearch = 1000;
-            var instrumentation = new MutableHnswIndex.SearchInstrumentation();
+            vectorResults = _vectorCapability.VectorStore.Search(_embedding, _maxResults);
             
-            vectorResults = _hnsw!.Search(
-                (ReadOnlySpan<float>)_embedding, 
-                _maxResults, 
-                efSearch,
-                null,
-                instrumentation
-            );
-            
-            vectorSearchActivity?.SetTag("ef_search", efSearch);
             vectorSearchActivity?.SetTag("result_count", vectorResults.Length);
-            vectorSearchActivity?.SetTag("descent_resize_operations", instrumentation.DescentResizeOperations);
-            instrumentation.SearchLayer.SetAsTags(vectorSearchActivity);
         }
 
         if (vectorResults.Length == 0)
