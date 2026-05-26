@@ -5,8 +5,8 @@ using System.ComponentModel.DataAnnotations;
 namespace KnowledgeSystem.Ai;
 
 /// <summary>
-///     Configuration for an embedding service, extending the base provider config
-///     with embedding-specific parameters.
+///     Configuration for an embedding service, extending the base provider config with embedding-specific parameters.
+///     P.S. An embedding service is supposed to be used with <see cref="ProviderType.Usual"/>!
 /// </summary>
 public class EmbeddingConfig : ProviderConfig
 {
