@@ -32,6 +32,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Retrieval.P
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Retrieval.InMemory", "KnowledgeSystem.Retrieval.InMemory\KnowledgeSystem.Retrieval.InMemory.csproj", "{3932AA8D-51E2-4B69-9166-F1E5916674D1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Ai", "KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj", "{A1433F6F-1F8F-4827-AE56-E5FDB65C4989}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -94,6 +96,10 @@ Global
 		{3932AA8D-51E2-4B69-9166-F1E5916674D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3932AA8D-51E2-4B69-9166-F1E5916674D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3932AA8D-51E2-4B69-9166-F1E5916674D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1433F6F-1F8F-4827-AE56-E5FDB65C4989}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1433F6F-1F8F-4827-AE56-E5FDB65C4989}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1433F6F-1F8F-4827-AE56-E5FDB65C4989}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1433F6F-1F8F-4827-AE56-E5FDB65C4989}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}

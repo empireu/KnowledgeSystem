@@ -5,10 +5,10 @@ using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Ai;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Events.Implementation;
-using KnowledgeSystem.Provider;
 using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach

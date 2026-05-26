@@ -1,6 +1,6 @@
 using Microsoft.Extensions.AI;
 
-namespace KnowledgeSystem.Provider;
+namespace KnowledgeSystem.Ai;
 
 /// <summary>
 ///     Centralizes provider-specific request parameters for OpenAI-backed clients.

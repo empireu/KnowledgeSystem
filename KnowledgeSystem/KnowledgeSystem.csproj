@@ -32,10 +32,15 @@
 
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval.Persistent\KnowledgeSystem.Retrieval.Persistent.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />
       <ProjectReference Include="..\KnowledgeSystems.Extensions\KnowledgeSystems.Extensions.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Provider\" />
     </ItemGroup>
 
 </Project>

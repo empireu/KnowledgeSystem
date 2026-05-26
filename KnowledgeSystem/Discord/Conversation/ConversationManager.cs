@@ -2,9 +2,9 @@ using System.Diagnostics;
 using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
+using KnowledgeSystem.Ai;
 using KnowledgeSystem.Discord.Integration;
 using KnowledgeSystem.Events.Implementation;
-using KnowledgeSystem.Provider;
 using KnowledgeSystem.Telemetry;
 using KnowledgeSystems.Extensions;
 using Microsoft.Extensions.AI;
@@ -47,7 +47,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
         _chatClient = OpenAiChatClientFactory.Create(_chatOptions.Endpoint, _chatOptions.ApiKey, _chatOptions.Model);
 
-        TokenEstimator = TokenizerHelper.Create(new TokenizerInfo
+        TokenEstimator = BasicTokenEstimator.Create(new BasicTokenEstimatorConfig
         {
             ModelName = _chatOptions.Model,
             Kind = TokenizerKind.HuggingFace,

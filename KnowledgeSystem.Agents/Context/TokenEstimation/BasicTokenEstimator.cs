@@ -9,50 +9,25 @@ namespace KnowledgeSystem.Agents.Context.TokenEstimation;
 
 public enum TokenizerKind
 {
+    Invalid,
     Tiktoken,
-    HuggingFace,
+    HuggingFace
 }
 
 public enum ChatTemplateFormat
 {
+    Invalid,
     ChatMl,
     Gemma,
-    Glm,
+    Glm
 }
 
-public sealed class TokenizerInfo
-{
-    public required string ModelName { get; init; }
-    
-    public required TokenizerKind Kind { get; init; }
-    
-    public required ChatTemplateFormat ChatFormat { get; init; }
-    
-    public string? TokenizerDir { get; init; }
-    
-    public static TokenizerInfo Gemma(string tokenizerDir) => new()
-    {
-        ModelName = "gemma",
-        Kind = TokenizerKind.HuggingFace,
-        ChatFormat = ChatTemplateFormat.Gemma,
-        TokenizerDir = tokenizerDir
-    };
-
-    public static TokenizerInfo Glm(string tokenizerDir) => new()
-    {
-        ModelName = "glm",
-        Kind = TokenizerKind.HuggingFace,
-        ChatFormat = ChatTemplateFormat.Glm,
-        TokenizerDir = tokenizerDir
-    };
-}
-
-public sealed class TokenizerHelper : ITokenEstimator
+public sealed class BasicTokenEstimator : ITokenEstimator
 {
     private readonly ChatTemplateFormatter _formatter;
     private readonly ITokenizerBackend _backend;
 
-    private TokenizerHelper(ChatTemplateFormatter formatter, ITokenizerBackend backend)
+    private BasicTokenEstimator(ChatTemplateFormatter formatter, ITokenizerBackend backend)
     {
         _formatter = formatter;
         _backend = backend;
@@ -64,30 +39,30 @@ public sealed class TokenizerHelper : ITokenEstimator
         return _backend.CountTokens(formatted);
     }
     
-    public static TokenizerHelper Create(TokenizerInfo info)
+    public static BasicTokenEstimator Create(BasicTokenEstimatorConfig config)
     {
         ChatTemplateFormatter formatter;
         ITokenizerBackend backend;
 
-        switch (info.Kind)
+        switch (config.Kind)
         {
             case TokenizerKind.Tiktoken:
                 formatter = ChatTemplateFormatter.ChatMl();
-                backend = new TiktokenBackend(info.ModelName);
+                backend = new TiktokenBackend(config.ModelName);
                 break;
             case TokenizerKind.HuggingFace:
             {
-                var dir = info.TokenizerDir ?? throw new ArgumentException("TokenizerDir is required", nameof(info));
+                var dir = config.TokenizerDir ?? throw new ArgumentException("TokenizerDir is required", nameof(config));
                 var tokens = SpecialTokens.FromDirectory(dir);
-                formatter = ChatTemplateFormatter.Create(info.ChatFormat, tokens);
+                formatter = ChatTemplateFormatter.Create(config.ChatFormat, tokens);
                 backend = new HuggingFaceBackend(Path.Combine(dir, "tokenizer.json"));
                 break;
             }
             default:
-                throw new ArgumentOutOfRangeException(nameof(info), info.Kind, null);
+                throw new ArgumentOutOfRangeException(nameof(config), config.Kind, null);
         }
 
-        return new TokenizerHelper(formatter, backend);
+        return new BasicTokenEstimator(formatter, backend);
     }
 
     public void Dispose() => _backend.Dispose();
