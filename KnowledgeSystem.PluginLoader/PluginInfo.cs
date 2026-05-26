@@ -23,7 +23,6 @@ internal sealed class PluginInfo(IPluginStartup? startup, Type pluginType, strin
     
     public Type PluginType { get; } = pluginType;
     
-    
     public string Path { get; } = path;
     
     public AssemblyName AssemblyName { get; } = assemblyName;

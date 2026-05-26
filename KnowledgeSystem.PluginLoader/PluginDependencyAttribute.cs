@@ -1,11 +1,7 @@
 ﻿namespace KnowledgeSystem.PluginLoader;
 
-/// <summary>
-///     Defines a dependency on another plugin.
-///     This should not be implemented directly by plugins; it should be wrapped by the application using this API.
-/// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
-public abstract class PluginDependencyAttribute : Attribute
+public sealed class PluginDependencyAttribute : Attribute
 {
     public enum DependencyType
     {
@@ -20,11 +16,11 @@ public abstract class PluginDependencyAttribute : Attribute
     }
 
     /// <summary>
-    ///     Creates a new instance of the PackageDependencyAttribute class.
+    ///     Defines a dependency on another plugin.
     /// </summary>
     /// <param name="packageName">The package to depend on. It is the one passed to the plugin attribute.</param>
     /// <param name="type"></param>
-    protected PluginDependencyAttribute(string packageName, DependencyType type = DependencyType.Required)
+    public PluginDependencyAttribute(string packageName, DependencyType type = DependencyType.Required)
     {
         PackageName = packageName;
         Type = type;

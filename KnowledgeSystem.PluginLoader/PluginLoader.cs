@@ -80,11 +80,7 @@ public static class PluginLoader
         }
     }
 
-    public static IHostBuilder UsePluginLoader<TStartup, TPlugin>(
-        this IHostBuilder builder, 
-        PluginLoaderOptions options) 
-        where TStartup : class, IPluginStartup 
-        where TPlugin: class, IPlugin
+    public static IHostBuilder UsePluginLoader(this IHostBuilder builder, PluginLoaderOptions options) 
     {
         var context = AssemblyLoadContext.Default;
         var directories = options.Directories;
@@ -129,7 +125,7 @@ public static class PluginLoader
             // Get the type for the startup class:
             var startupCandidates = pluginAssembly
                 .GetTypes()
-                .Where(x => typeof(TStartup).IsAssignableFrom(x) && x.IsClass)
+                .Where(x => typeof(IPluginStartup).IsAssignableFrom(x) && x.IsClass)
                 .ToList();
 
             if (startupCandidates.Count > 1)
@@ -143,7 +139,7 @@ public static class PluginLoader
             var pluginCandidates = pluginAssembly
                 .GetTypes()
                 .Where(x =>
-                    typeof(TPlugin).IsAssignableFrom(x)
+                    typeof(IPlugin).IsAssignableFrom(x)
                     && x is { IsClass: true, IsAbstract: false } 
                     && x.GetCustomAttribute<PluginAttribute>() != null)
                 .ToList();
@@ -158,7 +154,7 @@ public static class PluginLoader
                 new PluginInfo(
                     startupCandidates
                         .Select(Activator.CreateInstance)   // Create instance or null
-                        .Cast<TStartup>() 
+                        .Cast<IPluginStartup>() 
                         .FirstOrDefault(),
                     pluginCandidates.First(),               // Unique plugin instance
                     pluginPath, 

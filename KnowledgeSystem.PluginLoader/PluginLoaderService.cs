@@ -8,34 +8,27 @@ namespace KnowledgeSystem.PluginLoader;
 ///     The plugin loader service will manage the lifecycle of the plugins.
 ///     <see cref="IPlugin"/>
 /// </summary>
-internal sealed class PluginLoaderService : IHostedService
+internal sealed class PluginLoaderService(
+    ILogger<PluginLoaderService> logger,
+    IServiceProvider serviceProvider,
+    List<PluginInfo> plugins
+) : IHostedService
 {
-    private readonly ILogger<PluginLoaderService> _logger;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly List<PluginInfo> _plugins;
-
-    public PluginLoaderService(ILogger<PluginLoaderService> logger, IServiceProvider serviceProvider, List<PluginInfo> plugins)
-    {
-        _logger = logger;
-        _serviceProvider = serviceProvider;
-        _plugins = plugins;
-    }
-
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Setting up plugins.");
+        logger.LogInformation("Setting up plugins.");
 
-        foreach (var plugin in _plugins)
+        foreach (var plugin in plugins)
         {
-            _logger.LogInformation("Setting up {name} by {author}", plugin.DisplayName, plugin.Author);
+            logger.LogInformation("Setting up {name} by {author}", plugin.DisplayName, plugin.Author);
 
             try
             {
-                plugin.Instance = (IPlugin)ActivatorUtilities.CreateInstance(_serviceProvider, plugin.PluginType);
+                plugin.Instance = (IPlugin)ActivatorUtilities.CreateInstance(serviceProvider, plugin.PluginType);
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to instance plugin {name}: {ex}", plugin.QualifiedName, e);
+                logger.LogError("Failed to instance plugin {name}: {ex}", plugin.QualifiedName, e);
                 continue;
             }
 
@@ -45,18 +38,18 @@ internal sealed class PluginLoaderService : IHostedService
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to start plugin {name}: {ex}", plugin.QualifiedName, e);
+                logger.LogError("Failed to start plugin {name}: {ex}", plugin.QualifiedName, e);
             }
         }
 
-        _logger.LogInformation("Finished setting up {count} plugins.", _plugins.Count);
+        logger.LogInformation("Finished setting up {count} plugins.", plugins.Count);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        foreach (var plugin in _plugins.Where(plugin => plugin.Instance != null))
+        foreach (var plugin in plugins.Where(plugin => plugin.Instance != null))
         {
-            _logger.LogInformation("Stopping plugin {name}.", plugin.DisplayName);
+            logger.LogInformation("Stopping plugin {name}.", plugin.DisplayName);
 
             try
             {
@@ -65,7 +58,7 @@ internal sealed class PluginLoaderService : IHostedService
             }
             catch (Exception e)
             {
-                _logger.LogError("Failed to stop plugin {name}: {ex}", plugin.QualifiedName, e);
+                logger.LogError("Failed to stop plugin {name}: {ex}", plugin.QualifiedName, e);
             }
         }
     }
