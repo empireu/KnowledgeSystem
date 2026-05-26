@@ -3,7 +3,7 @@ using KnowledgeSystem.Agent.Config;
 using KnowledgeSystem.Agents.Telemetry;
 using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Discord.Integration;
-using KnowledgeSystem.Retrieval;
+using KnowledgeSystem.PluginLoader;
 using KnowledgeSystem.Retrieval.Persistent;
 using KnowledgeSystem.Retrieval.Telemetry;
 using KnowledgeSystem.Telemetry;
@@ -71,7 +71,8 @@ var builder = Host.CreateDefaultBuilder(args)
                     options.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
                 });
             });
-    });
+    })
+    .UsePluginLoader(PluginLoader.PluginLoaderOptions.Default);
 
 var host = builder.Build();
 
