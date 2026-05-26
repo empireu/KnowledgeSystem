@@ -3,8 +3,13 @@ using KnowledgeSystem.Vector;
 
 namespace KnowledgeSystem.Retrieval.Api.Store;
 
-public interface IVectorSearchStore : IReadOnlyDocumentStore
+public interface IVectorSearchStore : ISearchCapability
 {
+    /// <summary>
+    ///     The capability type for vector search.
+    /// </summary>
+    public static readonly StoreCapabilityType CapabilityType = new("VectorSearch");
+
     /// <summary>
     ///     Gets the embedding service used for vector search.
     /// </summary>

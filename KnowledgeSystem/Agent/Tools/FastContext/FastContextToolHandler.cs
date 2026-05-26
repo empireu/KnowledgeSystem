@@ -7,6 +7,7 @@ using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Lexical;
 using KnowledgeSystem.Retrieval;
+using KnowledgeSystem.Retrieval.Api.Store;
 using KnowledgeSystem.Telemetry;
 using KnowledgeSystems.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,7 +52,11 @@ public sealed class FastContextToolHandler(
         using var activity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("FastContext");
         activity?.SetTag("query", query);
 
-        var retrieval = ActivatorUtilities.CreateInstance<FastContextRetrievalPipeline>(serviceProvider, new FastContextRetrievalPipeline.Description
+        var store = serviceProvider.GetRequiredService<IReadOnlyDocumentStore>();
+        var vectorCapability = store.GetCapability<IVectorSearchStore>(IVectorSearchStore.CapabilityType);
+        var lexicalCapability = store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType);
+
+        var retrieval = new FastContextRetrievalPipeline(store, vectorCapability, lexicalCapability, new FastContextRetrievalPipeline.Description
         {
             Query = query,
             BootstrapCount = config.BootstrapCount,

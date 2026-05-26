@@ -19,7 +19,7 @@ namespace KnowledgeSystem.Retrieval.Persistent;
 /// <summary>
 ///     The RAG engine handles embedding queries and retrieving extracts from the repo using the HNSW.
 /// </summary>
-public sealed class RagEngine : IVectorSearchStore, ILexicalSearchStore
+public sealed class RagEngine : StoreBase
 {
     private readonly ILogger<RagEngine> _logger;
     private readonly IIndexStateTracker _stateTracker;
@@ -46,7 +46,7 @@ public sealed class RagEngine : IVectorSearchStore, ILexicalSearchStore
         _chunker = new Chunker(_options.MaxChunkLength);
     }
 
-    public string StoreId => _options.StoreId;
+    public override string StoreId => _options.StoreId;
 
     /// <summary>
     ///     The loaded HNSW index. Available after calling <see cref="InitializeAsync"/>.
@@ -103,6 +103,8 @@ public sealed class RagEngine : IVectorSearchStore, ILexicalSearchStore
         }
 
         _vectorStoreAdapter = new HnswVectorStoreAdapter(_hnsw);
+        RegisterCapability(IVectorSearchStore.CapabilityType, new VectorSearchCapability(this));
+        RegisterCapability(ILexicalSearchStore.CapabilityType, new LexicalSearchCapability(this));
         
         await SynchronizeAsync(cancellationToken);
     }
@@ -422,18 +424,18 @@ public sealed class RagEngine : IVectorSearchStore, ILexicalSearchStore
     
     #region API
     
-    public IReadOnlySet<EmdDocument> ListDocuments()
+    public override IReadOnlySet<EmdDocument> ListDocuments()
     {
         return Repo.Documents.Values.ToHashSet();
     }
 
-    public bool TryGetDocumentByPath(string path, [NotNullWhen(true)] out EmdDocument? document)
+    public override bool TryGetDocumentByPath(string path, [NotNullWhen(true)] out EmdDocument? document)
     {
         var fileKey = EmdReferencePath.CreateFile(path);
         return Repo.Documents.TryGetValue(fileKey, out document);
     }
 
-    public bool TryGetChunk(int chunkId, [NotNullWhen(true)] out EmdChunk? chunk)
+    public override bool TryGetChunk(int chunkId, [NotNullWhen(true)] out EmdChunk? chunk)
     {
         return _chunkById.TryGetValue(chunkId, out chunk);
     }
@@ -449,37 +451,43 @@ public sealed class RagEngine : IVectorSearchStore, ILexicalSearchStore
     ///     Gets a chunk by its chunk ID. Alias for <see cref="GetChunk"/>.
     /// </summary>
     public EmdChunk GetChunkByHnswId(int chunkId) => GetChunk(chunkId);
-
-    public IEmbeddingService EmbeddingService => _embeddingService;
-
-    IReadOnlyVectorStore IVectorSearchStore.VectorStore => _vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
-
-    public async Task<VectorSearchResult[]> SearchAsync(string query, int k, CancellationToken cancellationToken = default)
-    {
-        var queryVector = await _embeddingService.EmbedAsync(query, cancellationToken);
-        var vectorStore = _vectorStoreAdapter ??  throw new InvalidOperationException("RAG engine not initialized");
-        return vectorStore.Search(queryVector.Span, k);
-    }
-    
-    public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, CancellationToken cancellationToken = default)
-    {
-        var queryVectors = await _embeddingService.EmbedBatchAsync(queries, cancellationToken);
-        var vectorStore = _vectorStoreAdapter ??  throw new InvalidOperationException("RAG engine not initialized");
-        return queryVectors.Select(x => vectorStore.Search(x.Span, k)).ToArray();
-    }
-
-    public int GetChunkFrequency(string term) => LexicalIndex.GetChunkFrequency(term);
-
-    public IReadOnlyDictionary<string, int> GetChunkTokenSet(int chunkId) => LexicalIndex.GetChunkTokenSet(chunkId);
-
-    public Bm25Result[] SearchBm25(string query) => LexicalIndex.SearchBm25(query);
     
     #endregion
 
-    public ValueTask DisposeAsync()
+    public override ValueTask DisposeAsync()
     {
         // Empty
 
         return ValueTask.CompletedTask;
+    }
+
+    private sealed class VectorSearchCapability(RagEngine engine) : IVectorSearchStore
+    {
+        public IEmbeddingService EmbeddingService => engine._embeddingService;
+
+        IReadOnlyVectorStore IVectorSearchStore.VectorStore => engine._vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
+
+        public async Task<VectorSearchResult[]> SearchAsync(string query, int k, CancellationToken cancellationToken = default)
+        {
+            var queryVector = await engine._embeddingService.EmbedAsync(query, cancellationToken);
+            var vectorStore = engine._vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
+            return vectorStore.Search(queryVector.Span, k);
+        }
+
+        public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, CancellationToken cancellationToken = default)
+        {
+            var queryVectors = await engine._embeddingService.EmbedBatchAsync(queries, cancellationToken);
+            var vectorStore = engine._vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
+            return queryVectors.Select(x => vectorStore.Search(x.Span, k)).ToArray();
+        }
+    }
+
+    private sealed class LexicalSearchCapability(RagEngine engine) : ILexicalSearchStore
+    {
+        public int GetChunkFrequency(string term) => engine.LexicalIndex.GetChunkFrequency(term);
+
+        public IReadOnlyDictionary<string, int> GetChunkTokenSet(int chunkId) => engine.LexicalIndex.GetChunkTokenSet(chunkId);
+
+        public Bm25Result[] SearchBm25(string query) => engine.LexicalIndex.SearchBm25(query);
     }
 }

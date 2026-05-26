@@ -19,8 +19,9 @@ namespace KnowledgeSystem.Agent.Tools.FastContext;
 
 public sealed class FastContextRetrievalPipeline
 {
-    private readonly IVectorSearchStore _vectorStore;
-    private readonly ILexicalSearchStore _lexicalStore;
+    private readonly IReadOnlyDocumentStore _documentStore;
+    private readonly IVectorSearchStore _vectorCapability;
+    private readonly ILexicalSearchStore _lexicalCapability;
     private readonly string _query;
     private readonly int _bootstrapCount;
     private readonly float _parameter;
@@ -41,10 +42,11 @@ public sealed class FastContextRetrievalPipeline
     /// </summary>
     public readonly Dictionary<EmdDocument, ReferencedDocument> ReferencedDocuments = [];
     
-    public FastContextRetrievalPipeline(IVectorSearchStore vectorStore, ILexicalSearchStore lexicalStore, Description description)
+    public FastContextRetrievalPipeline(IReadOnlyDocumentStore documentStore, IVectorSearchStore vectorStore, ILexicalSearchStore lexicalStore, Description description)
     {
-        _vectorStore = vectorStore;
-        _lexicalStore = lexicalStore;
+        _documentStore = documentStore;
+        _vectorCapability = vectorStore;
+        _lexicalCapability = lexicalStore;
         _query = description.Query;
         _bootstrapCount = description.BootstrapCount;
         _parameter = description.Parameter;
@@ -69,7 +71,7 @@ public sealed class FastContextRetrievalPipeline
 
         using var activity = RetrievalTelemetry.Retrieval.StartInternalActivity("Embed");
         
-        var results = await _vectorStore.EmbeddingService.EmbedAsync(_query, cancellationToken);
+        var results = await _vectorCapability.EmbeddingService.EmbedAsync(_query, cancellationToken);
 
         _embedding = results.ToArray();
         _preparedForRun = true;
@@ -86,7 +88,7 @@ public sealed class FastContextRetrievalPipeline
     {
         using var activity = RetrievalTelemetry.Retrieval.StartInternalActivity("BM25");
         
-        var bm25Results = _lexicalStore.SearchBm25(_query);
+        var bm25Results = _lexicalCapability.SearchBm25(_query);
         var passedCount = 0;
 
         for (var index = 0; index < bm25Results.Length && passedCount < _bm25Count; index++)
@@ -94,7 +96,7 @@ public sealed class FastContextRetrievalPipeline
             var bm25Result = bm25Results[index];
             ++passedCount;
                 
-            var chunk = _vectorStore.GetChunk(bm25Result.ChunkId);
+            var chunk = _documentStore.GetChunk(bm25Result.ChunkId);
             
             if (!ReferencedDocuments.TryGetValue(chunk.Node.Document, out var referencedDocument))
             {
@@ -165,7 +167,7 @@ public sealed class FastContextRetrievalPipeline
         for (var resultIndex = 0; resultIndex < vectorResults.Length; resultIndex++)
         {
             var vectorSearchResult = vectorResults[resultIndex];
-            var vector = _vectorStore.VectorStore.GetVector(vectorSearchResult.Index).VectorView;
+            var vector = _vectorCapability.VectorStore.GetVector(vectorSearchResult.Index).VectorView;
             var coherence = VectorObjective.AdjustedCosineSimilarity(vector, _centroid);
 
             if (coherence > _coherenceThreshold)
@@ -174,7 +176,7 @@ public sealed class FastContextRetrievalPipeline
             }
 
             accepted++;
-            var chunk = _vectorStore.GetChunk(vectorSearchResult.Index);
+            var chunk = _documentStore.GetChunk(vectorSearchResult.Index);
 
             if (!ReferencedDocuments.TryGetValue(chunk.Node.Document, out var referencedDocument))
             {
@@ -320,7 +322,7 @@ public sealed class FastContextRetrievalPipeline
         {
             foreach (var chunkId in document.References.Keys)
             {
-                referencedChunks.Add((chunkId, _lexicalStore.GetChunkTokenSet(chunkId)));
+                referencedChunks.Add((chunkId, _lexicalCapability.GetChunkTokenSet(chunkId)));
             }
         }
 
@@ -337,7 +339,7 @@ public sealed class FastContextRetrievalPipeline
                 }
             }
             
-            var inCorpus = _lexicalStore.GetChunkFrequency(token);
+            var inCorpus = _lexicalCapability.GetChunkFrequency(token);
             tokenCounts.Add((token, inResults, inCorpus));
         }
 
@@ -410,11 +412,11 @@ public sealed class FastContextRetrievalPipeline
     /// </summary>
     private void Bootstrap(ReadOnlySpan<VectorSearchResult> results)
     {
-        var dimension = _vectorStore.VectorStore.Dimension;
+        var dimension = _vectorCapability.VectorStore.Dimension;
         var centroid = new float[dimension];
         var weightSum = 0.0f;
 
-        var vectorStore = _vectorStore.VectorStore;
+        var vectorStore = _vectorCapability.VectorStore;
 
         for (var resultIndex = 0; resultIndex < results.Length; resultIndex++)
         {

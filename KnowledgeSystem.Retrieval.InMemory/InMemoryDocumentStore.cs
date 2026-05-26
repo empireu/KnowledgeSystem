@@ -16,7 +16,7 @@ namespace KnowledgeSystem.Retrieval.InMemory;
 ///     An in-memory document store that supports adding and removing documents at runtime.
 ///     Implements vector search (via HNSW) and lexical search (via BM25).
 /// </summary>
-public sealed class InMemoryDocumentStore : IDocumentStore, IVectorSearchStore, ILexicalSearchStore, IDisposable
+public sealed class InMemoryDocumentStore : StoreBase, IDocumentStore, IDisposable
 {
     private readonly ILogger<InMemoryDocumentStore> _logger;
     private readonly IIndexStateTracker _stateTracker;
@@ -35,23 +35,26 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IVectorSearchStore, 
         _hnsw = new MutableHnswIndex(embeddingService.Dimension, maxConnectionsLane: 16, maxConnectionsDense: 32, efConstruction: 200);
         _vectorStoreAdapter = new HnswVectorStoreAdapter(_hnsw);
         LexicalIndex = new LexicalIndex();
+
+        RegisterCapability(IVectorSearchStore.CapabilityType, new VectorSearchCapability(this));
+        RegisterCapability(ILexicalSearchStore.CapabilityType, new LexicalSearchCapability(this));
     }
 
-    public string StoreId { get; }
+    public override string StoreId { get; }
 
     public LexicalIndex LexicalIndex { get; }
 
-    public IReadOnlySet<EmdDocument> ListDocuments()
+    public override IReadOnlySet<EmdDocument> ListDocuments()
     {
         return _documentsByPath.Values.ToHashSet();
     }
 
-    public bool TryGetDocumentByPath(string path, [NotNullWhen(true)] out EmdDocument? document)
+    public override bool TryGetDocumentByPath(string path, [NotNullWhen(true)] out EmdDocument? document)
     {
         return _documentsByPath.TryGetValue(path, out document);
     }
 
-    public bool TryGetChunk(int chunkId, [NotNullWhen(true)] out EmdChunk? chunk)
+    public override bool TryGetChunk(int chunkId, [NotNullWhen(true)] out EmdChunk? chunk)
     {
         return _chunkById.TryGetValue(chunkId, out chunk);
     }
@@ -94,28 +97,6 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IVectorSearchStore, 
         return Task.CompletedTask;
     }
 
-    public IEmbeddingService EmbeddingService => _embeddingService;
-
-    IReadOnlyVectorStore IVectorSearchStore.VectorStore => _vectorStoreAdapter;
-
-    public async Task<VectorSearchResult[]> SearchAsync(string query, int k, CancellationToken cancellationToken = default)
-    {
-        var queryVector = await _embeddingService.EmbedAsync(query, cancellationToken);
-        return _vectorStoreAdapter.Search(queryVector.Span, k);
-    }
-
-    public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, CancellationToken cancellationToken = default)
-    {
-        var queryVectors = await _embeddingService.EmbedBatchAsync(queries, cancellationToken);
-        return queryVectors.Select(vector => _vectorStoreAdapter.Search(vector.Span, k)).ToArray();
-    }
-
-    public int GetChunkFrequency(string term) => LexicalIndex.GetChunkFrequency(term);
-
-    public IReadOnlyDictionary<string, int> GetChunkTokenSet(int chunkId) => LexicalIndex.GetChunkTokenSet(chunkId);
-
-    public Bm25Result[] SearchBm25(string query) => LexicalIndex.SearchBm25(query);
-
     // Slow. Ideally we have small ops
     private async Task EmbedAndAddChunksAsync(List<EmdChunk> chunks, string documentPath)
     {
@@ -148,10 +129,38 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IVectorSearchStore, 
         // Empty
     }
 
-    public ValueTask DisposeAsync()
+    public override ValueTask DisposeAsync()
     {
         // Empty
         
         return ValueTask.CompletedTask;
+    }
+
+    private sealed class VectorSearchCapability(InMemoryDocumentStore store) : IVectorSearchStore
+    {
+        public IEmbeddingService EmbeddingService => store._embeddingService;
+
+        IReadOnlyVectorStore IVectorSearchStore.VectorStore => store._vectorStoreAdapter;
+
+        public async Task<VectorSearchResult[]> SearchAsync(string query, int k, CancellationToken cancellationToken = default)
+        {
+            var queryVector = await store._embeddingService.EmbedAsync(query, cancellationToken);
+            return store._vectorStoreAdapter.Search(queryVector.Span, k);
+        }
+
+        public async Task<VectorSearchResult[][]> SearchAsync(string[] queries, int k, CancellationToken cancellationToken = default)
+        {
+            var queryVectors = await store._embeddingService.EmbedBatchAsync(queries, cancellationToken);
+            return queryVectors.Select(vector => store._vectorStoreAdapter.Search(vector.Span, k)).ToArray();
+        }
+    }
+
+    private sealed class LexicalSearchCapability(InMemoryDocumentStore store) : ILexicalSearchStore
+    {
+        public int GetChunkFrequency(string term) => store.LexicalIndex.GetChunkFrequency(term);
+
+        public IReadOnlyDictionary<string, int> GetChunkTokenSet(int chunkId) => store.LexicalIndex.GetChunkTokenSet(chunkId);
+
+        public Bm25Result[] SearchBm25(string query) => store.LexicalIndex.SearchBm25(query);
     }
 }

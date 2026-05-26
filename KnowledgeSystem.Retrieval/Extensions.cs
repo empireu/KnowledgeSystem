@@ -19,15 +19,10 @@ public static class Extensions
     }
     
     /// <summary>
-    ///     Gets the lexical search capability from a vector-search-capable store.
+    ///     Gets the lexical search capability from a store that supports it.
     /// </summary>
     public static ILexicalSearchStore AsLexical(this IReadOnlyDocumentStore store)
     {
-        if (store is not ILexicalSearchStore result)
-        {
-            throw new InvalidOperationException($"Vector store of type {store} doesn't support vector search!");
-        }
-        
-        return result;
+        return store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType);
     }
 }

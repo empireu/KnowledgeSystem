@@ -42,8 +42,6 @@ public static class ServiceCollectionExtensions
         
         // TODO Move to manager
         services.AddSingleton<IReadOnlyDocumentStore>(sp => sp.GetRequiredService<RagEngine>());
-        services.AddSingleton<IVectorSearchStore>(sp => sp.GetRequiredService<RagEngine>());
-        services.AddSingleton<ILexicalSearchStore>(sp => sp.GetRequiredService<RagEngine>());
         services.AddSingleton<StoreManager>();
         
         return services;

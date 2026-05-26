@@ -14,10 +14,11 @@ public sealed class GrepContentToolHandler(
     AgentTool tool,
     StringArgument queryArgument,
     StringArgument pathFilterArgument,
-    ILexicalSearchStore store,
+    IReadOnlyDocumentStore store,
     GrepContentToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
+    private readonly ILexicalSearchStore _lexicalCapability = store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType);
     public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, GrepContentToolConfig config)
     {
         var grepTool = new ToolBuilder("grep_content")
@@ -54,7 +55,7 @@ public sealed class GrepContentToolHandler(
             }
         }
 
-        var bm25Results = store.SearchBm25(query);
+        var bm25Results = _lexicalCapability.SearchBm25(query);
 
         if (bm25Results.Length == 0)
         {

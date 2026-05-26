@@ -156,7 +156,7 @@ public class StoreTests
         var document = CreateSimpleDocument("doc.md", "Red Judas vs Blue Judas");
         await store.AddDocument(document);
 
-        var results = store.SearchBm25("red");
+        var results = store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType).SearchBm25("red");
         Assert.NotEmpty(results);
     }
 
@@ -206,8 +206,8 @@ public class StoreTests
             var store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
 
             Assert.IsType<IDocumentStore>(store, exactMatch: false);
-            Assert.IsType<IVectorSearchStore>(store, exactMatch: false);
-            Assert.IsType<ILexicalSearchStore>(store, exactMatch: false);
+            Assert.True(store.HasCapability(IVectorSearchStore.CapabilityType));
+            Assert.True(store.HasCapability(ILexicalSearchStore.CapabilityType));
             return Task.CompletedTask;
         }
         catch (Exception exception)
@@ -229,7 +229,7 @@ public class StoreTests
 
         Assert.Equal(2, store.ListDocuments().Count);
 
-        var bm25Results = store.SearchBm25("rockets");
+        var bm25Results = store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType).SearchBm25("rockets");
         Assert.NotEmpty(bm25Results);
     }
 
@@ -415,15 +415,16 @@ public class StoreTests
         var document = CreateSimpleDocument("doc.md", "Test content");
         await ((IDocumentStore)store).AddDocument(document);
 
-        // Pattern: check capability via is/cast
-        if (store is IVectorSearchStore vectorStore)
+        // Pattern: check capability via HasCapability/GetCapability
+        if (store.HasCapability(IVectorSearchStore.CapabilityType))
         {
-            Assert.Same(embeddingService, vectorStore.EmbeddingService);
-            Assert.NotNull(vectorStore.VectorStore);
+            var vectorCapability = store.GetCapability<IVectorSearchStore>(IVectorSearchStore.CapabilityType);
+            Assert.Same(embeddingService, vectorCapability.EmbeddingService);
+            Assert.NotNull(vectorCapability.VectorStore);
         }
         else
         {
-            Assert.Fail("InMemoryDocumentStore should implement IVectorSearchStore");
+            Assert.Fail("InMemoryDocumentStore should support IVectorSearchStore capability");
         }
     }
 
@@ -438,14 +439,15 @@ public class StoreTests
         var document = CreateSimpleDocument("doc.md", "Test content for lexical search");
         await ((IDocumentStore)store).AddDocument(document);
 
-        if (store is ILexicalSearchStore lexicalStore)
+        if (store.HasCapability(ILexicalSearchStore.CapabilityType))
         {
-            var results = lexicalStore.SearchBm25("lexical");
+            var lexicalCapability = store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType);
+            var results = lexicalCapability.SearchBm25("lexical");
             Assert.NotEmpty(results);
         }
         else
         {
-            Assert.Fail("InMemoryDocumentStore should implement ILexicalSearchStore");
+            Assert.Fail("InMemoryDocumentStore should support ILexicalSearchStore capability");
         }
     }
 

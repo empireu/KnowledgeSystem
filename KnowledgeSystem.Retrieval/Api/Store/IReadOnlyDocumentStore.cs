@@ -6,6 +6,16 @@ namespace KnowledgeSystem.Retrieval.Api.Store;
 public interface IReadOnlyDocumentStore : IAsyncDisposable
 {
     /// <summary>
+    ///     Whether this store supports the given capability.
+    /// </summary>
+    bool HasCapability(StoreCapabilityType capabilityType);
+
+    /// <summary>
+    ///     Gets a capability by its type. Throws if the capability is not supported.
+    /// </summary>
+    T GetCapability<T>(StoreCapabilityType capabilityType) where T : ISearchCapability;
+
+    /// <summary>
     ///     Unique ID for this store.
     /// </summary>
     string StoreId { get; }
