@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using KnowledgeSystem.Agent.Config;
 using KnowledgeSystem.Agent.Tools.Markers;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
@@ -15,10 +14,10 @@ using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Agent.Tools.Review;
 
-public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ReviewOptions options) : ToolHandler<ConversationalContext>.SubAgent(tool) {
+public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ProviderConfig reviewProvider, ChatOptionsConfig reviewChatOptions, string reviewSystemPromptFile) : ToolHandler<ConversationalContext>.SubAgent(tool) {
     public const string ToolId = "submit_with_review";    
     
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, ReviewOptions options)
+    public static void Register(AgentToolRegistry<ConversationalContext> registry, ProviderConfig reviewProvider, ChatOptionsConfig reviewChatOptions, string reviewSystemPromptFile)
     {
         var reviewTool = new ToolBuilder(ToolId)
             .WithDescription("Submits your message for the user to be peer-reviewed. If it passes, it will be shown to the user immediately. Otherwise, you will get a report on the found issues. Only call if you are responding with any information; don't call if you are just exchanging pleasantries.")
@@ -28,7 +27,9 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
         var handler = new PeerReviewSubAgentHandler(
             reviewTool,
             reportArg,
-            options
+            reviewProvider,
+            reviewChatOptions,
+            reviewSystemPromptFile
         );
         
         registry.RegisterTool(reviewTool, handler);
@@ -48,7 +49,7 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
             throw new Exception("Report is empty");
         }
         
-        var systemPrompt = await File.ReadAllTextAsync(options.SystemPromptFile, cancellationToken);
+        var systemPrompt = await File.ReadAllTextAsync(reviewSystemPromptFile, cancellationToken);
         
         var sb = new StringBuilder();
         sb.AppendLine(systemPrompt);
@@ -244,7 +245,7 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
             report
         );
         
-        return new Proxy(runner, this, reviewContext, options, cancellationToken);
+        return new Proxy(runner, this, reviewContext, reviewProvider, reviewChatOptions, cancellationToken);
     }
     
     /// <summary>
@@ -373,7 +374,8 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
         
         private readonly AgentRunner<ConversationalContext> _parentRunner;
         private readonly PeerReviewSubAgentHandler _subAgentHandler;
-        private readonly ReviewOptions _options;
+        private readonly ProviderConfig _reviewProvider;
+        private readonly ChatOptionsConfig _reviewChatOptions;
         private readonly AgentRunner<PeerReviewContext> _runner;
         private int _turnCount;
         
@@ -383,17 +385,19 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
             AgentRunner<ConversationalContext> parentRunner,
             PeerReviewSubAgentHandler subAgentHandler,
             PeerReviewContext reviewContext, 
-            ReviewOptions options, 
+            ProviderConfig reviewProvider,
+            ChatOptionsConfig reviewChatOptions,
             CancellationToken cancellationToken
         )
         {
             ReviewContext = reviewContext;
             _parentRunner = parentRunner;
             _subAgentHandler = subAgentHandler;
-            _options = options;
+            _reviewProvider = reviewProvider;
+            _reviewChatOptions = reviewChatOptions;
 
             _runner = new AgentRunner<PeerReviewContext>(
-                OpenAiChatClientFactory.Create(options.Endpoint, options.ApiKey, options.Model),
+                OpenAiChatClientFactory.Create(reviewProvider),
                 new PeerReviewAgent("peer_reviewer"),
                 parentRunner,
                 reviewContext,
@@ -443,7 +447,7 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
 
         public Microsoft.Extensions.AI.ChatOptions CreateOptionsForTurn(AgentRunner runner)
         {
-            return OpenAiChatOptionsFactory.Create(_options.ProviderOnly, _options.Temperature);
+            return OpenAiChatOptionsFactory.Create(_reviewChatOptions.ProviderOnly, _reviewChatOptions.Temperature);
         }
     }
 }

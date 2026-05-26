@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using KnowledgeSystem.Agent;
+using KnowledgeSystem.Agent.Config;
+using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Ai;
@@ -13,7 +15,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NetCord.Rest;
-using ChatOptions = KnowledgeSystem.Agent.Config.ChatOptions;
 
 namespace KnowledgeSystem.Discord.Conversation;
 
@@ -22,7 +23,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
     private readonly ILogger<ConversationManager> _logger;
     private readonly IChatClient _chatClient;
     private readonly IServiceProvider _serviceProvider;
-    private readonly ChatOptions _chatOptions;
+    private readonly ApplicationOptions _options;
     private readonly RestClient _restClient;
     private readonly string _systemPrompt;
 
@@ -38,29 +39,29 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
     private bool _disposed;
 
-    public ConversationManager(ILogger<ConversationManager> logger, IServiceProvider serviceProvider, IOptions<ChatOptions> options, RestClient restClient)
+    public ConversationManager(ILogger<ConversationManager> logger, IServiceProvider serviceProvider, IOptions<ApplicationOptions> options, RestClient restClient)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
-        _chatOptions = options.Value;
+        _options = options.Value;
         _restClient = restClient;
 
-        _chatClient = OpenAiChatClientFactory.Create(_chatOptions.Endpoint, _chatOptions.ApiKey, _chatOptions.Model);
+        _chatClient = OpenAiChatClientFactory.Create(_options.ChatProvider);
 
         TokenEstimator = BasicTokenEstimator.Create(new BasicTokenEstimatorConfig
         {
-            ModelName = _chatOptions.Model,
+            ModelName = _options.ChatProvider.Model,
             Kind = TokenizerKind.HuggingFace,
-            ChatFormat = _chatOptions.Template,
-            TokenizerDir = _chatOptions.TokenizerDir
+            ChatFormat = _options.Template,
+            TokenizerDir = _options.TokenizerDir
         });
 
-        _systemPrompt = File.ReadAllText(_chatOptions.SystemPromptFile);
+        _systemPrompt = File.ReadAllText(_options.SystemPromptFile);
     }
 
     public Microsoft.Extensions.AI.ChatOptions CreateOptionsForTurn(AgentRunner runner)
     {
-        return OpenAiChatOptionsFactory.Create(_chatOptions.ProviderOnly, _chatOptions.Temperature, reasoningEffort: "high");
+        return OpenAiChatOptionsFactory.Create(_options.Chat.ProviderOnly, _options.Chat.Temperature, reasoningEffort: "high");
     }
 
     public ITokenEstimator TokenEstimator { get; }
@@ -289,7 +290,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
             eventManager,
             name,
             _serviceProvider,
-            _chatOptions
+            _options
         );
         
         var runner = new AgentRunner<ConversationalContext>(

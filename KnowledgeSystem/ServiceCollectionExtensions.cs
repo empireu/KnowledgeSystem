@@ -13,7 +13,6 @@ namespace KnowledgeSystem;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    // TODO refactor
     public static IServiceCollection AddRagServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<WikiDiskStoreDescription>()
@@ -28,7 +27,6 @@ public static class ServiceCollectionExtensions
         // Register the SQLite-backed index state tracker:
         services.AddSingleton<IIndexStateTracker, SqliteIndexStateTracker>();
 
-        // P.S. needs move
         services.AddSingleton<IEmbeddingService>(_ =>
             new OpenAiEmbeddingService(
                 options.Embedding.Endpoint,

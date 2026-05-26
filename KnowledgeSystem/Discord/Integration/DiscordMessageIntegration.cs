@@ -30,7 +30,7 @@ public sealed class DiscordMessageIntegration(
     ILogger<DiscordMessageIntegration> logger,
     IConversationManager conversationManager,
     IDiscordMessageTarget target,
-    IOptions<ChatOptions> options
+    IOptions<ApplicationOptions> options
 ) : IEventReceiver
 {
     // ReSharper disable UnusedAutoPropertyAccessor.Local

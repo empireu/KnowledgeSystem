@@ -1,3 +1,4 @@
+using KnowledgeSystem.Agent.Config;
 using KnowledgeSystem.Agent.Events;
 using KnowledgeSystem.Agent.Tools.FastContext;
 using KnowledgeSystem.Agent.Tools.FetchContext;
@@ -9,7 +10,6 @@ using KnowledgeSystem.Agent.Tools.Review;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Events.Api;
 using Microsoft.Extensions.AI;
-using ChatOptions = KnowledgeSystem.Agent.Config.ChatOptions;
 
 namespace KnowledgeSystem.Agent;
 
@@ -17,7 +17,7 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 {
     private readonly IEventManager _eventManager;
 
-    public ConversationalAgent(IEventManager eventManager, string agentId, IServiceProvider serviceProvider, ChatOptions options) : base(agentId)
+    public ConversationalAgent(IEventManager eventManager, string agentId, IServiceProvider serviceProvider, ApplicationOptions options) : base(agentId)
     {
         _eventManager = eventManager;
         
@@ -28,9 +28,9 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
         GrepContentToolHandler.Register(ToolRegistry, serviceProvider, new GrepContentToolConfig());
         FetchContextToolHandler.Register(ToolRegistry, serviceProvider, new FetchContextToolConfig());
         
-        if (options.Review != null)
+        if (options.ReviewProvider != null)
         {
-            PeerReviewSubAgentHandler.Register(ToolRegistry, options.Review);
+            PeerReviewSubAgentHandler.Register(ToolRegistry, options.ReviewProvider, options.ReviewChat, options.ReviewSystemPromptFile!);
         }
     }
 

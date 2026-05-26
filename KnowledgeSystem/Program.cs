@@ -21,8 +21,8 @@ var builder = Host.CreateDefaultBuilder(args)
     {
         services.AddRagServices(context.Configuration);
 
-        services.AddOptions<ChatOptions>()
-            .BindConfiguration(ChatOptions.Section)
+        services.AddOptions<ApplicationOptions>()
+            .BindConfiguration(ApplicationOptions.Section)
             .ValidateOnStart();
     })
     .UseSerilog((context, loggerConfiguration) =>
