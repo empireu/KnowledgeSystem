@@ -75,7 +75,7 @@ var builder = Host.CreateDefaultBuilder(args)
 
 var host = builder.Build();
 
-var engine = host.Services.GetRequiredService<RagEngine>();
+var engine = host.Services.GetRequiredService<DiskWikiStore>();
 await engine.InitializeAsync();
 engine.Warmup();
 

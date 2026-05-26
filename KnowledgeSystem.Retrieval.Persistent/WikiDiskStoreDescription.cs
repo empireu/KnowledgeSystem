@@ -1,15 +1,14 @@
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
 using System.ComponentModel.DataAnnotations;
+using KnowledgeSystem.Ai;
 
 namespace KnowledgeSystem.Retrieval.Persistent;
-
-// TODO refactor
 
 /// <summary>
 ///     Configuration options for the RAG system, bound from IConfiguration.
 /// </summary>
-public class RagOptions
+public class WikiDiskStoreDescription
 {
     public const string Section = "rag";
 
@@ -26,28 +25,16 @@ public class RagOptions
     
     [Required]
     public string HnswIndexPath { get; set; } = null!;
-    
+
+    /// <summary>
+    ///     Embedding service configuration. Bound from the "rag:embedding" config section.
+    /// </summary>
     [Required]
-    public string EmbeddingEndpoint { get; set; } = null!;
-    
-    [Required]
-    public string EmbeddingModel { get; set; } = null!;
-    
-    [Required]    
-    public string EmbeddingApiKey { get; set; } = null!;
-    
-    [Required]
-    [Range(64, 2048, ErrorMessage = $"Invalid {nameof(EmbeddingDimension)}")]
-    public int EmbeddingDimension { get; set; }
+    public EmbeddingConfig Embedding { get; set; } = null!;
     
     [Required]
     [Range(32, 2048, ErrorMessage = $"Invalid {nameof(MaxChunkLength)}")]
     public int MaxChunkLength { get; set; }
-
-    /// <summary>
-    ///     String prepended to each request.
-    /// </summary>
-    public string EmbeddingSystemPrompt { get; set; } = string.Empty;
 
     [Range(1, 16)]
     public int MaxReadTasks { get; set; } = 8;

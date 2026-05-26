@@ -9,6 +9,16 @@ namespace KnowledgeSystem.Ai;
 /// </summary>
 public static class OpenAiChatClientFactory
 {
+    public static IChatClient Create(ProviderConfig providerConfig)
+    {
+        if (providerConfig.ProviderType != ProviderType.Usual)
+        {
+            throw new NotSupportedException("provider is not implemented");
+        }
+        
+        return Create(providerConfig.Endpoint, providerConfig.Key, providerConfig.Model);
+    }
+    
     public static IChatClient Create(string endpoint, string apiKey, string model)
     {
         var clientOptions = new OpenAIClientOptions

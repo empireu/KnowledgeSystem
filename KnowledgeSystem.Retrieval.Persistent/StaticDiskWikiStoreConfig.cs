@@ -3,7 +3,7 @@
 /// <summary>
 ///     Configuration for creating a disk-backed store.
 /// </summary>
-public sealed class DiskStoreConfig
+public sealed class StaticDiskWikiStoreConfig
 {
     /// <summary>
     ///     Unique ID for the store.

@@ -19,12 +19,12 @@ namespace KnowledgeSystem.Retrieval.Persistent;
 /// <summary>
 ///     The RAG engine handles embedding queries and retrieving extracts from the repo using the HNSW.
 /// </summary>
-public sealed class RagEngine : StoreBase
+public sealed class DiskWikiStore : StoreBase
 {
-    private readonly ILogger<RagEngine> _logger;
+    private readonly ILogger<DiskWikiStore> _logger;
     private readonly IIndexStateTracker _stateTracker;
     private readonly IEmbeddingService _embeddingService;
-    private readonly RagOptions _options;
+    private readonly WikiDiskStoreDescription _options;
     private readonly Chunker _chunker;
 
     private MutableHnswIndex? _hnsw;
@@ -37,7 +37,7 @@ public sealed class RagEngine : StoreBase
     /// </summary>
     private readonly Dictionary<int, EmdChunk> _chunkById = new();
 
-    public RagEngine(ILogger<RagEngine> logger, IIndexStateTracker stateTracker, IEmbeddingService embeddingService, IOptions<RagOptions> options)
+    public DiskWikiStore(ILogger<DiskWikiStore> logger, IIndexStateTracker stateTracker, IEmbeddingService embeddingService, IOptions<WikiDiskStoreDescription> options)
     {
         _logger = logger;
         _stateTracker = stateTracker;
@@ -461,7 +461,7 @@ public sealed class RagEngine : StoreBase
         return ValueTask.CompletedTask;
     }
 
-    private sealed class VectorSearchCapability(RagEngine engine) : IVectorSearchStore
+    private sealed class VectorSearchCapability(DiskWikiStore engine) : IVectorSearchStore
     {
         public IEmbeddingService EmbeddingService => engine._embeddingService;
 
@@ -482,7 +482,7 @@ public sealed class RagEngine : StoreBase
         }
     }
 
-    private sealed class LexicalSearchCapability(RagEngine engine) : ILexicalSearchStore
+    private sealed class LexicalSearchCapability(DiskWikiStore engine) : ILexicalSearchStore
     {
         public int GetChunkFrequency(string term) => engine.LexicalIndex.GetChunkFrequency(term);
 

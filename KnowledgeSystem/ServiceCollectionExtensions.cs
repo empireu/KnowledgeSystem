@@ -16,11 +16,11 @@ public static class ServiceCollectionExtensions
     // TODO refactor
     public static IServiceCollection AddRagServices(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<RagOptions>()
-            .BindConfiguration(RagOptions.Section)
+        services.AddOptions<WikiDiskStoreDescription>()
+            .BindConfiguration(WikiDiskStoreDescription.Section)
             .ValidateOnStart();
  
-        var options = configuration.GetSection(RagOptions.Section).Get<RagOptions>() 
+        var options = configuration.GetSection(WikiDiskStoreDescription.Section).Get<WikiDiskStoreDescription>() 
                       ?? throw new InvalidOperationException("RAG configuration is missing");
 
         services.AddDbContext<RagDbContext>(o => o.UseSqlite($"Data Source={options.DatabasePath}"));
@@ -31,17 +31,17 @@ public static class ServiceCollectionExtensions
         // P.S. needs move
         services.AddSingleton<IEmbeddingService>(_ =>
             new OpenAiEmbeddingService(
-                options.EmbeddingEndpoint,
-                options.EmbeddingApiKey,
-                options.EmbeddingModel,
-                options.EmbeddingDimension,
-                options.EmbeddingSystemPrompt
+                options.Embedding.Endpoint,
+                options.Embedding.Key,
+                options.Embedding.Model,
+                options.Embedding.Dimension,
+                options.Embedding.SystemPrompt
             ));
         
-        services.AddSingleton<RagEngine>();
+        services.AddSingleton<DiskWikiStore>();
         
         // TODO Move to manager
-        services.AddSingleton<IReadOnlyDocumentStore>(sp => sp.GetRequiredService<RagEngine>());
+        services.AddSingleton<IReadOnlyDocumentStore>(sp => sp.GetRequiredService<DiskWikiStore>());
         services.AddSingleton<StoreManager>();
         
         return services;

@@ -1,4 +1,5 @@
-﻿using KnowledgeSystem.Retrieval.Api.Store;
+﻿using KnowledgeSystem.Ai;
+using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -12,21 +13,20 @@ public static class StoreManagerExtensions
     ///     Creates a new disk-backed store and initializes it.
     ///     The store syncs its content from the repository on disk.
     /// </summary>
-    public static async Task<IReadOnlyDocumentStore> CreateDiskStoreAsync(this StoreManager manager, DiskStoreConfig config, CancellationToken cancellationToken = default)
+    public static async Task<IReadOnlyDocumentStore> CreateDiskStoreAsync(this StoreManager manager, StaticDiskWikiStoreConfig config, CancellationToken cancellationToken = default)
     {
         return await manager.CreateStoreAsync(config.StoreId, async () =>
         {
-            // TODO This crap needs to be refactord
-            var options = new RagOptions
+            var options = new WikiDiskStoreDescription
             {
                 StoreId = config.StoreId,
                 RepositoryPath = config.RepositoryPath,
                 DatabasePath = config.DatabasePath,
                 HnswIndexPath = config.HnswIndexPath,
-                EmbeddingEndpoint = "",
-                EmbeddingModel = "",
-                EmbeddingApiKey = "",
-                EmbeddingDimension = manager.EmbeddingService.Dimension
+                Embedding = new EmbeddingConfig
+                {
+                    Dimension = manager.EmbeddingService.Dimension
+                }
             };
 
             var dbContextOptions = new DbContextOptionsBuilder<RagDbContext>()
@@ -35,9 +35,9 @@ public static class StoreManagerExtensions
 
             var dbContext = new RagDbContext(dbContextOptions);
             var stateTracker = new SqliteIndexStateTracker(dbContext);
-            var logger = manager.ServiceProvider.GetRequiredService<ILogger<RagEngine>>();
+            var logger = manager.ServiceProvider.GetRequiredService<ILogger<DiskWikiStore>>();
 
-            var engine = new RagEngine(
+            var engine = new DiskWikiStore(
                 logger,
                 stateTracker,
                 manager.EmbeddingService,
