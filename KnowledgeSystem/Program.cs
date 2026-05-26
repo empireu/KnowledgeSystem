@@ -20,10 +20,6 @@ var builder = Host.CreateDefaultBuilder(args)
     .ConfigureServices((context, services) =>
     {
         services.AddRagServices(context.Configuration);
-
-        services.AddOptions<ApplicationOptions>()
-            .BindConfiguration(ApplicationOptions.Section)
-            .ValidateOnStart();
     })
     .UseSerilog((context, loggerConfiguration) =>
     {

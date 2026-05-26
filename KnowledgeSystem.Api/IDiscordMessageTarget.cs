@@ -8,5 +8,6 @@ namespace KnowledgeSystem.Discord.Integration;
 public interface IDiscordMessageTarget
 {
     Task UpdateContentAsync(string content, CancellationToken cancellationToken = default);
+   
     Task SetEmbedAsync(EmbedProperties embed, CancellationToken cancellationToken = default);
 }

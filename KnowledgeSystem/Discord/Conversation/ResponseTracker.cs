@@ -1,17 +1,11 @@
 using System.Collections.Concurrent;
+using KnowledgeSystem.Api;
 using Microsoft.Extensions.Hosting;
 
 namespace KnowledgeSystem.Discord.Conversation;
 
 public class ResponseTracker : IHostedService
 {
-    public sealed class ActiveRunInfo
-    {
-        public required CancellationTokenSource Cts { get; init; }
-        
-        public Func<CancellationToken, Task>? OnCloseAction { get; init; }
-    }
-    
     private readonly ConcurrentDictionary<ulong, ActiveRunInfo> _activeRuns = new();
 
     public void Add(ulong key, ActiveRunInfo cts)

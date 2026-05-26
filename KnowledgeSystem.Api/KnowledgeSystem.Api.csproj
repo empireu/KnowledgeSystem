@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="NetCord" Version="1.0.0-alpha.489" />
+    </ItemGroup>
+
+</Project>

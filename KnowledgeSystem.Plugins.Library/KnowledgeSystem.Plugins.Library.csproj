@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
+    </ItemGroup>
+
+    <Target Name="CopyToLibrariesFolder" AfterTargets="Build">
+        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="..\KnowledgeSystem\bin\$(Configuration)\$(TargetFramework)\libraries\" SkipUnchangedFiles="true" />
+    </Target>
+    
+</Project>

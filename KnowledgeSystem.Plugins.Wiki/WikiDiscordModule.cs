@@ -1,12 +1,10 @@
-using KnowledgeSystem.Discord.Conversation;
+﻿using KnowledgeSystem.Discord.Integration;
 using Microsoft.Extensions.Logging;
 using NetCord;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 
-// ReSharper disable UnusedMember.Global
-
-namespace KnowledgeSystem.Discord.Integration;
+namespace KnowledgeSystem.Agent;
 
 public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversationManager, ResponseTracker responseTracker ) : ApplicationCommandModule<ApplicationCommandContext>
 {
