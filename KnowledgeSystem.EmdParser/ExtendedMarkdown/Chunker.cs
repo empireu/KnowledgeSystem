@@ -6,10 +6,8 @@ namespace KnowledgeSystem.EmdParser.ExtendedMarkdown;
 /// <summary>
 ///     Utility for generating chunks centered around a Markdown node.
 /// </summary>
-public sealed class Chunker(int maxChunkLength = 512)
+public sealed class Chunker(int maxChunkLength = 1000)
 {
-    public static readonly Chunker Default = new();
-    
     /// <summary>
     ///     Maximum character length for a single chunk.
     ///     Nodes exceeding this will be split.

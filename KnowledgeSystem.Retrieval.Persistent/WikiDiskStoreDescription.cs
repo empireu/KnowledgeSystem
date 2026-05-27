@@ -10,8 +10,6 @@ namespace KnowledgeSystem.Retrieval.Persistent;
 /// </summary>
 public class WikiDiskStoreDescription
 {
-    public const string Section = "rag";
-
     [Required]
     public string RepositoryPath { get; set; } = null!;
 

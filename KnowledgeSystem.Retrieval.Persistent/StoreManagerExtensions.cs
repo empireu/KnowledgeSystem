@@ -26,7 +26,8 @@ public static class StoreManagerExtensions
                 Embedding = new EmbeddingConfig
                 {
                     Dimension = manager.EmbeddingService.Dimension
-                }
+                },
+                MaxChunkLength = 1000
             };
 
             var dbContextOptions = new DbContextOptionsBuilder<RagDbContext>()
