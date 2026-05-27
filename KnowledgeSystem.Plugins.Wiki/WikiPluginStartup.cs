@@ -14,5 +14,7 @@ public class WikiPluginStartup : IPluginStartup
         // Stores:
         services.AddSingleton<WikiStores>();
         services.AddHostedService<WikiStores>(sp => sp.GetRequiredService<WikiStores>());
+
+        services.AddSingleton<WikiLayerFactory>();
     }
 }

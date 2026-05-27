@@ -30,14 +30,14 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
     
     public WikiMessagingLayer(
         ILogger<WikiMessagingLayer> logger,
-        IReadOnlyDocumentStore store,
+        WikiStores stores,
         string name,
         IOptions<WikiOptions> configOptions,
         IServiceProvider serviceProvider
         )
     {
         _logger = logger;
-        _store = store;
+        _store = stores.Store;
         _name = name;
         _config = configOptions.Value;
         _serviceProvider = serviceProvider;
@@ -62,6 +62,8 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 
     public Task<IResponsePipeline> CreateResponsePipeline(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken)
     {
+        _context.ChatContext.InsertUser(userMessageInfo.Message);
+        
         // Creates the event manager, used by the agent's orchestration logic:
         var eventManager = ActivatorUtilities.CreateInstance<AgentEventManager>(_serviceProvider);
         
@@ -102,7 +104,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 
         IResponsePipeline pipeline = ActivatorUtilities.CreateInstance<AssembledResponsePipeline>(
             _serviceProvider,
-            messageTarget,
+            observer,
             runner
         );
 

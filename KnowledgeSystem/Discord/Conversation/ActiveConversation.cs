@@ -104,6 +104,7 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
             }
             catch (OperationCanceledException)
             {
+                await target.UpdateContentAsync("Interaction was cancelled", CancellationToken.None);
                 _logger.LogInformation("Conversation {target} was cancelled", ScopeInfo);
                 return;
             }

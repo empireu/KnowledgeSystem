@@ -63,11 +63,6 @@ public class ResponseTracker : IResponseTracker, IHostedService
         foreach (var activeRunInfo in activeRuns)
         {
             await activeRunInfo.Cts.CancelAsync();
-
-            if (activeRunInfo.OnCloseAction != null)
-            {
-                await activeRunInfo.OnCloseAction(cancellationToken);
-            }
         }
     }
 }

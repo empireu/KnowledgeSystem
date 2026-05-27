@@ -6,17 +6,14 @@ using NetCord.Services.ApplicationCommands;
 
 namespace KnowledgeSystem.Plugins.Wiki;
 
-public class WikiModule(IConversationManager conversationManager, IServiceProvider serviceProvider ) : ApplicationCommandModule<ApplicationCommandContext>
+public class WikiModule(IConversationManager conversationManager, WikiLayerFactory factory) : ApplicationCommandModule<ApplicationCommandContext>
 {
     [SlashCommand("ask", "Ask a single wiki question")]
     public async Task AskAsync([SlashCommandParameter] string message)
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
-        
-        var messagingLayer = ActivatorUtilities.CreateInstance<WikiMessagingLayer>(
-            serviceProvider,
-            "wiki_ask"
-        );
+
+        var messagingLayer = factory.CreateMessagingLayer("wiki_ask");
        
         conversationManager.RunOneShotConversation(
             Context.Interaction.Id,
@@ -47,10 +44,7 @@ public class WikiModule(IConversationManager conversationManager, IServiceProvid
             
         var thread = await textChannel.CreateGuildThreadAsync(starterMessage.Id, new GuildThreadFromMessageProperties(threadName));
 
-        var messagingLayer = ActivatorUtilities.CreateInstance<WikiMessagingLayer>(
-            serviceProvider,
-            "wiki_convo"
-        );
+        var messagingLayer = factory.CreateMessagingLayer("wiki_conversation");
             
         conversationManager.OpenConversation(thread.Id, messagingLayer);
 

@@ -258,8 +258,7 @@ public sealed class ConversationManager(
         var cts = new CancellationTokenSource(AgentTimeout);
         tracker.Add(interactionId, new ActiveRunInfo
         {
-            Cts = cts,
-            OnCloseAction = stopCts => target.UpdateContentAsync("Interaction was cancelled", stopCts)
+            Cts = cts
         });
         
         var task = conversation.RunToCompletionAsync(userMessageInfo, target, cts.Token);
@@ -315,8 +314,7 @@ public sealed class ConversationManager(
         var cts = new CancellationTokenSource(AgentTimeout);
         tracker.Add(conversation.ScopeInfo.Id, new ActiveRunInfo
         {
-            Cts = cts,
-            OnCloseAction = stopCts => target.UpdateContentAsync("Interaction was cancelled", stopCts)
+            Cts = cts
         });
         
         var task = conversation.RunToCompletionAsync(
