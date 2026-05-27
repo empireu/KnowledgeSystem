@@ -7,6 +7,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="KnowledgeSystem.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Api\KnowledgeSystem.Api.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.PluginLoader\KnowledgeSystem.PluginLoader.csproj" />

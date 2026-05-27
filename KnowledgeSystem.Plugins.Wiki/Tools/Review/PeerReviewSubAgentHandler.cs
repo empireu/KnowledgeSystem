@@ -368,57 +368,43 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
         return uncovered;
     }
     
-    public sealed class Proxy : ISubAgentProxy, AgentRunner.ICompletionFactory
+    public sealed class Proxy(
+        AgentRunner<ConversationalContext> parentRunner,
+        PeerReviewSubAgentHandler subAgentHandler,
+        PeerReviewContext reviewContext,
+        ProviderConfig reviewProvider,
+        ChatOptionsConfig reviewChatOptions,
+        CancellationToken cancellationToken
+    ) : ISubAgentProxy
     {
-        public PeerReviewContext ReviewContext { get; }
-        
-        private readonly AgentRunner<ConversationalContext> _parentRunner;
-        private readonly PeerReviewSubAgentHandler _subAgentHandler;
-        private readonly ProviderConfig _reviewProvider;
-        private readonly ChatOptionsConfig _reviewChatOptions;
-        private readonly AgentRunner<PeerReviewContext> _runner;
-        private int _turnCount;
-        
         private const int MaxTurns = 7;
 
-        public Proxy(
-            AgentRunner<ConversationalContext> parentRunner,
-            PeerReviewSubAgentHandler subAgentHandler,
-            PeerReviewContext reviewContext, 
-            ProviderConfig reviewProvider,
-            ChatOptionsConfig reviewChatOptions,
-            CancellationToken cancellationToken
-        )
-        {
-            ReviewContext = reviewContext;
-            _parentRunner = parentRunner;
-            _subAgentHandler = subAgentHandler;
-            _reviewProvider = reviewProvider;
-            _reviewChatOptions = reviewChatOptions;
+        public PeerReviewContext ReviewContext { get; } = reviewContext;
 
-            _runner = new AgentRunner<PeerReviewContext>(
-                OpenAiChatClientFactory.Create(reviewProvider),
-                new PeerReviewAgent("peer_reviewer"),
-                parentRunner,
-                reviewContext,
-                NullEventManager.Instance,
-                cancellationToken,
-                this
-            );
-        }
+        private readonly AgentRunner<PeerReviewContext> _runner = new(
+            OpenAiChatClientFactory.Create(reviewProvider),
+            new PeerReviewAgent("peer_reviewer"),
+            parentRunner,
+            reviewContext,
+            NullEventManager.Instance,
+            cancellationToken,
+            AgentRunner.ICompletionFactory.Wrap(reviewChatOptions.CreateOptions)
+        );
+        
+        private int _turnCount;
         
         public AgentRunner AgentRunner  => _runner;
         
         public async Task<ToolExecutionResult?> StepAsync()
         {
-            if (_parentRunner.ActiveToolCalls.Count > 1)
+            if (parentRunner.ActiveToolCalls.Count > 1)
             {
-                return _subAgentHandler.Error("Cannot execute review in parallel with other tools!");
+                return subAgentHandler.Error("Cannot execute review in parallel with other tools!");
             }
             
             if (++_turnCount > MaxTurns)
             {
-                return _subAgentHandler.Error($"Review agent exceeded maximum turn limit ({MaxTurns}).");
+                return subAgentHandler.Error($"Review agent exceeded maximum turn limit ({MaxTurns}).");
             }
             
             var result = await _runner.ExecuteTurn();
@@ -428,26 +414,21 @@ public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgu
                 switch (ReviewContext.FinalStatus)
                 {
                     case PeerReviewContext.Status.Approved:
-                        return _subAgentHandler.Success("Review passed. Your report has been shown to the user.");
+                        return subAgentHandler.Success("Review passed. Your report has been shown to the user.");
                     case PeerReviewContext.Status.Rejected:
-                        return _subAgentHandler.Error(ReviewContext.Feedback ?? "No feedback provided.");
+                        return subAgentHandler.Error(ReviewContext.Feedback ?? "No feedback provided.");
                     case PeerReviewContext.Status.Invalid:
                     default:
-                        return _subAgentHandler.Error("Review agent completed without calling approve or reject.");
+                        return subAgentHandler.Error("Review agent completed without calling approve or reject.");
                 }
             }
 
             if (result == AgentRunner.TurnStatus.CompletedWithError)
             {
-                return _subAgentHandler.Error($"Review agent error: {_runner.FinishError?.Message ?? "Unknown error"}");
+                return subAgentHandler.Error($"Review agent error: {_runner.FinishError?.Message ?? "Unknown error"}");
             }
 
             return null;
-        }
-
-        public Microsoft.Extensions.AI.ChatOptions CreateOptionsForTurn(AgentRunner runner)
-        {
-            return OpenAiChatOptionsFactory.Create(_reviewChatOptions.ProviderOnly, _reviewChatOptions.Temperature);
         }
     }
 }

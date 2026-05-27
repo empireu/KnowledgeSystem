@@ -1,6 +1,7 @@
 ﻿using KnowledgeSystem.Api;
 using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Discord.Integration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NetCord;
 using NetCord.Rest;
@@ -8,33 +9,23 @@ using NetCord.Services.ApplicationCommands;
 
 namespace KnowledgeSystem.Agent;
 
-public class MqrModule(
-    ILogger<MqrModule> logger,
-    IConversationManager conversationManager,
-    IResponseTracker responseTracker
-) : ApplicationCommandModule<ApplicationCommandContext>
+public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversationManager, IServiceProvider serviceProvider ) : ApplicationCommandModule<ApplicationCommandContext>
 {
-    private static readonly TimeSpan AgentTimeout = TimeSpan.FromMinutes(14);
-
     [SlashCommand("ask", "Ask MQR a single question")]
     public async Task AskAsync([SlashCommandParameter] string message)
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
         
-        var target = new InteractionMessageTarget(Context.Interaction);
-
-        var cts = new CancellationTokenSource(AgentTimeout);
-        responseTracker.Add(Context.Interaction.Id, new ActiveRunInfo
-        {
-            Cts = cts,
-            OnCloseAction = stopCts => target.UpdateContentAsync("Question was cancelled", stopCts)
-        });
-        
-        _ = RunAgentSafely(
-            conversationManager.AskAsync(message, target, cts.Token),
-            target,
-            "Agent execution failed in /mqr ask",
-            Context.Interaction.Id
+        var messagingLayer = ActivatorUtilities.CreateInstance<WikiMessagingLayer>(
+            serviceProvider,
+            "wiki_ask"
+        );
+       
+        conversationManager.RunOneShotConversation(
+            Context.Interaction.Id,
+            new UserMessageInfo(message),
+            new InteractionMessageTarget(Context.Interaction),
+            messagingLayer
         );
     }
 
@@ -43,90 +34,29 @@ public class MqrModule(
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
         
-        try
+        if (Context.Channel is not TextGuildChannel textChannel)
         {
-            if (Context.Channel is not TextGuildChannel textChannel)
-            {
-                await Context.Interaction.ModifyResponseAsync(m => m.Content = "This command can only be used in a server text channel.");
-                return;
-            }
+            await Context.Interaction.ModifyResponseAsync(m => m.Content = "This command can only be used in a server text channel.");
+            return;
+        }
 
-            // Text channels require threads to be created from a message.
-            // This message becomes the thread's root/anchor.
-            var threadName = $"MQR: {Context.User.Username}";
-            var starterMessage = await textChannel.SendMessageAsync(new MessageProperties
-            {
-                Content = $"▸ **{Context.User.Username}** started a conversation"
-            });
+        // Text channels require threads to be created from a message.
+        // This message becomes the thread's root/anchor.
+        var threadName = $"MQR: {Context.User.Username}";
+        var starterMessage = await textChannel.SendMessageAsync(new MessageProperties
+        {
+            Content = $"▸ **{Context.User.Username}** started a conversation"
+        });
             
-            var thread = await textChannel.CreateGuildThreadAsync(starterMessage.Id, new GuildThreadFromMessageProperties(threadName));
+        var thread = await textChannel.CreateGuildThreadAsync(starterMessage.Id, new GuildThreadFromMessageProperties(threadName));
 
-            // Register the conversation immediately so MessageHandler picks up replies:
-            var conversation = conversationManager.CreateConversation(thread.Id);
+        var messagingLayer = ActivatorUtilities.CreateInstance<WikiMessagingLayer>(
+            serviceProvider,
+            "wiki_convo"
+        );
+            
+        conversationManager.OpenConversation(thread.Id, messagingLayer);
 
-            await Context.Interaction.ModifyResponseAsync(m => m.Content = $"Thread created! <#{thread.Id}>");
-
-            // Send a status message in the thread that the observer will modify in-place:
-            var statusMessage = await Context.Client.Rest.SendMessageAsync(thread.Id, new MessageProperties
-            {
-                Content = "> ▸ *Unleashing...*"
-            });
-
-            var target = new ChannelMessageTarget(Context.Client.Rest, thread.Id, statusMessage.Id);
-
-            var cts = new CancellationTokenSource(AgentTimeout);
-            responseTracker.Add(thread.Id, new ActiveRunInfo
-            {
-                Cts = cts
-            });
-
-            _ = RunAgentSafely(
-                conversation.RunToCompletionAsync(message, target, cts.Token),
-                target,
-                "Agent execution failed in thread {threadId}",
-                thread.Id
-            );
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error in /mqr unleash");
-            try
-            {
-                await Context.Interaction.ModifyResponseAsync(m => m.Content = $"An error occurred: {ex.Message}");
-            }
-            catch
-            {
-                // Interaction may have already been updated
-            }
-        }
-    }
-
-    private async Task RunAgentSafely(Task agentTask, IDiscordMessageTarget target, string logMessage, ulong runKey)
-    {
-        try
-        {
-            await agentTask;
-        }
-        catch (OperationCanceledException)
-        {
-            logger.LogInformation("Agent task was cancelled for run {RunKey}", runKey);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, logMessage, runKey);
-
-            try
-            {
-                await target.UpdateContentAsync($"An error occurred: {ex.Message}");
-            }
-            catch (Exception discordEx)
-            {
-                logger.LogError(discordEx, "Discord communication error for run {RunKey}", runKey);
-            }
-        }
-        finally
-        {
-            responseTracker.Remove(runKey);
-        }
+        await Context.Interaction.ModifyResponseAsync(m => m.Content = $"Thread created! <#{thread.Id}>");
     }
 }

@@ -1,8 +1,6 @@
 using KnowledgeSystem;
-using KnowledgeSystem.Agent.Config;
 using KnowledgeSystem.Agents.Telemetry;
 using KnowledgeSystem.Discord.Conversation;
-using KnowledgeSystem.Discord.Integration;
 using KnowledgeSystem.PluginLoader;
 using KnowledgeSystem.Retrieval.Persistent;
 using KnowledgeSystem.Retrieval.Telemetry;
@@ -39,7 +37,7 @@ var builder = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IConversationManager>(sp => sp.GetRequiredService<ConversationManager>());
         services.AddSingleton<ConversationManager>();
         services.AddHostedService(sp => sp.GetRequiredService<ConversationManager>());
-        services.AddGatewayHandler<MessageHandler>();
+        services.AddGatewayHandler<ExternalMessageHandler>();
     })
     .ConfigureServices(services =>
     {

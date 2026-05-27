@@ -1,5 +1,4 @@
 ﻿using KnowledgeSystem.Discord.Integration;
-using NetCord.Rest;
 
 namespace KnowledgeSystem.Api;
 
@@ -9,11 +8,8 @@ namespace KnowledgeSystem.Api;
 public interface IAgentMessagingLayer
 {
     /// <summary>
-    ///     Called only once, before the conversation starts.
-    ///     The context and other long-living objects should be created here, with the system prompt inserted (if applicable).
+    ///     Called only once, before the first message comes through.
     /// </summary>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
     public Task PrepareAsync(CancellationToken cancellationToken);
 
     /// <summary>

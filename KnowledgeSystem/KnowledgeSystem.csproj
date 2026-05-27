@@ -43,8 +43,6 @@
 
     <ItemGroup>
       <Folder Include="Agent\Config\" />
-      <Folder Include="Provider\" />
-      <Folder Include="Telemetry\" />
     </ItemGroup>
 
 </Project>

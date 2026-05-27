@@ -7,9 +7,9 @@
 public interface IActiveConversation
 {
     /// <summary>
-    ///     Gets the channel ID of the thread.
+    ///     Gets the ID and scope of the conversation.
     /// </summary>
-    public ulong ChannelId { get; }
+    public ConversationScopeInfo ScopeInfo { get; }
     
     /// <summary>
     ///     Gets the time offset for automatic expiration.

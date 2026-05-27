@@ -17,7 +17,7 @@ namespace KnowledgeSystem.Agent;
 /// <summary>
 ///     Messaging layer for one-shot ask and long-running conversations with the wiki agent.
 /// </summary>
-public class WikiMessagingLayer : IAgentMessagingLayer
+public sealed class WikiMessagingLayer : IAgentMessagingLayer
 {
     private readonly ConversationalContext _context = new();
     private readonly ILogger<WikiMessagingLayer> _logger;

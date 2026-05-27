@@ -126,7 +126,7 @@ public abstract class AgentRunner
         {
             public ChatOptions CreateOptionsForTurn(AgentRunner runner)
             {
-                return factory();
+                return factory(runner);
             }
         }
     }

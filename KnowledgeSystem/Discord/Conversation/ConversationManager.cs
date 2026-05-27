@@ -1,7 +1,9 @@
 using KnowledgeSystem.Api;
+using KnowledgeSystem.Discord.Integration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NetCord.Gateway;
 using NetCord.Rest;
 
 namespace KnowledgeSystem.Discord.Conversation;
@@ -9,11 +11,12 @@ namespace KnowledgeSystem.Discord.Conversation;
 public sealed class ConversationManager(
     ILogger<ConversationManager> logger,
     RestClient restClient,
+    ResponseTracker tracker,
     IServiceProvider serviceProvider
 ) : IConversationManager, IHostedService, IDisposable
 {
-    // Sorted by expiry timestamp for efficient eviction scanning.
-    // Keyed by (ExpiresAt, ChannelId) to guarantee uniqueness.
+    private static readonly TimeSpan AgentTimeout = TimeSpan.FromMinutes(14);
+    
     private readonly SortedList<(DateTimeOffset ExpiresAt, ulong ChannelId), ActiveConversation> _sorted = [];
     private readonly Dictionary<ulong, ActiveConversation> _byChannel = [];
     private readonly Lock _lock = new();
@@ -40,11 +43,13 @@ public sealed class ConversationManager(
         }
     }
 
-    public ActiveConversation? TryGetConversation(ulong channelId)
+    public ActiveConversation? TryGetAndTouchConversation(ulong channelId)
     {
         lock (_lock)
         {
-            return _byChannel.GetValueOrDefault(channelId);
+            var result = _byChannel.GetValueOrDefault(channelId);
+            result?.TouchActivity();
+            return result;
         }
     }
     
@@ -96,14 +101,25 @@ public sealed class ConversationManager(
 
     private void InsertSorted(ActiveConversation conversation)
     {
-        _sorted[(conversation.ExpiresAt, conversation.ChannelId)] = conversation;
-        _byChannel[conversation.ChannelId] = conversation;
+        if (conversation.ScopeInfo.ScopeType != ConversationScopeInfo.Type.Channel)
+        {
+            throw new Exception($"Cannot insert conversation of type {conversation.ScopeInfo.ScopeType}");
+        }
+        
+        // From parent, but for safety:
+        lock (_lock)
+        {
+            _sorted[(conversation.ExpiresAt, conversation.ScopeInfo.Id)] = conversation;
+            _byChannel[conversation.ScopeInfo.Id] = conversation;
+        }
     }
 
     private ActiveConversation? RemoveFromSorted(ulong channelId)
     {
         if (!_byChannel.Remove(channelId, out var conversation))
+        {
             return null;
+        }
 
         // Find the sorted entry by channelId (expiry may have changed since insert)
         var key = _sorted.Keys.FirstOrDefault(k => k.ChannelId == channelId);
@@ -140,7 +156,7 @@ public sealed class ConversationManager(
 
         foreach (var conversation in expired)
         {
-            logger.LogInformation("Evicting expired conversation in channel {channel}", conversation.ChannelId);
+            logger.LogInformation("Evicting expired conversation in channel {channel}", conversation.ScopeInfo.Id);
             await conversation.CloseAsync(restClient, "idle timeout", CancellationToken.None);
             conversation.Dispose();
         }
@@ -212,33 +228,144 @@ public sealed class ConversationManager(
     #endregion
 
     #region API
-    
-    public TLayer CreateConversation<TLayer>(ulong channelId, Func<IActiveConversation, TLayer> factory) where TLayer : IAgentMessagingLayer
+
+    public void OpenConversation(ulong channel, IAgentMessagingLayer layer)
     {
         lock (_lock)
         {
-            if (_byChannel.ContainsKey(channelId))
+            if (_byChannel.ContainsKey(channel))
             {
-                throw new InvalidOperationException($"A conversation for channel {channelId} already exists.");
+                throw new InvalidOperationException($"A conversation for channel {channel} already exists.");
             }
 
-            // Create the conversation first:
             var conversation = new ActiveConversation(
                 serviceProvider.GetRequiredService<ILogger<ActiveConversation>>(),
-                this,
-                channelId
+                new ConversationScopeInfo(channel, ConversationScopeInfo.Type.Channel),
+                layer
             );
-            
-            var layer = factory(conversation);
-    
-            // Then bind the dependency:
-            conversation.Layer = layer;
-            
+         
             InsertSorted(conversation);
-
-            return layer;
         }
     }
-    
+
+    public void RunOneShotConversation(ulong interactionId, UserMessageInfo userMessageInfo, IDiscordMessageTarget target, IAgentMessagingLayer layer)
+    {
+        var conversation = new ActiveConversation(
+            serviceProvider.GetRequiredService<ILogger<ActiveConversation>>(),
+            new ConversationScopeInfo(interactionId, ConversationScopeInfo.Type.Single),
+            layer
+        );
+        
+        var cts = new CancellationTokenSource(AgentTimeout);
+        tracker.Add(interactionId, new ActiveRunInfo
+        {
+            Cts = cts,
+            OnCloseAction = stopCts => target.UpdateContentAsync("Interaction was cancelled", stopCts)
+        });
+        
+        var task = conversation.RunToCompletionAsync(userMessageInfo, target, cts.Token);
+
+        _ = ObserveExecutionAndFinishRun(
+            task,
+            target,
+            conversation.ScopeInfo,
+            cts.Token
+        );
+    }
+
     #endregion
+
+    internal async Task HandleExternalMessage(Message message) 
+    {
+        // Only handle messages in active conversation threads:
+        var conversation = TryGetAndTouchConversation(message.ChannelId);
+        
+        if (conversation == null)
+        {
+            return;
+        }
+
+        if (conversation.IsRunning)
+        {
+            await restClient.SendMessageAsync(message.ChannelId, new MessageProperties
+            {
+                Content = "> Another operation is in progress."
+            });
+                
+            return;
+        }
+
+        logger.LogInformation(
+            "Processing message in conversation {channel} from {user}: {content}",
+            message.ChannelId,
+            message.Author.Username,
+            message.Content
+        );
+
+        var statusMessage = await restClient.SendMessageAsync(message.ChannelId, new MessageProperties
+        {
+            Content = "> *Processing...*"
+        });
+            
+        var target = new ChannelMessageTarget(
+            restClient,
+            message.ChannelId,
+            statusMessage.Id
+        );
+        
+        var cts = new CancellationTokenSource(AgentTimeout);
+        tracker.Add(conversation.ScopeInfo.Id, new ActiveRunInfo
+        {
+            Cts = cts,
+            OnCloseAction = stopCts => target.UpdateContentAsync("Interaction was cancelled", stopCts)
+        });
+        
+        var task = conversation.RunToCompletionAsync(
+            new UserMessageInfo(message.Content),
+            target,
+            cts.Token
+        );
+        
+        _ = ObserveExecutionAndFinishRun(
+            task,
+            target,
+            conversation.ScopeInfo,
+            cts.Token
+        );
+    }
+    
+    /// <summary>
+    ///     Runs in the background. Observes the execution of the agent's task, logs errors, and removes the run from the active tracker.
+    /// </summary>
+    private async Task ObserveExecutionAndFinishRun(Task agentTask, IDiscordMessageTarget target, ConversationScopeInfo scopeInfo, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await agentTask;
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogInformation("Agent task was cancelled for run {scope}", scopeInfo);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Agent task for run {scope} threw an exception", scopeInfo);
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await target.UpdateContentAsync($"An error occurred: {ex.Message}", cancellationToken);
+                }
+                catch (Exception discordEx)
+                {
+                    logger.LogError(discordEx, "Discord communication error for run {scope}", scopeInfo);
+                }   
+            }
+        }
+        finally
+        {
+            tracker.Remove(scopeInfo.Id);
+        }
+    }
 }

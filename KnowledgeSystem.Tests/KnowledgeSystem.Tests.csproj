@@ -21,6 +21,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Plugins.Wiki\KnowledgeSystem.Plugins.Wiki.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval.InMemory\KnowledgeSystem.Retrieval.InMemory.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval.Persistent\KnowledgeSystem.Retrieval.Persistent.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />

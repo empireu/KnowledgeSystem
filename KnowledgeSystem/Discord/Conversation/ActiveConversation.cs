@@ -10,31 +10,28 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
     private static readonly TimeSpan TimeoutDuration = TimeSpan.FromHours(1);
 
     private readonly ILogger<ActiveConversation> _logger;
-    private readonly IConversationManager _manager;
     private readonly SemaphoreSlim _runLock = new(1, 1);
     private CancellationTokenSource _runCts = new();
     private bool _disposed;
 
+    private bool _prepared;
+
     /// <summary>
     ///     Set after the instance is created.
     /// </summary>
-    public IAgentMessagingLayer Layer { get; internal set; }
+    public IAgentMessagingLayer Layer { get; }
 
-    public ulong ChannelId { get; }
+    public ConversationScopeInfo ScopeInfo { get; }
 
     public DateTimeOffset ExpiresAt { get; private set; }
 
     public bool IsRunning => _runLock.CurrentCount == 0;
     
-    public ActiveConversation(ILogger<ActiveConversation> logger, ConversationManager manager, ulong channelId) 
+    public ActiveConversation(ILogger<ActiveConversation> logger, ConversationScopeInfo scopeInfo, IAgentMessagingLayer layer) 
     {
         _logger = logger;
-        _manager = manager;
-        ChannelId = channelId;
-
-        // Circular dependency issue
-        Layer = null!;
-        
+        ScopeInfo = scopeInfo;
+        Layer = layer;
         TouchActivity();
     }
 
@@ -48,22 +45,25 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
 
     public async Task CloseAsync(RestClient restClient, string reason, CancellationToken cancellationToken = default)
     {
-        Cancel();
-        
-        try
+        await _runCts.CancelAsync();
+
+        if (ScopeInfo.ScopeType == ConversationScopeInfo.Type.Channel)
         {
-            await restClient.SendMessageAsync(ChannelId, new MessageProperties
+            try
             {
-                Content = $"> Conversation ended: {reason}"
-            }, cancellationToken: cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send close message for conversation {channel}", ChannelId);
+                await restClient.SendMessageAsync(ScopeInfo.Id, new MessageProperties
+                {
+                    Content = $"> Conversation ended: {reason}"
+                }, cancellationToken: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send close message for conversation {target}", ScopeInfo);
+            }   
         }
     }
 
-    public async Task RunToCompletionAsync(string userMessage, IDiscordMessageTarget target, CancellationToken cancellationToken = default)
+    public async Task RunToCompletionAsync(UserMessageInfo userMessage, IDiscordMessageTarget target, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         TouchActivity();
@@ -83,13 +83,19 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
         var token = linkedCts.Token;
 
         await _runLock.WaitAsync(token);
-    
+
+        if (!_prepared)
+        {
+            await Layer.PrepareAsync(cancellationToken);
+            _prepared = true;
+        }
+        
         try
         {
             // The response pipeline is used to answer a single prompt:
             var pipeline = await Layer.CreateResponsePipeline(
                 target,
-                new UserMessageInfo(userMessage),
+                userMessage,
                 cancellationToken
             );
             
@@ -99,12 +105,12 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Conversation {channel} was cancelled", ChannelId);
+                _logger.LogInformation("Conversation {target} was cancelled", ScopeInfo);
                 return;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Conversation {channel} failed with exception", ChannelId);
+                _logger.LogError(ex, "Conversation {target} failed with exception", ScopeInfo);
                 return;
             }
             
@@ -114,11 +120,6 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
         {
             _runLock.Release();
         }
-    }
-
-    public void Cancel()
-    {
-        _runCts.Cancel();
     }
 
     public void Dispose()
