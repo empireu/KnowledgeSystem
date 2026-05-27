@@ -4,12 +4,11 @@ using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
-using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Tools.Markers;
+using KnowledgeSystem.Plugins.Library.Tools.Markers;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Plugins.Wiki.Tools.GrepContent;
+namespace KnowledgeSystem.Plugins.Library.Tools.GrepContent;
 
 public sealed class GrepContentToolHandler(
     AgentTool tool,

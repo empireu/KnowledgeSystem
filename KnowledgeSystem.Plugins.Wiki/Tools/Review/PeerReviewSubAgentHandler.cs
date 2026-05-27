@@ -8,7 +8,7 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Events.Implementation;
 using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Tools.Markers;
+using KnowledgeSystem.Plugins.Library.Tools.Markers;
 using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach

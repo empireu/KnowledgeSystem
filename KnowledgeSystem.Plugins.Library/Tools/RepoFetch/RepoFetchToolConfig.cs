@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Plugins.Wiki.Tools.RepoFetch;
+﻿namespace KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
 
 public sealed class RepoFetchToolConfig
 {

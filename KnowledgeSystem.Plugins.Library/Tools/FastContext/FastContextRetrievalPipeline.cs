@@ -13,7 +13,7 @@ using KnowledgeSystems.Extensions;
 // ReSharper disable ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Plugins.Wiki.Tools.FastContext;
+namespace KnowledgeSystem.Plugins.Library.Tools.FastContext;
 
 public sealed class FastContextRetrievalPipeline
 {

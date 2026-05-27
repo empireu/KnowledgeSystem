@@ -4,12 +4,11 @@ using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
-using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Tools.Markers;
+using KnowledgeSystem.Plugins.Library.Tools.Markers;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Plugins.Wiki.Tools.FetchContext;
+namespace KnowledgeSystem.Plugins.Library.Tools.FetchContext;
 
 public sealed class FetchContextToolHandler(
     AgentTool tool,

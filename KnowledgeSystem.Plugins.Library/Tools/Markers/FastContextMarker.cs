@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.Agents.Context;
 
-namespace KnowledgeSystem.Plugins.Wiki.Tools.Markers;
+namespace KnowledgeSystem.Plugins.Library.Tools.Markers;
 
 public class FastContextMarker : IMarkerElement
 {

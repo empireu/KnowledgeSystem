@@ -1,7 +1,7 @@
 ﻿using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 
-namespace KnowledgeSystem.Plugins.Wiki.Tools.Markers;
+namespace KnowledgeSystem.Plugins.Library.Tools.Markers;
 
 public class RepositoryFetchedTextMarker : IMarkerElement
 {

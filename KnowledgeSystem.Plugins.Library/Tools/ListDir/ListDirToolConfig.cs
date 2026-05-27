@@ -1,4 +1,4 @@
-namespace KnowledgeSystem.Plugins.Wiki.Tools.ListDir;
+namespace KnowledgeSystem.Plugins.Library.Tools.ListDir;
 
 public sealed class ListDirToolConfig
 {

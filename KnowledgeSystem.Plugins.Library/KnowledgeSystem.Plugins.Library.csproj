@@ -14,6 +14,11 @@
       <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Api\KnowledgeSystem.Api.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />
+    </ItemGroup>
+    
+    <ItemGroup>
+      <Folder Include="Tools\" />
     </ItemGroup>
 
     <Target Name="CopyToLibrariesFolder" AfterTargets="Build">

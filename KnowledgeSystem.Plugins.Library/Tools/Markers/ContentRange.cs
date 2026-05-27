@@ -1,6 +1,6 @@
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 
-namespace KnowledgeSystem.Plugins.Wiki.Tools.Markers;
+namespace KnowledgeSystem.Plugins.Library.Tools.Markers;
 
 /// <summary>
 ///     A structured reference to a region of document content, used by markers for deduplication in the peer review sub-agent.

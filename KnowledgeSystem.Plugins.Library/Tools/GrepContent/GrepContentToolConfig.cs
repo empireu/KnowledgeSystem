@@ -1,4 +1,4 @@
-namespace KnowledgeSystem.Plugins.Wiki.Tools.GrepContent;
+namespace KnowledgeSystem.Plugins.Library.Tools.GrepContent;
 
 public sealed class GrepContentToolConfig
 {
