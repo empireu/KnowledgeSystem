@@ -1,4 +1,6 @@
-﻿namespace KnowledgeSystem.Agent;
+﻿using KnowledgeSystem.Plugins.Library;
+
+namespace KnowledgeSystem.Plugins.Wiki;
 
 public sealed class PeerReviewContext : ConversationalContext
 {

@@ -2,7 +2,7 @@ using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using Microsoft.Extensions.AI;
 
-namespace KnowledgeSystem.Agent;
+namespace KnowledgeSystem.Plugins.Library;
 
 public class ConversationalContext : AgentExecutionContext
 {

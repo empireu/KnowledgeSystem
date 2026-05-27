@@ -1,18 +1,17 @@
-﻿using KnowledgeSystem.Agent.Config;
-using KnowledgeSystem.Agent.Events;
-using KnowledgeSystem.Agents.Context.TokenEstimation;
+﻿using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Ai;
 using KnowledgeSystem.Api;
-using KnowledgeSystem.Discord.Conversation;
-using KnowledgeSystem.Discord.Integration;
 using KnowledgeSystem.Events.Api;
+using KnowledgeSystem.Plugins.Library;
+using KnowledgeSystem.Plugins.Wiki.Config;
+using KnowledgeSystem.Plugins.Wiki.Events;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace KnowledgeSystem.Agent;
+namespace KnowledgeSystem.Plugins.Wiki;
 
 /// <summary>
 ///     Messaging layer for one-shot ask and long-running conversations with the wiki agent.

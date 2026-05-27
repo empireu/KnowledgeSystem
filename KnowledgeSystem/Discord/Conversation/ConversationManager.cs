@@ -1,5 +1,4 @@
 using KnowledgeSystem.Api;
-using KnowledgeSystem.Discord.Integration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

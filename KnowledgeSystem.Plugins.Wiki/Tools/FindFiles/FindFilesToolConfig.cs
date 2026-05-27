@@ -1,6 +1,6 @@
 // ReSharper disable AutoPropertyCanBeMadeGetOnly.Global
 
-namespace KnowledgeSystem.Agent.Tools.FindFiles;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.FindFiles;
 
 public sealed class FindFilesToolConfig
 {

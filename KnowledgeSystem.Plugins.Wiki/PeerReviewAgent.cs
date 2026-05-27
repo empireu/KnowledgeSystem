@@ -1,8 +1,8 @@
-﻿using KnowledgeSystem.Agent.Tools.Review;
-using KnowledgeSystem.Agents.Orchestration;
+﻿using KnowledgeSystem.Agents.Orchestration;
+using KnowledgeSystem.Plugins.Wiki.Tools.Review;
 using Microsoft.Extensions.AI;
 
-namespace KnowledgeSystem.Agent;
+namespace KnowledgeSystem.Plugins.Wiki;
 
 public sealed class PeerReviewAgent : Agent<PeerReviewContext>
 {

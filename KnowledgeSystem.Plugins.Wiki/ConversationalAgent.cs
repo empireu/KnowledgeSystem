@@ -1,17 +1,18 @@
-using KnowledgeSystem.Agent.Config;
-using KnowledgeSystem.Agent.Events;
-using KnowledgeSystem.Agent.Tools.FastContext;
-using KnowledgeSystem.Agent.Tools.FetchContext;
-using KnowledgeSystem.Agent.Tools.FindFiles;
-using KnowledgeSystem.Agent.Tools.GrepContent;
-using KnowledgeSystem.Agent.Tools.ListDir;
-using KnowledgeSystem.Agent.Tools.RepoFetch;
-using KnowledgeSystem.Agent.Tools.Review;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Events.Api;
+using KnowledgeSystem.Plugins.Library;
+using KnowledgeSystem.Plugins.Wiki.Config;
+using KnowledgeSystem.Plugins.Wiki.Events;
+using KnowledgeSystem.Plugins.Wiki.Tools.FastContext;
+using KnowledgeSystem.Plugins.Wiki.Tools.FetchContext;
+using KnowledgeSystem.Plugins.Wiki.Tools.FindFiles;
+using KnowledgeSystem.Plugins.Wiki.Tools.GrepContent;
+using KnowledgeSystem.Plugins.Wiki.Tools.ListDir;
+using KnowledgeSystem.Plugins.Wiki.Tools.RepoFetch;
+using KnowledgeSystem.Plugins.Wiki.Tools.Review;
 using Microsoft.Extensions.AI;
 
-namespace KnowledgeSystem.Agent;
+namespace KnowledgeSystem.Plugins.Wiki;
 
 public sealed class ConversationalAgent : Agent<ConversationalContext>
 {

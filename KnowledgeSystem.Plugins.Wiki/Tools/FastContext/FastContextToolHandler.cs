@@ -1,20 +1,20 @@
 using System.Diagnostics;
 using System.Text;
-using KnowledgeSystem.Agent.Tools.Markers;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Api;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Lexical;
-using KnowledgeSystem.Retrieval;
+using KnowledgeSystem.Plugins.Library;
+using KnowledgeSystem.Plugins.Wiki.Tools.Markers;
 using KnowledgeSystem.Retrieval.Api.Store;
-using KnowledgeSystem.Telemetry;
 using KnowledgeSystems.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Agent.Tools.FastContext;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.FastContext;
 
 public sealed class FastContextToolHandler(
     AgentTool tool,

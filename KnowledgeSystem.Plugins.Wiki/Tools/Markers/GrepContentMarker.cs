@@ -1,6 +1,6 @@
 using KnowledgeSystem.Agents.Context;
 
-namespace KnowledgeSystem.Agent.Tools.Markers;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.Markers;
 
 public class GrepContentMarker : IMarkerElement
 {

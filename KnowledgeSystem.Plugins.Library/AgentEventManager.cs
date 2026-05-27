@@ -3,7 +3,7 @@ using KnowledgeSystem.Events.Implementation;
 using KnowledgeSystems.Extensions;
 using Microsoft.Extensions.Logging;
 
-namespace KnowledgeSystem.Discord.Conversation;
+namespace KnowledgeSystem.Plugins.Library;
 
 public class AgentEventManager(ILogger<DefaultEventManager>? errorLogger, IServiceProvider serviceProvider) : DefaultEventManager(errorLogger, serviceProvider)
 {

@@ -1,13 +1,11 @@
 ﻿using KnowledgeSystem.Api;
-using KnowledgeSystem.Discord.Conversation;
-using KnowledgeSystem.Discord.Integration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NetCord;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 
-namespace KnowledgeSystem.Agent;
+namespace KnowledgeSystem.Plugins.Wiki;
 
 public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversationManager, IServiceProvider serviceProvider ) : ApplicationCommandModule<ApplicationCommandContext>
 {

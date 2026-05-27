@@ -1,14 +1,15 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using KnowledgeSystem.Agent.Tools.Markers;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
+using KnowledgeSystem.Plugins.Library;
+using KnowledgeSystem.Plugins.Wiki.Tools.Markers;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Agent.Tools.GrepContent;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.GrepContent;
 
 public sealed class GrepContentToolHandler(
     AgentTool tool,

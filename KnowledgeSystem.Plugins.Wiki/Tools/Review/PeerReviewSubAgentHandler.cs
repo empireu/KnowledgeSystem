@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using KnowledgeSystem.Agent.Tools.Markers;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
@@ -8,11 +7,13 @@ using KnowledgeSystem.Ai;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Events.Implementation;
+using KnowledgeSystem.Plugins.Library;
+using KnowledgeSystem.Plugins.Wiki.Tools.Markers;
 using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Agent.Tools.Review;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.Review;
 
 public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ProviderConfig reviewProvider, ChatOptionsConfig reviewChatOptions, string reviewSystemPromptFile) : ToolHandler<ConversationalContext>.SubAgent(tool) {
     public const string ToolId = "submit_with_review";    

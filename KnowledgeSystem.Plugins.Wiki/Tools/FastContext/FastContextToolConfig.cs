@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Agent.Tools.FastContext;
+﻿namespace KnowledgeSystem.Plugins.Wiki.Tools.FastContext;
 
 public sealed class FastContextToolConfig
 {

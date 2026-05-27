@@ -1,8 +1,8 @@
-﻿using KnowledgeSystem.Agent.Config;
-using KnowledgeSystem.PluginLoader;
+﻿using KnowledgeSystem.PluginLoader;
+using KnowledgeSystem.Plugins.Wiki.Config;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Agent;
+namespace KnowledgeSystem.Plugins.Wiki;
 
 public class WikiPluginStartup : IPluginStartup
 {

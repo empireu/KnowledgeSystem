@@ -1,10 +1,16 @@
+using KnowledgeSystem.Agents.Telemetry;
+using KnowledgeSystem.Api;
+using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Embedding;
-using KnowledgeSystem.Retrieval.Api;
-using KnowledgeSystem.Retrieval.Api.Store;
-using KnowledgeSystem.Retrieval.Persistent;
-using Microsoft.EntityFrameworkCore;
+using KnowledgeSystem.Retrieval.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using NetCord.Gateway;
+using NetCord.Hosting.Gateway;
+using NetCord.Hosting.Services.ApplicationCommands;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace KnowledgeSystem;
 
@@ -13,35 +19,72 @@ namespace KnowledgeSystem;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddRagServices(this IServiceCollection services, IConfiguration configuration)
+    extension(IHostBuilder hostBuilder)
     {
-        services.AddOptions<WikiDiskStoreDescription>()
-            .BindConfiguration(WikiDiskStoreDescription.Section)
-            .ValidateOnStart();
- 
-        var options = configuration.GetSection(WikiDiskStoreDescription.Section).Get<WikiDiskStoreDescription>() 
-                      ?? throw new InvalidOperationException("RAG configuration is missing");
+        internal IHostBuilder WithDiscordIntegration() => hostBuilder.ConfigureServices(services =>
+        {
+            services.AddDiscordGateway(options =>
+            {
+                options.Intents = GatewayIntents.GuildMessages | GatewayIntents.MessageContent | GatewayIntents.Guilds;
+            });
 
-        services.AddDbContext<RagDbContext>(o => o.UseSqlite($"Data Source={options.DatabasePath}"));
+            // Message handler:
+            services.AddGatewayHandler<ExternalMessageHandler>();
+       
+            services.AddApplicationCommands();
+        });
 
-        // Register the SQLite-backed index state tracker:
-        services.AddSingleton<IIndexStateTracker, SqliteIndexStateTracker>();
+        internal IHostBuilder WithCoreServices() => hostBuilder.ConfigureServices((context, services) =>
+        {
+            var options = context.Configuration
+                .GetSection(KnowledgeSystemConfig.Section)
+                .Get<KnowledgeSystemConfig>() ?? throw new InvalidOperationException("RAG configuration is missing");
+            
+            // Conversation manager:
+            services.AddSingleton<ConversationManager>();
+            services.AddSingleton<IConversationManager>(sp => sp.GetRequiredService<ConversationManager>());
+            services.AddHostedService(sp => sp.GetRequiredService<ConversationManager>());
 
-        services.AddSingleton<IEmbeddingService>(_ =>
-            new OpenAiEmbeddingService(
-                options.Embedding.Endpoint,
-                options.Embedding.Key,
-                options.Embedding.Model,
-                options.Embedding.Dimension,
-                options.Embedding.SystemPrompt
-            ));
-        
-        services.AddSingleton<DiskWikiStore>();
-        
-        // TODO Move to manager
-        services.AddSingleton<IReadOnlyDocumentStore>(sp => sp.GetRequiredService<DiskWikiStore>());
-        services.AddSingleton<StoreManager>();
-        
-        return services;
+            // Run tracker:
+            services.AddSingleton<ResponseTracker>();
+            services.AddSingleton<IResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
+            services.AddHostedService<ResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
+            
+            // Embedding:
+            if (options.EmbeddingProvider != null && options.EmbeddingConfig != null)
+            {
+                services.AddSingleton<IEmbeddingService>(_ =>
+                    new OpenAiEmbeddingService(
+                        options.EmbeddingProvider.Endpoint,
+                        options.EmbeddingProvider.Key,
+                        options.EmbeddingProvider.Model,
+                        options.EmbeddingConfig.Dimension,
+                        options.EmbeddingConfig.SystemPrompt
+                    ));
+            }
+        });
+
+        internal IHostBuilder WithTelemetryServices() => hostBuilder.ConfigureServices(services =>
+        {
+            services
+                .AddOpenTelemetry()
+                .ConfigureResource(resource => 
+                {
+                    resource.AddService("KnowledgeSystem");
+                })
+                .WithTracing(tracing =>
+                {
+                    tracing.AddSource(RetrievalTelemetry.Retrieval.Name);
+                    tracing.AddSource(KnowledgeSystemTelemetry.AgentTools.Name);
+                    tracing.AddSource(AgentTelemetry.Agent.Name);
+                    tracing.AddSource(KnowledgeSystemTelemetry.AgentChat.Name);
+                
+                    tracing.AddOtlpExporter(options => 
+                    {
+                        options.Endpoint = new Uri("http://localhost:4317");
+                        options.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                    });
+                });
+        });
     }
 }

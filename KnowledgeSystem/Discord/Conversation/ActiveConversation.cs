@@ -1,5 +1,4 @@
 ﻿using KnowledgeSystem.Api;
-using KnowledgeSystem.Discord.Integration;
 using Microsoft.Extensions.Logging;
 using NetCord.Rest;
 

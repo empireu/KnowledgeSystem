@@ -1,5 +1,5 @@
 ﻿using System.Text;
-using FastContextToolHandler = KnowledgeSystem.Agent.Tools.FastContext.FastContextToolHandler;
+using FastContextToolHandler = KnowledgeSystem.Plugins.Wiki.Tools.FastContext.FastContextToolHandler;
 
 namespace KnowledgeSystem.Tests;
 

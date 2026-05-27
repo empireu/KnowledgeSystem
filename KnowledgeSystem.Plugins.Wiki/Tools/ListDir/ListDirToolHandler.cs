@@ -2,11 +2,11 @@ using System.Text;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
-using KnowledgeSystem.Retrieval.Api;
+using KnowledgeSystem.Plugins.Library;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Agent.Tools.ListDir;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.ListDir;
 
 public sealed class ListDirToolHandler(
     AgentTool tool,

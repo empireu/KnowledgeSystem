@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
-using KnowledgeSystem.Ai;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
+using KnowledgeSystem.Ai;
 
-namespace KnowledgeSystem.Agent.Config;
+namespace KnowledgeSystem.Plugins.Wiki.Config;
 
 /// <summary>
 ///     Temporary, will be implemented by the agent once it's separatd.

@@ -1,16 +1,16 @@
 using System.Text;
-using KnowledgeSystem.Agent;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Api;
 using KnowledgeSystem.Events.Api;
 using Microsoft.Extensions.Logging;
 using NetCord;
 using NetCord.Rest;
 
-namespace KnowledgeSystem.Discord.Integration;
+namespace KnowledgeSystem.Plugins.Library;
 
 /// <summary>
 ///     Integrates a user request with discord. The lifetime of this handler is from the moment the user sends the message, to the moment the final response is generated.

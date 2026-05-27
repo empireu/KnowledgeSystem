@@ -1,6 +1,6 @@
 using NetCord.Rest;
 
-namespace KnowledgeSystem.Discord.Integration;
+namespace KnowledgeSystem.Api;
 
 /// <summary>
 ///     Message target that modifies a message sent in a channel.

@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
-using KnowledgeSystem.Embedding;
 using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 using KnowledgeSystem.EmdParser.MarkdownTree;
 using KnowledgeSystem.Lexical;
@@ -14,7 +13,7 @@ using KnowledgeSystems.Extensions;
 // ReSharper disable ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Agent.Tools.FastContext;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.FastContext;
 
 public sealed class FastContextRetrievalPipeline
 {

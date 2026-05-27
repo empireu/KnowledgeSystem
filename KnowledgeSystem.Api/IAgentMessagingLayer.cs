@@ -1,6 +1,4 @@
-﻿using KnowledgeSystem.Discord.Integration;
-
-namespace KnowledgeSystem.Api;
+﻿namespace KnowledgeSystem.Api;
 
 /// <summary>
 ///     API layer for a single conversation or a one-shot command.

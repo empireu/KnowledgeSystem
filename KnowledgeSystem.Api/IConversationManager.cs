@@ -1,7 +1,4 @@
-﻿using KnowledgeSystem.Api;
-using KnowledgeSystem.Discord.Integration;
-
-namespace KnowledgeSystem.Discord.Conversation;
+﻿namespace KnowledgeSystem.Api;
 
 /// <summary>
 ///     Manages active Discord-AI conversations.

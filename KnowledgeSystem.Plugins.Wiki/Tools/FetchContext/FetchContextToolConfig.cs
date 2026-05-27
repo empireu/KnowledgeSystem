@@ -1,4 +1,4 @@
-namespace KnowledgeSystem.Agent.Tools.FetchContext;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.FetchContext;
 
 public sealed class FetchContextToolConfig
 {

@@ -2,7 +2,7 @@
 
 // ReSharper disable MemberCanBePrivate.Global
 
-namespace KnowledgeSystem.Telemetry;
+namespace KnowledgeSystem.Api;
 
 // TODO temporary measure
 public static class KnowledgeSystemTelemetry

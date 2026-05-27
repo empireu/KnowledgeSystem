@@ -1,8 +1,9 @@
 ﻿using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Plugins.Library;
 
-namespace KnowledgeSystem.Agent.Tools.Review;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.Review;
 
 public class ReviewFlagToolHandler<TContext>(AgentTool tool, Func<TContext, string> resultProvider) : ToolHandler<TContext>.Plain(tool) where TContext : ConversationalContext
 {

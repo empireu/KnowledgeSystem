@@ -3,13 +3,13 @@ using System.Text.RegularExpressions;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
-using KnowledgeSystem.Retrieval.Api;
+using KnowledgeSystem.Plugins.Library;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.DependencyInjection;
 
 // ReSharper disable ForeachCanBeConvertedToQueryUsingAnotherGetEnumerator
 
-namespace KnowledgeSystem.Agent.Tools.FindFiles;
+namespace KnowledgeSystem.Plugins.Wiki.Tools.FindFiles;
 
 public sealed class FindFilesToolHandler(
     AgentTool tool,
