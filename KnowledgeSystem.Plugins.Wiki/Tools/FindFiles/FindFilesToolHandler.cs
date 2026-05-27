@@ -18,14 +18,21 @@ public sealed class FindFilesToolHandler(
     FindFilesToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, FindFilesToolConfig config)
+    public static void Register(AgentToolRegistry<ConversationalContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, FindFilesToolConfig config)
     {
         var findTool = new ToolBuilder("find_files")
             .WithDescription("Searches for files by name using a case-insensitive regex pattern on the full file path. Use this to locate files when you know part of the filename or path.")
             .WithRequiredStringArgument("pattern", "Regex pattern to match against file paths. Examples: 'navos' matches any file with 'navos' in its path; '.*stats\\.md$' matches files ending in 'stats.md'; 'SDX/Data.*\\.md$' matches markdown files under SDX/Data.", out var patternArg)
             .Build();
 
-        var handler = ActivatorUtilities.CreateInstance<FindFilesToolHandler>(serviceProvider, findTool, patternArg, config);
+        var handler = ActivatorUtilities.CreateInstance<FindFilesToolHandler>(
+            serviceProvider,
+            findTool,
+            patternArg,
+            store,
+            config
+        );
+        
         registry.RegisterTool(findTool, handler);
     }
 

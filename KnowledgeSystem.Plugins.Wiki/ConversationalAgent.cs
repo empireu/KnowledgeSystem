@@ -18,20 +18,60 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 {
     private readonly IEventManager _eventManager;
 
-    public ConversationalAgent(IReadOnlyDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, ApplicationOptions options) : base(agentId)
+    public ConversationalAgent(IReadOnlyDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options) : base(agentId)
     {
         _eventManager = eventManager;
         
-        FastContextToolHandler.Register(ToolRegistry, store, serviceProvider, new FastContextToolConfig());
-        RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, new RepoFetchToolConfig());
-        ListDirToolHandler.Register(ToolRegistry, serviceProvider, new ListDirToolConfig());
-        FindFilesToolHandler.Register(ToolRegistry, serviceProvider, new FindFilesToolConfig());
-        GrepContentToolHandler.Register(ToolRegistry, serviceProvider, new GrepContentToolConfig());
-        FetchContextToolHandler.Register(ToolRegistry, serviceProvider, new FetchContextToolConfig());
+        FastContextToolHandler.Register(
+            ToolRegistry,
+            store,
+            serviceProvider,
+            new FastContextToolConfig()
+        );
         
-        if (options.ReviewProvider != null)
+        RepoFetchToolHandler.Register(
+            ToolRegistry,
+            store,
+            serviceProvider,
+            new RepoFetchToolConfig()
+        );
+        
+        ListDirToolHandler.Register(
+            ToolRegistry,
+            store,
+            serviceProvider,
+            new ListDirToolConfig()
+        );
+        
+        FindFilesToolHandler.Register(
+            ToolRegistry,
+            store,
+            serviceProvider,
+            new FindFilesToolConfig()
+        );
+        
+        GrepContentToolHandler.Register(
+            ToolRegistry, 
+            store,
+            serviceProvider,
+            new GrepContentToolConfig()
+        );
+        
+        FetchContextToolHandler.Register(
+            ToolRegistry,
+            store,
+            serviceProvider,
+            new FetchContextToolConfig()
+        );
+        
+        if (options.ReviewProvider != null && options.ReviewSystemPromptFile != null)
         {
-            PeerReviewSubAgentHandler.Register(ToolRegistry, options.ReviewProvider, options.ReviewChat, options.ReviewSystemPromptFile!);
+            PeerReviewSubAgentHandler.Register(
+                ToolRegistry,
+                options.ReviewProvider,
+                options.Review,
+                options.ReviewSystemPromptFile!
+            );
         }
     }
 

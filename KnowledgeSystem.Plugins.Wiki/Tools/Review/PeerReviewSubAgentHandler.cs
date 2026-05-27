@@ -15,7 +15,13 @@ using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Plugins.Wiki.Tools.Review;
 
-public class PeerReviewSubAgentHandler(AgentTool tool, StringArgument reportArgument, ProviderConfig reviewProvider, ChatOptionsConfig reviewChatOptions, string reviewSystemPromptFile) : ToolHandler<ConversationalContext>.SubAgent(tool) {
+public class PeerReviewSubAgentHandler(
+    AgentTool tool,
+    StringArgument reportArgument,
+    ProviderConfig reviewProvider,
+    ChatOptionsConfig reviewChatOptions,
+    string reviewSystemPromptFile
+) : ToolHandler<ConversationalContext>.SubAgent(tool) {
     public const string ToolId = "submit_with_review";    
     
     public static void Register(AgentToolRegistry<ConversationalContext> registry, ProviderConfig reviewProvider, ChatOptionsConfig reviewChatOptions, string reviewSystemPromptFile)

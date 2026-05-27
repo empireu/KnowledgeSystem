@@ -19,9 +19,8 @@ namespace KnowledgeSystem.Plugins.Wiki.Tools.FastContext;
 public sealed class FastContextToolHandler(
     AgentTool tool,
     StringArgument queryArgument,
-    IServiceProvider serviceProvider,
-    FastContextToolConfig config,
-    IReadOnlyDocumentStore store
+    IReadOnlyDocumentStore store,
+    FastContextToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
     public static void Register(
@@ -39,8 +38,8 @@ public sealed class FastContextToolHandler(
             serviceProvider,
             searchTool,
             queryArg,
-            config,
-            store
+            store,
+            config
         );
         
         registry.RegisterTool(searchTool, handler);

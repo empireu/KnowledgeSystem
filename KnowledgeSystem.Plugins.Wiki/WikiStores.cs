@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace KnowledgeSystem.Plugins.Wiki;
 
-public class WikiStores(ILogger<WikiStores> logger, IServiceProvider serviceProvider, IOptions<ApplicationOptions> options) : IHostedService
+public class WikiStores(ILogger<WikiStores> logger, IServiceProvider serviceProvider, IOptions<WikiOptions> options) : IHostedService
 {
     private readonly StoreManager _storeManager = ActivatorUtilities.CreateInstance<StoreManager>(serviceProvider);
 

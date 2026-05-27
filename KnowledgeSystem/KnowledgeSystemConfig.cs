@@ -1,5 +1,7 @@
 ﻿using KnowledgeSystem.Ai;
 
+// ReSharper disable PropertyCanBeMadeInitOnly.Global
+
 namespace KnowledgeSystem;
 
 public class KnowledgeSystemConfig

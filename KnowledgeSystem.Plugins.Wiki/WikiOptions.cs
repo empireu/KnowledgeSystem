@@ -6,7 +6,7 @@ using KnowledgeSystem.Ai;
 
 namespace KnowledgeSystem.Plugins.Wiki;
 
-public class ApplicationOptions
+public class WikiOptions
 {
     public const string Section = "wiki";
 
@@ -43,7 +43,7 @@ public class ApplicationOptions
     /// <summary>
     ///     Review sub-agent chat request parameters.
     /// </summary>
-    public ChatOptionsConfig ReviewChat { get; set; } = new();
+    public ChatOptionsConfig Review { get; set; } = new();
 
     /// <summary>
     ///     Path to the review sub-agent system prompt file. Must not be null if enabled.

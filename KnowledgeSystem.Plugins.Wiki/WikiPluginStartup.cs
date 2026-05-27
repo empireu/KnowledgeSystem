@@ -7,8 +7,8 @@ public class WikiPluginStartup : IPluginStartup
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddOptions<ApplicationOptions>()
-            .BindConfiguration(ApplicationOptions.Section)
+        services.AddOptions<WikiOptions>()
+            .BindConfiguration(WikiOptions.Section)
             .ValidateOnStart();
 
         // Stores:

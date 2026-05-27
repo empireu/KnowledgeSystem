@@ -22,7 +22,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
     private readonly ILogger<WikiMessagingLayer> _logger;
     private readonly IReadOnlyDocumentStore _store;
     private readonly string _name;
-    private readonly ApplicationOptions _config;
+    private readonly WikiOptions _config;
     private readonly IServiceProvider _serviceProvider;
     
     private readonly IChatClient _chatClient;
@@ -32,7 +32,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         ILogger<WikiMessagingLayer> logger,
         IReadOnlyDocumentStore store,
         string name,
-        IOptions<ApplicationOptions> configOptions,
+        IOptions<WikiOptions> configOptions,
         IServiceProvider serviceProvider
         )
     {

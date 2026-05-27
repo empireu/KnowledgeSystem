@@ -15,14 +15,20 @@ public sealed class ListDirToolHandler(
     ListDirToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, ListDirToolConfig config)
+    public static void Register(AgentToolRegistry<ConversationalContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, ListDirToolConfig config)
     {
         var listTool = new ToolBuilder("list_dir")
             .WithDescription("Lists the immediate files and subdirectories in a directory path. Does NOT recurse into subdirectories. Use this to explore the repository structure before searching.")
             .WithRequiredStringArgument("path", "The directory path to list (e.g. 'SDX/PublicWiki/' or 'SDX/Data/'). Use empty string or '/' to list the root directory.", out var pathArg)
             .Build();
 
-        var handler = ActivatorUtilities.CreateInstance<ListDirToolHandler>(serviceProvider, listTool, pathArg, config);
+        var handler = ActivatorUtilities.CreateInstance<ListDirToolHandler>(
+            serviceProvider,
+            listTool,
+            pathArg,
+            store,
+            config
+        );
         
         registry.RegisterTool(listTool, handler);
     }

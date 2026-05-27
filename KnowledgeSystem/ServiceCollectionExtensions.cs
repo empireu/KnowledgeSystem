@@ -8,7 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
-using NetCord.Hosting.Services.ApplicationCommands;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -30,8 +29,6 @@ public static class ServiceCollectionExtensions
 
             // Message handler:
             services.AddGatewayHandler<ExternalMessageHandler>();
-       
-            services.AddApplicationCommands();
         });
 
         internal IHostBuilder WithCoreServices() => hostBuilder.ConfigureServices((context, services) =>

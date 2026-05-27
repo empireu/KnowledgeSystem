@@ -19,8 +19,7 @@ public sealed class GrepContentToolHandler(
     GrepContentToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
-    private readonly ILexicalSearchCapability _lexicalCapability = store.GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, GrepContentToolConfig config)
+    public static void Register(AgentToolRegistry<ConversationalContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, GrepContentToolConfig config)
     {
         var grepTool = new ToolBuilder("grep_content")
             .WithDescription("Searches the text content of documents using keyword (BM25) matching. Returns file paths and character offsets where matches occur. Use this to quickly locate where specific terms appear without a full semantic search.")
@@ -28,10 +27,19 @@ public sealed class GrepContentToolHandler(
             .WithStringArgument("pathFilter", "Optional case-insensitive regex that limits which file paths are searched (e.g. 'SDX/Data' or 'WeaponCore').", out var filterArg)
             .Build();
 
-        var handler = ActivatorUtilities.CreateInstance<GrepContentToolHandler>(serviceProvider, grepTool, queryArg, filterArg, config);
+        var handler = ActivatorUtilities.CreateInstance<GrepContentToolHandler>(
+            serviceProvider,
+            grepTool,
+            queryArg,
+            filterArg,
+            store,
+            config
+        );
      
         registry.RegisterTool(grepTool, handler);
     }
+    
+    private readonly ILexicalSearchCapability _lexicalCapability = store.GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
 
     public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
