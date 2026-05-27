@@ -1,32 +1,17 @@
-using System.Diagnostics;
-using KnowledgeSystem.Agent;
-using KnowledgeSystem.Agent.Config;
-using KnowledgeSystem.Agents.Context;
-using KnowledgeSystem.Agents.Context.TokenEstimation;
-using KnowledgeSystem.Agents.Orchestration;
-using KnowledgeSystem.Ai;
-using KnowledgeSystem.Discord.Integration;
-using KnowledgeSystem.Events.Implementation;
-using KnowledgeSystem.Telemetry;
-using KnowledgeSystems.Extensions;
-using Microsoft.Extensions.AI;
+using KnowledgeSystem.Api;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NetCord.Rest;
 
 namespace KnowledgeSystem.Discord.Conversation;
 
-public sealed class ConversationManager : IConversationManager, IHostedService, IDisposable
+public sealed class ConversationManager(
+    ILogger<ConversationManager> logger,
+    RestClient restClient,
+    IServiceProvider serviceProvider
+) : IConversationManager, IHostedService, IDisposable
 {
-    private readonly ILogger<ConversationManager> _logger;
-    private readonly IChatClient _chatClient;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ApplicationOptions _options;
-    private readonly RestClient _restClient;
-    private readonly string _systemPrompt;
-
     // Sorted by expiry timestamp for efficient eviction scanning.
     // Keyed by (ExpiresAt, ChannelId) to guarantee uniqueness.
     private readonly SortedList<(DateTimeOffset ExpiresAt, ulong ChannelId), ActiveConversation> _sorted = [];
@@ -39,35 +24,6 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
     private bool _disposed;
 
-    public ConversationManager(ILogger<ConversationManager> logger, IServiceProvider serviceProvider, IOptions<ApplicationOptions> options, RestClient restClient)
-    {
-        _logger = logger;
-        _serviceProvider = serviceProvider;
-        _options = options.Value;
-        _restClient = restClient;
-
-        _chatClient = OpenAiChatClientFactory.Create(_options.ChatProvider);
-
-        TokenEstimator = BasicTokenEstimator.Create(new BasicTokenEstimatorConfig
-        {
-            ModelName = _options.ChatProvider.Model,
-            Kind = TokenizerKind.HuggingFace,
-            ChatFormat = _options.Template,
-            TokenizerDir = _options.TokenizerDir
-        });
-
-        _systemPrompt = File.ReadAllText(_options.SystemPromptFile);
-    }
-
-    public Microsoft.Extensions.AI.ChatOptions CreateOptionsForTurn(AgentRunner runner)
-    {
-        return OpenAiChatOptionsFactory.Create(_options.Chat.ProviderOnly, _options.Chat.Temperature, reasoningEffort: "high");
-    }
-
-    public ITokenEstimator TokenEstimator { get; }
-
-    #region Conversation API
-    
     public bool HasConversation(ulong channelId)
     {
         lock (_lock)
@@ -91,33 +47,7 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
             return _byChannel.GetValueOrDefault(channelId);
         }
     }
-
-    public ActiveConversation CreateConversation(ulong channelId)
-    {
-        lock (_lock)
-        {
-            if (_byChannel.ContainsKey(channelId))
-            {
-                throw new InvalidOperationException($"A conversation for channel {channelId} already exists.");
-            }
-
-            var context = new ConversationalContext();
-
-            context.ChatContext.InsertSystem(_systemPrompt);
-
-            var conversation = ActivatorUtilities.CreateInstance<ActiveConversation>(
-                _serviceProvider, 
-                context,
-                channelId,
-                _chatClient
-            );
-
-            InsertSorted(conversation);
-
-            return conversation;
-        }
-    }
-
+    
     public void RemoveConversation(ulong channelId)
     {
         ActiveConversation? conversation;
@@ -151,11 +81,11 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
         foreach (var conversation in conversations)
         {
-            await conversation.CloseAsync(_restClient, reason, cancellationToken);
+            await conversation.CloseAsync(restClient, reason, cancellationToken);
             conversation.Dispose();
         }
         
-        _logger.LogInformation("Closed {count} conversations", conversations.Count);
+        logger.LogInformation("Closed {count} conversations", conversations.Count);
 
         lock (_lock)
         {
@@ -164,8 +94,6 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         }
     }
 
-    #endregion
-    
     private void InsertSorted(ActiveConversation conversation)
     {
         _sorted[(conversation.ExpiresAt, conversation.ChannelId)] = conversation;
@@ -183,6 +111,8 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         return conversation;
     }
 
+    #region Eviction
+    
     private async Task EvictionLoopAsync()
     {
         while (await _evictionTimer.WaitForNextTickAsync(_evictionCts.Token))
@@ -210,18 +140,32 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
 
         foreach (var conversation in expired)
         {
-            _logger.LogInformation("Evicting expired conversation in channel {channel}", conversation.ChannelId);
-            await conversation.CloseAsync(_restClient, "idle timeout", CancellationToken.None);
+            logger.LogInformation("Evicting expired conversation in channel {channel}", conversation.ChannelId);
+            await conversation.CloseAsync(restClient, "idle timeout", CancellationToken.None);
             conversation.Dispose();
         }
     }
 
+    #endregion
+
+    #region Lifetime
+
+    /// <summary>
+    ///     Starts the eviction loop in the background.
+    /// </summary>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _evictionLoop = EvictionLoopAsync();
+        
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     Cancels the eviction loop and closes all conversations.
+    /// </summary>
+    /// <param name="cancellationToken"></param>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         await _evictionCts.CancelAsync();
@@ -238,87 +182,6 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
         }
 
         await CloseAllAsync("application is shutting down", cancellationToken);
-    }
-
-    public async Task AskAsync(string message, IDiscordMessageTarget target, CancellationToken cancellationToken = default)
-    {
-        using var activity = KnowledgeSystemTelemetry.AgentChat.StartInternalActivity("AgentAsk");
-        activity?.SetTag("user_query", message);
-        
-        var context = new ConversationalContext();
-        context.ChatContext.InsertSystem(_systemPrompt);
-        context.ChatContext.InsertUser(message);
-
-        var orchestration = CreateResponseOrchestrator("ask", context, target, cancellationToken);
-
-        try
-        {
-            var turns = await orchestration.RootRunner.RunAsync();
-            activity?.SetTag("turns", turns);
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("One-shot query was cancelled");
-            return;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "One-shot query failed with error");
-            activity?.SetTag("exception", ex.Message);
-            activity?.SetStatus(ActivityStatusCode.Error);
-            return;
-        }
-
-        if (orchestration.RootRunner.FinishError != null)
-        {
-            _logger.LogWarning("One-shot query completed with error: {Error}", orchestration.RootRunner.FinishError);
-            activity?.SetTag("finish_error", orchestration.RootRunner.FinishError.Message);
-            activity?.SetStatus(ActivityStatusCode.Error);
-            return;
-        }
-
-        activity?.SetStatus(ActivityStatusCode.Ok);
-    }
-
-    public DiscordOrchestrationLayer CreateResponseOrchestrator(string name, ConversationalContext context, IDiscordMessageTarget target, CancellationToken cancellationToken)
-    {
-        // Creates the event manager, used by the agent's orchestration logic:
-        var eventManager = ActivatorUtilities.CreateInstance<AgentEventManager>(_serviceProvider);
-        
-        // Orchestrates all high-level events and sub-agents.  Uses the event manager to dispatch the final output event, after review rewrite:
-        var agent = new ConversationalAgent(
-            eventManager,
-            name,
-            _serviceProvider,
-            _options
-        );
-        
-        var runner = new AgentRunner<ConversationalContext>(
-            client: _chatClient,
-            agent: agent,
-            parent: null,
-            context: context,
-            eventManager: eventManager,
-            cancellationToken: cancellationToken,
-            completionFactory: this
-        );
-
-        // Handles the discord integration:
-        var observer = ActivatorUtilities.CreateInstance<DiscordMessageIntegration>(
-            _serviceProvider,
-            runner,
-            target
-        );
-        
-        // Links the data flow from the agents:
-        eventManager.AddReceiver(observer);
-
-        return new DiscordOrchestrationLayer
-        {
-            RootAgent = agent,
-            RootRunner = runner,
-            DiscordIntegration = observer
-        };
     }
     
     public void Dispose()
@@ -345,4 +208,37 @@ public sealed class ConversationManager : IConversationManager, IHostedService, 
             _byChannel.Clear();
         }
     }
+
+    #endregion
+
+    #region API
+    
+    public TLayer CreateConversation<TLayer>(ulong channelId, Func<IActiveConversation, TLayer> factory) where TLayer : IAgentMessagingLayer
+    {
+        lock (_lock)
+        {
+            if (_byChannel.ContainsKey(channelId))
+            {
+                throw new InvalidOperationException($"A conversation for channel {channelId} already exists.");
+            }
+
+            // Create the conversation first:
+            var conversation = new ActiveConversation(
+                serviceProvider.GetRequiredService<ILogger<ActiveConversation>>(),
+                this,
+                channelId
+            );
+            
+            var layer = factory(conversation);
+    
+            // Then bind the dependency:
+            conversation.Layer = layer;
+            
+            InsertSorted(conversation);
+
+            return layer;
+        }
+    }
+    
+    #endregion
 }

@@ -27,4 +27,9 @@ public sealed class InteractionMessageTarget(Interaction interaction) : IDiscord
             m.Embeds = [embed];
         }, cancellationToken: cancellationToken);
     }
+
+    public override string ToString()
+    {
+        return $"{nameof(InteractionMessageTarget)}[{interaction.User.Username}, {interaction.Channel}, {interaction.Id}]";
+    }
 }

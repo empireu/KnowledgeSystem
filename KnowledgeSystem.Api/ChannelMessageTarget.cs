@@ -26,4 +26,9 @@ public sealed class ChannelMessageTarget(RestClient restClient, ulong channelId,
             m.Embeds = [embed];
         }, cancellationToken: cancellationToken);
     }
+    
+    public override string ToString()
+    {
+        return $"{nameof(ChannelMessageTarget)}[{channelId}]";
+    }
 }

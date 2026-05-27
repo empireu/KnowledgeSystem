@@ -1,11 +1,12 @@
 ﻿using KnowledgeSystem.Discord.Integration;
+using NetCord.Rest;
 
 namespace KnowledgeSystem.Api;
 
 /// <summary>
 ///     API layer for a single conversation or a one-shot command.
 /// </summary>
-public interface IConversationLifetime
+public interface IAgentMessagingLayer
 {
     /// <summary>
     ///     Called only once, before the conversation starts.
@@ -16,17 +17,11 @@ public interface IConversationLifetime
     public Task PrepareAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Responds to the user's message.
+    ///     Creates a response pipeline for the user's message.
     /// </summary>
     /// <param name="messageTarget">The message integration layer.</param>
     /// <param name="userMessageInfo">Data containing the message.</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public Task RespondToUserAsync(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken);
-
-    /// <summary>
-    ///     Called when the conversation is destroyed (either due to timeout, or completion, in the case of one-shot queries).
-    /// </summary>
-    /// <returns></returns>
-    public Task Destroy() => Task.CompletedTask;
+    public Task<IResponsePipeline> CreateResponsePipeline(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken);
 }

@@ -1,4 +1,6 @@
-﻿using KnowledgeSystem.Discord.Integration;
+﻿using KnowledgeSystem.Api;
+using KnowledgeSystem.Discord.Conversation;
+using KnowledgeSystem.Discord.Integration;
 using Microsoft.Extensions.Logging;
 using NetCord;
 using NetCord.Rest;
@@ -6,7 +8,11 @@ using NetCord.Services.ApplicationCommands;
 
 namespace KnowledgeSystem.Agent;
 
-public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversationManager, ResponseTracker responseTracker ) : ApplicationCommandModule<ApplicationCommandContext>
+public class MqrModule(
+    ILogger<MqrModule> logger,
+    IConversationManager conversationManager,
+    IResponseTracker responseTracker
+) : ApplicationCommandModule<ApplicationCommandContext>
 {
     private static readonly TimeSpan AgentTimeout = TimeSpan.FromMinutes(14);
 
@@ -18,7 +24,7 @@ public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversat
         var target = new InteractionMessageTarget(Context.Interaction);
 
         var cts = new CancellationTokenSource(AgentTimeout);
-        responseTracker.Add(Context.Interaction.Id, new ResponseTracker.ActiveRunInfo
+        responseTracker.Add(Context.Interaction.Id, new ActiveRunInfo
         {
             Cts = cts,
             OnCloseAction = stopCts => target.UpdateContentAsync("Question was cancelled", stopCts)
@@ -69,7 +75,7 @@ public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversat
             var target = new ChannelMessageTarget(Context.Client.Rest, thread.Id, statusMessage.Id);
 
             var cts = new CancellationTokenSource(AgentTimeout);
-            responseTracker.Add(thread.Id, new ResponseTracker.ActiveRunInfo
+            responseTracker.Add(thread.Id, new ActiveRunInfo
             {
                 Cts = cts
             });

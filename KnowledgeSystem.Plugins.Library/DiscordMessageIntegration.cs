@@ -1,15 +1,12 @@
 using System.Text;
 using KnowledgeSystem.Agent;
-using KnowledgeSystem.Agent.Config;
-using KnowledgeSystem.Agent.Events;
 using KnowledgeSystem.Agents.Context;
+using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
 using KnowledgeSystem.Agents.Tools;
-using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Events.Api;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NetCord;
 using NetCord.Rest;
 
@@ -25,13 +22,7 @@ namespace KnowledgeSystem.Discord.Integration;
 ///         <item><description></description></item>
 ///     </list>
 /// </summary>
-public sealed class DiscordMessageIntegration(
-    AgentRunner<ConversationalContext> runner,
-    ILogger<DiscordMessageIntegration> logger,
-    IConversationManager conversationManager,
-    IDiscordMessageTarget target,
-    IOptions<ApplicationOptions> options
-) : IEventReceiver
+public sealed class DiscordMessageIntegration : IEventReceiver
 {
     // ReSharper disable UnusedAutoPropertyAccessor.Local
 
@@ -104,12 +95,22 @@ public sealed class DiscordMessageIntegration(
         /// </summary>
         Failed
     }
+
+    /// <summary>
+    ///     If true, a summary of the tool calls will remain with the final output.
+    /// </summary>
+    public bool Verbose { get; set; } = false;
+    
+    private readonly ILogger<DiscordMessageIntegration> _logger;
+    private readonly AgentRunner<ConversationalContext> _runner;
+    private readonly ITokenEstimator? _tokenEstimatorr;
+    private readonly IDiscordMessageTarget _target;
     
     private readonly List<RoundNode> _rounds = [];
     private RoundNode? _currentRound;
     private string? _finalResponse;
-    private bool _isVerified;
-    private int _finalTokens;
+    private List<KeyValuePair<string, string>>? _additionalEmbeds;
+    private int? _finalTokens;
     private bool _hasError;
     private bool _finalSent;
 
@@ -117,6 +118,33 @@ public sealed class DiscordMessageIntegration(
     private CancellationTokenSource? _debounceCts;
     private readonly SemaphoreSlim _updateLock = new(1, 1);
     private readonly Lock _stateLock = new();
+    
+    /// <summary>
+    ///     Integrates a user request with discord. The lifetime of this handler is from the moment the user sends the message, to the moment the final response is generated.
+    ///     <list type="bullet">
+    ///         <item><description>Each round is an LLM turn that may produce an output trace and tool calls.</description></item>
+    ///         <item><description>Tool calls are grouped under their round.</description></item>
+    ///         <item><description>Sub-agents are revealed by peeking at <see cref="AgentToolFrame.RunningSubAgent.Proxy"/>, during <see cref="OnTurnAsync"/>, recursively building the subtree.</description></item>
+    ///         <item><description>The single Discord message is updated in-place via debounced incremental updates, then replaced with a final embed on completion.</description></item>
+    ///         <item><description></description></item>
+    ///     </list>
+    /// </summary>
+    public DiscordMessageIntegration(ILogger<DiscordMessageIntegration> logger, AgentRunner<ConversationalContext> runner, ITokenEstimator? tokenEstimator, IDiscordMessageTarget target)
+    {
+        _logger = logger;
+        _runner = runner;
+        _tokenEstimatorr = tokenEstimator;
+        _target = target;
+    }
+    
+    public DiscordMessageIntegration(ILogger<DiscordMessageIntegration> logger, AgentRunner<ConversationalContext> runner, IDiscordMessageTarget target)
+    {
+        _logger = logger;
+        _runner = runner;
+        _tokenEstimatorr = null;
+        _target = target;
+    }
+    
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(600);
     
     [SubscribeEvent]
@@ -226,26 +254,26 @@ public sealed class DiscordMessageIntegration(
     [SubscribeEvent]
     public async ValueTask OnAssistantMessageAsync(AgentMessageEvent @event, CancellationToken cancellationToken)
     {
-        await HandleAssistantMessage(@event.Response.Text, false, cancellationToken);
+        await PresentMessage(@event.Response.Text, null, cancellationToken);
     }
 
-    [SubscribeEvent]
-    public async ValueTask OnReviewedMessageAsync(AgentPeerReviewedMessageEvent @event, CancellationToken cancellationToken)
-    {
-        await HandleAssistantMessage(@event.Content, true,  cancellationToken);
-    }
-
-    private async Task HandleAssistantMessage(string content, bool isPeerReviewed, CancellationToken cancellationToken)
+    /// <summary>
+    ///     Call this to finalize the interaction and present the final message.
+    /// </summary>
+    /// <param name="content"></param>
+    /// <param name="additionalEmbeds"></param>
+    /// <param name="cancellationToken"></param>
+    public async Task PresentMessage(string content, List<KeyValuePair<string, string>>? additionalEmbeds, CancellationToken cancellationToken)
     {
         lock (_stateLock)
         {
             _finalResponse = content;
         }
 
-        var messages = runner.ExecutionContext.ChatMessages;
+        var messages = _runner.ExecutionContext.ChatMessages;
 
-        _finalTokens = conversationManager.TokenEstimator.CountTokens(messages);
-        _isVerified = isPeerReviewed;
+        _additionalEmbeds = additionalEmbeds;
+        _finalTokens = _tokenEstimatorr?.CountTokens(messages);
         
         await GetUpdateMessageTask(cancellationToken);
     }
@@ -271,11 +299,11 @@ public sealed class DiscordMessageIntegration(
 
             try
             {
-                await target.SetEmbedAsync(embed, cancellationToken);
+                await _target.SetEmbedAsync(embed, cancellationToken);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to update Discord message with error embed");
+                _logger.LogWarning(ex, "Failed to update Discord message with error embed");
             }
         }
     }
@@ -293,7 +321,7 @@ public sealed class DiscordMessageIntegration(
     /// </summary>
     private void UpdateSubAgentTrees()
     {
-        foreach (var frame in runner.ActiveToolCalls)
+        foreach (var frame in _runner.ActiveToolCalls)
         {
             if (frame is not AgentToolFrame.RunningSubAgent subFrame)
             {
@@ -525,7 +553,7 @@ public sealed class DiscordMessageIntegration(
             .WithTimestamp(DateTimeOffset.UtcNow)
             .WithFooter(new EmbedFooterProperties { Text = "MQR Agent" });
 
-        if (options.Value.Verbose && snapshot.Count > 0)
+        if (Verbose && snapshot.Count > 0)
         {
             var toolSummary = new StringBuilder();
             var totalTools = 0;
@@ -564,11 +592,17 @@ public sealed class DiscordMessageIntegration(
             .WithInline()
         );
 
-        embed = embed.AddFields(new EmbedFieldProperties()
-            .WithName("Peer-review")
-            .WithValue(_isVerified ? "Yes" : "No")
-            .WithInline()
-        );
+        if (_additionalEmbeds != null)
+        {
+            foreach (var (name, value) in _additionalEmbeds)
+            {
+                embed = embed.AddFields(new EmbedFieldProperties()
+                    .WithName(name)
+                    .WithValue(value)
+                    .WithInline()
+                );       
+            }
+        }
 
         return embed;
     }
@@ -607,7 +641,7 @@ public sealed class DiscordMessageIntegration(
             }
             catch(Exception ex) when(ex is not OperationCanceledException)
             {
-                logger.LogWarning(ex, "Final observer update await produced error");
+                _logger.LogWarning(ex, "Final observer update await produced error");
             }
         }
 
@@ -673,17 +707,17 @@ public sealed class DiscordMessageIntegration(
                 }
 
                 var embed = BuildFinalEmbed();
-                await target.SetEmbedAsync(embed, cancellationToken);
+                await _target.SetEmbedAsync(embed, cancellationToken);
             }
             else
             {
                 var content = BuildStatusContent();
-                await target.UpdateContentAsync(content, cancellationToken);
+                await _target.UpdateContentAsync(content, cancellationToken);
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to update Discord message");
+            _logger.LogError(ex, "Failed to update Discord message");
         }
     }
     

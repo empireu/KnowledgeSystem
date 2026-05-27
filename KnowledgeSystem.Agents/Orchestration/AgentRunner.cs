@@ -111,6 +111,24 @@ public abstract class AgentRunner
         ///     Creates the chat completion request for a turn.
         /// </summary>
         ChatOptions CreateOptionsForTurn(AgentRunner runner);
+
+        public static ICompletionFactory Wrap(Func<AgentRunner, ChatOptions> factory)
+        {
+            return new Wrapper(factory);
+        }
+
+        public static ICompletionFactory Wrap(Func<ChatOptions> factory)
+        {
+            return new Wrapper(_ => factory());
+        }
+        
+        private sealed class Wrapper(Func<AgentRunner, ChatOptions> factory) : ICompletionFactory
+        {
+            public ChatOptions CreateOptionsForTurn(AgentRunner runner)
+            {
+                return factory();
+            }
+        }
     }
 
     public sealed class DefaultCompletionFactory : ICompletionFactory

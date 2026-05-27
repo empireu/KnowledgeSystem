@@ -8,6 +8,8 @@
 
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Api\KnowledgeSystem.Api.csproj" />
     </ItemGroup>
 
     <Target Name="CopyToLibrariesFolder" AfterTargets="Build">
