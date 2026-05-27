@@ -7,9 +7,9 @@ using NetCord.Services.ApplicationCommands;
 
 namespace KnowledgeSystem.Plugins.Wiki;
 
-public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversationManager, IServiceProvider serviceProvider ) : ApplicationCommandModule<ApplicationCommandContext>
+public class WikiModule(IConversationManager conversationManager, IServiceProvider serviceProvider ) : ApplicationCommandModule<ApplicationCommandContext>
 {
-    [SlashCommand("ask", "Ask MQR a single question")]
+    [SlashCommand("ask", "Ask a single wiki question")]
     public async Task AskAsync([SlashCommandParameter] string message)
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
@@ -27,7 +27,7 @@ public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversat
         );
     }
 
-    [SlashCommand("unleash", "Start a persistent MQR conversation thread")]
+    [SlashCommand("unleash", "Start a persistent wiki conversation thread")]
     public async Task UnleashAsync([SlashCommandParameter] string message)
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
@@ -43,7 +43,7 @@ public class MqrModule(ILogger<MqrModule> logger, IConversationManager conversat
         var threadName = $"MQR: {Context.User.Username}";
         var starterMessage = await textChannel.SendMessageAsync(new MessageProperties
         {
-            Content = $"▸ **{Context.User.Username}** started a conversation"
+            Content = $"▸ **{Context.User.Username}** started a wiki conversation"
         });
             
         var thread = await textChannel.CreateGuildThreadAsync(starterMessage.Id, new GuildThreadFromMessageProperties(threadName));

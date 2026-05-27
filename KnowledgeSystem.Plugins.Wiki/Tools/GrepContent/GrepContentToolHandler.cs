@@ -19,7 +19,7 @@ public sealed class GrepContentToolHandler(
     GrepContentToolConfig config
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
-    private readonly ILexicalSearchStore _lexicalCapability = store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType);
+    private readonly ILexicalSearchCapability _lexicalCapability = store.GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
     public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, GrepContentToolConfig config)
     {
         var grepTool = new ToolBuilder("grep_content")

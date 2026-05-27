@@ -21,8 +21,8 @@ public static class Extensions
     /// <summary>
     ///     Gets the lexical search capability from a store that supports it.
     /// </summary>
-    public static ILexicalSearchStore AsLexical(this IReadOnlyDocumentStore store)
+    public static ILexicalSearchCapability AsLexical(this IReadOnlyDocumentStore store)
     {
-        return store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType);
+        return store.GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
     }
 }

@@ -36,8 +36,8 @@ public sealed class InMemoryDocumentStore : StoreBase, IDocumentStore, IDisposab
         _vectorStoreAdapter = new HnswVectorStoreAdapter(_hnsw);
         LexicalIndex = new LexicalIndex();
 
-        RegisterCapability(IVectorSearchStore.CapabilityType, new VectorSearchCapability(this));
-        RegisterCapability(ILexicalSearchStore.CapabilityType, new LexicalSearchCapability(this));
+        RegisterCapability(IVectorSearchCapability.CapabilityType, new VectorSearchCapability(this));
+        RegisterCapability(ILexicalSearchCapability.CapabilityType, new LexicalSearchCapability(this));
     }
 
     public override string StoreId { get; }
@@ -136,11 +136,11 @@ public sealed class InMemoryDocumentStore : StoreBase, IDocumentStore, IDisposab
         return ValueTask.CompletedTask;
     }
 
-    private sealed class VectorSearchCapability(InMemoryDocumentStore store) : IVectorSearchStore
+    private sealed class VectorSearchCapability(InMemoryDocumentStore store) : IVectorSearchCapability
     {
         public IEmbeddingService EmbeddingService => store._embeddingService;
 
-        IReadOnlyVectorStore IVectorSearchStore.VectorStore => store._vectorStoreAdapter;
+        IReadOnlyVectorStore IVectorSearchCapability.VectorStore => store._vectorStoreAdapter;
 
         public async Task<VectorSearchResult[]> SearchAsync(string query, int k, CancellationToken cancellationToken = default)
         {
@@ -155,7 +155,7 @@ public sealed class InMemoryDocumentStore : StoreBase, IDocumentStore, IDisposab
         }
     }
 
-    private sealed class LexicalSearchCapability(InMemoryDocumentStore store) : ILexicalSearchStore
+    private sealed class LexicalSearchCapability(InMemoryDocumentStore store) : ILexicalSearchCapability
     {
         public int GetChunkFrequency(string term) => store.LexicalIndex.GetChunkFrequency(term);
 

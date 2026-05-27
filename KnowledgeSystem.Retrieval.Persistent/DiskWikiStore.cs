@@ -103,8 +103,8 @@ public sealed class DiskWikiStore : StoreBase
         }
 
         _vectorStoreAdapter = new HnswVectorStoreAdapter(_hnsw);
-        RegisterCapability(IVectorSearchStore.CapabilityType, new VectorSearchCapability(this));
-        RegisterCapability(ILexicalSearchStore.CapabilityType, new LexicalSearchCapability(this));
+        RegisterCapability(IVectorSearchCapability.CapabilityType, new VectorSearchCapability(this));
+        RegisterCapability(ILexicalSearchCapability.CapabilityType, new LexicalSearchCapability(this));
         
         await SynchronizeAsync(cancellationToken);
     }
@@ -461,11 +461,11 @@ public sealed class DiskWikiStore : StoreBase
         return ValueTask.CompletedTask;
     }
 
-    private sealed class VectorSearchCapability(DiskWikiStore engine) : IVectorSearchStore
+    private sealed class VectorSearchCapability(DiskWikiStore engine) : IVectorSearchCapability
     {
         public IEmbeddingService EmbeddingService => engine._embeddingService;
 
-        IReadOnlyVectorStore IVectorSearchStore.VectorStore => engine._vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
+        IReadOnlyVectorStore IVectorSearchCapability.VectorStore => engine._vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
 
         public async Task<VectorSearchResult[]> SearchAsync(string query, int k, CancellationToken cancellationToken = default)
         {
@@ -482,7 +482,7 @@ public sealed class DiskWikiStore : StoreBase
         }
     }
 
-    private sealed class LexicalSearchCapability(DiskWikiStore engine) : ILexicalSearchStore
+    private sealed class LexicalSearchCapability(DiskWikiStore engine) : ILexicalSearchCapability
     {
         public int GetChunkFrequency(string term) => engine.LexicalIndex.GetChunkFrequency(term);
 

@@ -3,7 +3,7 @@ using KnowledgeSystem.Vector;
 
 namespace KnowledgeSystem.Retrieval.Api.Store;
 
-public interface IVectorSearchStore : ISearchCapability
+public interface IVectorSearchCapability : ISearchCapability
 {
     /// <summary>
     ///     The capability type for vector search.

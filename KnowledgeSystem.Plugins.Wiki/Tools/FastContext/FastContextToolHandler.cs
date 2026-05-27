@@ -20,10 +20,15 @@ public sealed class FastContextToolHandler(
     AgentTool tool,
     StringArgument queryArgument,
     IServiceProvider serviceProvider,
-    FastContextToolConfig config
+    FastContextToolConfig config,
+    IReadOnlyDocumentStore store
 ) : ToolHandler<ConversationalContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IServiceProvider serviceProvider, FastContextToolConfig config)
+    public static void Register(
+        AgentToolRegistry<ConversationalContext> registry,
+        IReadOnlyDocumentStore store,
+        IServiceProvider serviceProvider,
+        FastContextToolConfig config)
     {
         var searchTool = new ToolBuilder("fast_context")
             .WithDescription("Searches the knowledge base for all information related to the topic. Provide a rich sentence to maximize recall!")
@@ -34,12 +39,20 @@ public sealed class FastContextToolHandler(
             serviceProvider,
             searchTool,
             queryArg,
-            config
+            config,
+            store
         );
         
         registry.RegisterTool(searchTool, handler);
     }
-
+    
+    
+    private readonly IVectorSearchCapability _vectorCapability = store
+        .GetCapability<IVectorSearchCapability>(IVectorSearchCapability.CapabilityType);
+    
+    private readonly ILexicalSearchCapability _lexicalCapability = store
+        .GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
+    
     public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var query = queryArgument.GetValue(args);
@@ -52,11 +65,7 @@ public sealed class FastContextToolHandler(
         using var activity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("FastContext");
         activity?.SetTag("query", query);
 
-        var store = serviceProvider.GetRequiredService<IReadOnlyDocumentStore>();
-        var vectorCapability = store.GetCapability<IVectorSearchStore>(IVectorSearchStore.CapabilityType);
-        var lexicalCapability = store.GetCapability<ILexicalSearchStore>(ILexicalSearchStore.CapabilityType);
-
-        var retrieval = new FastContextRetrievalPipeline(store, vectorCapability, lexicalCapability, new FastContextRetrievalPipeline.Description
+        var retrieval = new FastContextRetrievalPipeline(store, _vectorCapability, _lexicalCapability, new FastContextRetrievalPipeline.Description
         {
             Query = query,
             BootstrapCount = config.BootstrapCount,
@@ -70,10 +79,9 @@ public sealed class FastContextToolHandler(
             await retrieval.PrepareForRun(cancellationToken);
         }
 
-        int chars;
         using (var runActivity = KnowledgeSystemTelemetry.AgentTools.StartInternalActivity("Retrieval"))
         {
-            chars = retrieval.Run();
+            var chars = retrieval.Run();
             runActivity?.SetTag("chars", chars);
         }
 

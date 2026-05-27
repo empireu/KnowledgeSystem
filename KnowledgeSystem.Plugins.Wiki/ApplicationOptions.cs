@@ -2,14 +2,13 @@ using System.ComponentModel.DataAnnotations;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Ai;
 
-namespace KnowledgeSystem.Plugins.Wiki.Config;
+// ReSharper disable AutoPropertyCanBeMadeGetOnly.Global
 
-/// <summary>
-///     Temporary, will be implemented by the agent once it's separatd.
-/// </summary>
+namespace KnowledgeSystem.Plugins.Wiki;
+
 public class ApplicationOptions
 {
-    public const string Section = "app";
+    public const string Section = "wiki";
 
     /// <summary>
     ///     The chat LLM provider configuration.
@@ -21,6 +20,9 @@ public class ApplicationOptions
     ///     Chat request parameters for the main agent.
     /// </summary>
     public ChatOptionsConfig Chat { get; set; } = new();
+    
+    [Required]
+    public string RepoPath { get; set; } = null!;
 
     [Required]
     public string SystemPromptFile { get; set; } = null!;

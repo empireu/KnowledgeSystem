@@ -1,7 +1,6 @@
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Events.Api;
 using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Config;
 using KnowledgeSystem.Plugins.Wiki.Events;
 using KnowledgeSystem.Plugins.Wiki.Tools.FastContext;
 using KnowledgeSystem.Plugins.Wiki.Tools.FetchContext;
@@ -10,6 +9,7 @@ using KnowledgeSystem.Plugins.Wiki.Tools.GrepContent;
 using KnowledgeSystem.Plugins.Wiki.Tools.ListDir;
 using KnowledgeSystem.Plugins.Wiki.Tools.RepoFetch;
 using KnowledgeSystem.Plugins.Wiki.Tools.Review;
+using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Plugins.Wiki;
@@ -18,11 +18,11 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
 {
     private readonly IEventManager _eventManager;
 
-    public ConversationalAgent(IEventManager eventManager, string agentId, IServiceProvider serviceProvider, ApplicationOptions options) : base(agentId)
+    public ConversationalAgent(IReadOnlyDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, ApplicationOptions options) : base(agentId)
     {
         _eventManager = eventManager;
         
-        FastContextToolHandler.Register(ToolRegistry, serviceProvider, new FastContextToolConfig());
+        FastContextToolHandler.Register(ToolRegistry, store, serviceProvider, new FastContextToolConfig());
         RepoFetchToolHandler.Register(ToolRegistry, serviceProvider, new RepoFetchToolConfig());
         ListDirToolHandler.Register(ToolRegistry, serviceProvider, new ListDirToolConfig());
         FindFilesToolHandler.Register(ToolRegistry, serviceProvider, new FindFilesToolConfig());

@@ -4,8 +4,8 @@ using KnowledgeSystem.Ai;
 using KnowledgeSystem.Api;
 using KnowledgeSystem.Events.Api;
 using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Config;
 using KnowledgeSystem.Plugins.Wiki.Events;
+using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -20,6 +20,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 {
     private readonly ConversationalContext _context = new();
     private readonly ILogger<WikiMessagingLayer> _logger;
+    private readonly IReadOnlyDocumentStore _store;
     private readonly string _name;
     private readonly ApplicationOptions _config;
     private readonly IServiceProvider _serviceProvider;
@@ -29,12 +30,14 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
     
     public WikiMessagingLayer(
         ILogger<WikiMessagingLayer> logger,
+        IReadOnlyDocumentStore store,
         string name,
         IOptions<ApplicationOptions> configOptions,
         IServiceProvider serviceProvider
         )
     {
         _logger = logger;
+        _store = store;
         _name = name;
         _config = configOptions.Value;
         _serviceProvider = serviceProvider;
@@ -65,6 +68,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         // Orchestrates all high-level events and sub-agents.
         // Uses the event manager to dispatch the final output event, after review rewrite:
         var agent = new ConversationalAgent(
+            _store,
             eventManager,
             _name,
             _serviceProvider,

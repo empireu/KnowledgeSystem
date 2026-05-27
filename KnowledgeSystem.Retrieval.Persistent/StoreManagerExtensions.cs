@@ -13,7 +13,7 @@ public static class StoreManagerExtensions
     ///     Creates a new disk-backed store and initializes it.
     ///     The store syncs its content from the repository on disk.
     /// </summary>
-    public static async Task<IReadOnlyDocumentStore> CreateDiskStoreAsync(this StoreManager manager, StaticDiskWikiStoreConfig config, CancellationToken cancellationToken = default)
+    public static async Task<IReadOnlyDocumentStore> CreateStaticWikiStoreAsync(this StoreManager manager, StaticDiskWikiStoreConfig config, CancellationToken cancellationToken = default)
     {
         return await manager.CreateStoreAsync(config.StoreId, async () =>
         {
@@ -37,16 +37,16 @@ public static class StoreManagerExtensions
             var stateTracker = new SqliteIndexStateTracker(dbContext);
             var logger = manager.ServiceProvider.GetRequiredService<ILogger<DiskWikiStore>>();
 
-            var engine = new DiskWikiStore(
+            var store = new DiskWikiStore(
                 logger,
                 stateTracker,
                 manager.EmbeddingService,
                 Options.Create(options)
             );
             
-            await engine.InitializeAsync(cancellationToken);
+            await store.InitializeAsync(cancellationToken);
 
-            return engine;
+            return store;
         }, cancellationToken);
     }
 }
