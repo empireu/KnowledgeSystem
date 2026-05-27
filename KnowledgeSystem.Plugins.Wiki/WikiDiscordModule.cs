@@ -1,8 +1,9 @@
 ﻿using KnowledgeSystem.Api;
-using Microsoft.Extensions.DependencyInjection;
 using NetCord;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
+
+// ReSharper disable UnusedMember.Global
 
 namespace KnowledgeSystem.Plugins.Wiki;
 
@@ -17,14 +18,14 @@ public class WikiModule(IConversationManager conversationManager, WikiLayerFacto
        
         conversationManager.RunOneShotConversation(
             Context.Interaction.Id,
-            new UserMessageInfo(message),
+            new UserMessageInfo(message, Context.User.Username),
             new InteractionMessageTarget(Context.Interaction),
             messagingLayer
         );
     }
 
     [SlashCommand("unleash", "Start a persistent wiki conversation thread")]
-    public async Task UnleashAsync([SlashCommandParameter] string message)
+    public async Task UnleashAsync([SlashCommandParameter] string topic)
     {
         await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
         
@@ -39,7 +40,7 @@ public class WikiModule(IConversationManager conversationManager, WikiLayerFacto
         var threadName = $"MQR: {Context.User.Username}";
         var starterMessage = await textChannel.SendMessageAsync(new MessageProperties
         {
-            Content = $"▸ **{Context.User.Username}** started a wiki conversation"
+            Content = $"▸ {topic}"
         });
             
         var thread = await textChannel.CreateGuildThreadAsync(starterMessage.Id, new GuildThreadFromMessageProperties(threadName));
@@ -48,6 +49,6 @@ public class WikiModule(IConversationManager conversationManager, WikiLayerFacto
             
         conversationManager.OpenConversation(thread.Id, messagingLayer);
 
-        await Context.Interaction.ModifyResponseAsync(m => m.Content = $"Thread created! <#{thread.Id}>");
+        await Context.Interaction.DeleteResponseAsync();
     }
 }

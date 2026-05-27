@@ -62,7 +62,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 
     public Task<IResponsePipeline> CreateResponsePipeline(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken)
     {
-        _context.ChatContext.InsertUser(userMessageInfo.Message);
+        _context.ChatContext.InsertUser($"{userMessageInfo.Username}: {userMessageInfo.Message}");
         
         // Creates the event manager, used by the agent's orchestration logic:
         var eventManager = ActivatorUtilities.CreateInstance<AgentEventManager>(_serviceProvider);

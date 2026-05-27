@@ -318,7 +318,7 @@ public sealed class ConversationManager(
         });
         
         var task = conversation.RunToCompletionAsync(
-            new UserMessageInfo(message.Content),
+            new UserMessageInfo(message.Content, message.Author.Username),
             target,
             cts.Token
         );
