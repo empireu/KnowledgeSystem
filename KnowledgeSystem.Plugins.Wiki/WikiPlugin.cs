@@ -15,10 +15,12 @@ public class WikiPlugin(
     GatewayClient client
 ) : IPlugin
 {
-    public async Task Start(CancellationToken cancellationToken)
+    public Task Start(CancellationToken cancellationToken)
     {
         host.AddApplicationCommandModule<WikiModule>();
         
         logger.LogInformation("Registered wiki commands");
+
+        return Task.CompletedTask;
     }
 }
