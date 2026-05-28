@@ -22,5 +22,5 @@ public interface IAgentMessagingLayer
     /// <summary>
     ///     Called when the layer is detached (it will never receive any more messages).
     /// </summary>
-    public Task CloseAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task CloseAsync(LayerCloseReason reason, CancellationToken cancellationToken) => Task.CompletedTask;
 }

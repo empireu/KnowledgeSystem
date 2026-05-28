@@ -75,7 +75,7 @@ public sealed class ConversationManager(
         }
     }
 
-    public async Task CloseAllAsync(string reason, CancellationToken cancellationToken = default)
+    public async Task ShutdownAsync(CancellationToken cancellationToken = default)
     {
         List<ActiveConversation> conversations;
         lock (_lock)
@@ -85,7 +85,7 @@ public sealed class ConversationManager(
 
         foreach (var conversation in conversations)
         {
-            await conversation.CloseAsync(restClient, reason, cancellationToken);
+            await conversation.CloseAsync(restClient, LayerCloseReason.Shutdown, "Shutting down", cancellationToken);
             conversation.Dispose();
         }
         
@@ -156,7 +156,7 @@ public sealed class ConversationManager(
         foreach (var conversation in expired)
         {
             logger.LogInformation("Evicting expired conversation in channel {channel}", conversation.ScopeInfo.Id);
-            await conversation.CloseAsync(restClient, "idle timeout", CancellationToken.None);
+            await conversation.CloseAsync(restClient, LayerCloseReason.ConversationTimeout, "Inactive", CancellationToken.None);
             conversation.Dispose();
         }
     }
@@ -196,7 +196,7 @@ public sealed class ConversationManager(
             }
         }
 
-        await CloseAllAsync("application is shutting down", cancellationToken);
+        await ShutdownAsync(cancellationToken);
     }
     
     public void Dispose()
@@ -367,7 +367,7 @@ public sealed class ConversationManager(
             
             if (conversationToCleanup != null)
             {
-                await conversationToCleanup.CloseAsync(restClient, "one-shot complete", CancellationToken.None);
+                await conversationToCleanup.CloseAsync(restClient, LayerCloseReason.ConversationEnded, "One-shot complete", CancellationToken.None);
                 conversationToCleanup.Dispose();
             }
         }

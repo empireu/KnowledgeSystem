@@ -6,7 +6,7 @@ namespace KnowledgeSystem.Discord.Conversation;
 
 public sealed class ActiveConversation : IActiveConversation, IDisposable
 {
-    private static readonly TimeSpan TimeoutDuration = TimeSpan.FromHours(1);
+    private static readonly TimeSpan TimeoutDuration = TimeSpan.FromMinutes(4);
 
     private readonly ILogger<ActiveConversation> _logger;
     private readonly SemaphoreSlim _runLock = new(1, 1);
@@ -42,10 +42,10 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
         ExpiresAt = DateTimeOffset.UtcNow + TimeoutDuration;
     }
 
-    public async Task CloseAsync(RestClient restClient, string reason, CancellationToken cancellationToken = default)
+    public async Task CloseAsync(RestClient restClient, LayerCloseReason reason, string reasonMessage, CancellationToken cancellationToken = default)
     {
         await _runCts.CancelAsync();
-        await Layer.CloseAsync(cancellationToken);
+        await Layer.CloseAsync(reason, cancellationToken);
 
         if (ScopeInfo.ScopeType == ConversationScopeInfo.Type.Channel)
         {
@@ -53,7 +53,7 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
             {
                 await restClient.SendMessageAsync(ScopeInfo.Id, new MessageProperties
                 {
-                    Content = $"> Conversation ended: {reason}"
+                    Content = $"> Conversation ended: {reasonMessage}"
                 }, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
