@@ -18,4 +18,9 @@ public interface IAgentMessagingLayer
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     public Task<IResponsePipeline> CreateResponsePipeline(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Called when the layer is detached (it will never receive any more messages).
+    /// </summary>
+    public Task CloseAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

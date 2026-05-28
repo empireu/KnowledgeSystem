@@ -45,6 +45,7 @@ public sealed class ActiveConversation : IActiveConversation, IDisposable
     public async Task CloseAsync(RestClient restClient, string reason, CancellationToken cancellationToken = default)
     {
         await _runCts.CancelAsync();
+        await Layer.CloseAsync(cancellationToken);
 
         if (ScopeInfo.ScopeType == ConversationScopeInfo.Type.Channel)
         {

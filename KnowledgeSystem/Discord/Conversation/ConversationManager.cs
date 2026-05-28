@@ -267,7 +267,8 @@ public sealed class ConversationManager(
             task,
             target,
             conversation.ScopeInfo,
-            cts.Token
+            cts.Token,
+            conversation
         );
     }
 
@@ -334,7 +335,7 @@ public sealed class ConversationManager(
     /// <summary>
     ///     Runs in the background. Observes the execution of the agent's task, logs errors, and removes the run from the active tracker.
     /// </summary>
-    private async Task ObserveExecutionAndFinishRun(Task agentTask, IDiscordMessageTarget target, ConversationScopeInfo scopeInfo, CancellationToken cancellationToken)
+    private async Task ObserveExecutionAndFinishRun(Task agentTask, IDiscordMessageTarget target, ConversationScopeInfo scopeInfo, CancellationToken cancellationToken, ActiveConversation? conversationToCleanup = null)
     {
         try
         {
@@ -363,6 +364,12 @@ public sealed class ConversationManager(
         finally
         {
             tracker.Remove(scopeInfo.Id);
+            
+            if (conversationToCleanup != null)
+            {
+                await conversationToCleanup.CloseAsync(restClient, "one-shot complete", CancellationToken.None);
+                conversationToCleanup.Dispose();
+            }
         }
     }
 }
