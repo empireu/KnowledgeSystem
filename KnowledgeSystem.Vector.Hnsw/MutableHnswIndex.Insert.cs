@@ -124,6 +124,7 @@ public sealed partial class MutableHnswIndex
             if (!wasKept)
             {
                 vectors[evictedIndex]!.GetEdgesInLayer(layer).Remove(targetNode.Index);
+                MarkVectorDirty(evictedIndex);
             }
         }
 
@@ -133,6 +134,8 @@ public sealed partial class MutableHnswIndex
         {
             edges.Add(keptEdges[index].Index);
         }
+
+        MarkVectorDirty(targetNode.Index);
     }
 
     /// <summary>
@@ -237,6 +240,8 @@ public sealed partial class MutableHnswIndex
                 lock (_graphLock)
                 {
                     EntryPointVector = vector;
+                    MarkStructuralChange();
+                    MarkVectorDirty(vector.Index);
                 }
 
                 return vector;
@@ -360,6 +365,13 @@ public sealed partial class MutableHnswIndex
                             TrimEdges(insertCtx.TrimEdgesData, neighbor, layer, maxConnections);
                         }
                     }
+
+                    // Mark the inserted vector and all touched neighbors as dirty:
+                    MarkVectorDirty(vector.Index);
+                    for (var i = 0; i < insertCtx.ResultsBuffer.Count; i++)
+                    {
+                        MarkVectorDirty(insertCtx.ResultsBuffer[i].Index);
+                    }
                 }
 
                 // Update the current node to the best one found on the layer by the extended search:
@@ -376,6 +388,16 @@ public sealed partial class MutableHnswIndex
                     {
                         EntryPointVector = vector;
                     }
+
+                    MarkStructuralChange();
+                }
+            }
+            else
+            {
+                // Even without increased height, the new vector itself is dirty:
+                lock (_dirtyLock)
+                {
+                    _dirtyVectorIndices.Add(vector.Index);
                 }
             }
 

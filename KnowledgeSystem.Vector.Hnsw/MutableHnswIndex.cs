@@ -4,6 +4,7 @@
 
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.ObjectPool;
+using System.Threading;
 
 namespace KnowledgeSystem.Vector.Hnsw;
 
@@ -22,6 +23,32 @@ public sealed partial class MutableHnswIndex
 
     private readonly object _allocationLock = new();
     private readonly object _graphLock = new();
+
+    /// <summary>
+    ///     Protects <see cref="_dirtyVectorIndices"/> and <see cref="_hasStructuralChanges"/> during concurrent access.
+    /// </summary>
+    private readonly Lock _dirtyLock = new();
+
+    /// <summary>
+    ///     Indices of vectors whose on-disk slot is out of date.
+    /// </summary>
+    private readonly HashSet<int> _dirtyVectorIndices = [];
+
+    /// <summary>
+    ///     True when header fields (EntryPointVector, LayerCount, free slots) have changed since last save.
+    /// </summary>
+    private bool _hasStructuralChanges;
+
+    /// <summary>
+    ///     Ensures at most one save runs at a time.
+    /// </summary>
+    private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
+
+    /// <summary>
+    ///     The maximum number of sparse layers any slot can hold on disk.
+    ///     When a vector's <see cref="StoredVectorImpl.TargetLayer"/> exceeds this, a full rewrite is required.
+    /// </summary>
+    public int MaxLayersAllocated { get; private set; } = 1;
 
     private readonly ObjectPool<SearchData> _searchDataPool = new DefaultObjectPool<SearchData>(new SearchDataPoolPolicy(), 128);
     private readonly ObjectPool<InsertContext> _insertContextPool = new DefaultObjectPool<InsertContext>(new InsertContextPoolPolicy(), 128);
@@ -228,6 +255,12 @@ public sealed partial class MutableHnswIndex
     internal sealed class StoredVectorImpl(int index, Allocation<float> vectorStorage, EdgeList denseGraph, Allocation<EdgeList>? sparseGraphs) : IStoredVector
     {
         public int Index { get; } = index;
+
+        /// <summary>
+        ///     Byte offset of this vector's fixed slot within the data file.
+        ///     Set on load and on full rewrite. Used for incremental in-place updates.
+        /// </summary>
+        public long FileOffset;
         
         /// <summary>
         ///     The vector data.

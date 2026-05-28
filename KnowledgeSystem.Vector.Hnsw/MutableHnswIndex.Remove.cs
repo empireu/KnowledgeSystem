@@ -54,6 +54,7 @@ public sealed partial class MutableHnswIndex
                 for (var i = 0; i < neighborCount; i++)
                 {
                     vectors[neighborSnapshotBuffer[i]]!.GetEdgesInLayer(layer).Remove(node.Index);
+                    MarkVectorDirty(neighborSnapshotBuffer[i]);
                 }
 
                 // Repair using search.
@@ -110,6 +111,7 @@ public sealed partial class MutableHnswIndex
                         var candidateNode = vectors[candidateIndex]!;
                         var candidateEdges = candidateNode.GetEdgesInLayer(layer);
                         candidateEdges.Add(neighbor.Index);
+                        MarkVectorDirty(candidateIndex);
 
                         if (candidateEdges.Count > maxConnections)
                         {
@@ -133,7 +135,11 @@ public sealed partial class MutableHnswIndex
             if (EntryPointVector == node)
             {
                 SelectNewEntryPoint(node);
+                MarkStructuralChange();
             }
+
+            // The removed node itself is dirty (its slot becomes dead):
+            MarkVectorDirty(node.Index);
 
             // Deallocate:
         
