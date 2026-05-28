@@ -12,9 +12,9 @@ public sealed class ListDirToolHandler(
     StringArgument pathArgument,
     IReadOnlyDocumentStore store,
     ListDirToolConfig config
-) : ToolHandler<ConversationalContext>.Plain(tool)
+) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, ListDirToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, ListDirToolConfig config)
     {
         var listTool = new ToolBuilder("list_dir")
             .WithDescription("Lists the immediate files and subdirectories in a directory path. Does NOT recurse into subdirectories. Use this to explore the repository structure before searching.")
@@ -32,7 +32,7 @@ public sealed class ListDirToolHandler(
         registry.RegisterTool(listTool, handler);
     }
 
-    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
+    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<BasicContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var path = pathArgument.GetValue(args).Trim('/');
         var prefix = string.IsNullOrEmpty(path) ? "" : path + "/";

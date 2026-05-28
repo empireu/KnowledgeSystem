@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Plugins.Library;
 
-public class ConversationalContext : AgentExecutionContext
+public class BasicContext : AgentExecutionContext
 {
     public AgentContext ChatContext { get; } = new();
 

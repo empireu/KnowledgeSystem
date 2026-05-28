@@ -13,7 +13,7 @@ using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Plugins.Wiki.Tools.Review;
+namespace KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
 
 public class PeerReviewSubAgentHandler(
     AgentTool tool,
@@ -21,10 +21,10 @@ public class PeerReviewSubAgentHandler(
     ProviderConfig reviewProvider,
     ChatOptionsConfig reviewChatOptions,
     string reviewSystemPromptFile
-) : ToolHandler<ConversationalContext>.SubAgent(tool) {
+) : ToolHandler<BasicContext>.SubAgent(tool) {
     public const string ToolId = "submit_with_review";    
     
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, ProviderConfig reviewProvider, ChatOptionsConfig reviewChatOptions, string reviewSystemPromptFile)
+    public static void Register(AgentToolRegistry<BasicContext> registry, ProviderConfig reviewProvider, ChatOptionsConfig reviewChatOptions, string reviewSystemPromptFile)
     {
         var reviewTool = new ToolBuilder(ToolId)
             .WithDescription("Submits your message for the user to be peer-reviewed. If it passes, it will be shown to the user immediately. Otherwise, you will get a report on the found issues. Only call if you are responding with any information; don't call if you are just exchanging pleasantries.")
@@ -43,9 +43,9 @@ public class PeerReviewSubAgentHandler(
     }
     
     public override async Task<ISubAgentProxy> BeginSubAgentExecution(
-        AgentRunner<ConversationalContext> runner,
+        AgentRunner<BasicContext> runner,
         ArgumentExtractionResult args, 
-        ConversationalContext runContext,
+        BasicContext runContext,
         string toolCallId,
         CancellationToken cancellationToken)
     {
@@ -376,7 +376,7 @@ public class PeerReviewSubAgentHandler(
     }
     
     public sealed class Proxy(
-        AgentRunner<ConversationalContext> parentRunner,
+        AgentRunner<BasicContext> parentRunner,
         PeerReviewSubAgentHandler subAgentHandler,
         PeerReviewContext reviewContext,
         ProviderConfig reviewProvider,

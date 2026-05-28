@@ -1,10 +1,11 @@
 ﻿using KnowledgeSystem.Plugins.Library;
 
-namespace KnowledgeSystem.Plugins.Wiki;
+namespace KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
 
-public sealed class PeerReviewContext : ConversationalContext
+public sealed class PeerReviewContext : BasicContext
 {
     public string ToolCallId { get; }
+    
     public string Report { get; }
 
     public enum Status

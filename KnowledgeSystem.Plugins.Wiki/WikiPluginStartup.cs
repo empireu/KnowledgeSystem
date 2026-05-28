@@ -1,4 +1,5 @@
 ﻿using KnowledgeSystem.PluginLoader;
+using KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Plugins.Wiki;

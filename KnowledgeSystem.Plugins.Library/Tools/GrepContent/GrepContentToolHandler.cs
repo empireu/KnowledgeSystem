@@ -16,9 +16,9 @@ public sealed class GrepContentToolHandler(
     StringArgument pathFilterArgument,
     IReadOnlyDocumentStore store,
     GrepContentToolConfig config
-) : ToolHandler<ConversationalContext>.Plain(tool)
+) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, GrepContentToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, GrepContentToolConfig config)
     {
         var grepTool = new ToolBuilder("grep_content")
             .WithDescription("Searches the text content of documents using keyword (BM25) matching. Returns file paths and character offsets where matches occur. Use this to quickly locate where specific terms appear without a full semantic search.")
@@ -40,7 +40,7 @@ public sealed class GrepContentToolHandler(
     
     private readonly ILexicalSearchCapability _lexicalCapability = store.GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
 
-    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
+    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<BasicContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var query = queryArgument.GetValue(args);
         var pathFilter = pathFilterArgument.GetValueOrNull(args);

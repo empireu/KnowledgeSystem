@@ -7,18 +7,17 @@ using KnowledgeSystem.Plugins.Library.Tools.FindFiles;
 using KnowledgeSystem.Plugins.Library.Tools.GrepContent;
 using KnowledgeSystem.Plugins.Library.Tools.ListDir;
 using KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
-using KnowledgeSystem.Plugins.Wiki.Events;
-using KnowledgeSystem.Plugins.Wiki.Tools.Review;
+using KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 
-namespace KnowledgeSystem.Plugins.Wiki;
+namespace KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
 
-public sealed class ConversationalAgent : Agent<ConversationalContext>
+public sealed class WikiAgent : Agent<BasicContext>
 {
     private readonly IEventManager _eventManager;
 
-    public ConversationalAgent(IReadOnlyDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options) : base(agentId)
+    public WikiAgent(IReadOnlyDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options) : base(agentId)
     {
         _eventManager = eventManager;
         
@@ -75,7 +74,7 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
         }
     }
 
-    public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<ConversationalContext> runner, ChatResponse response)
+    public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<BasicContext> runner, ChatResponse response)
     {
         if (string.IsNullOrWhiteSpace(response.Text))
         {
@@ -87,7 +86,7 @@ public sealed class ConversationalAgent : Agent<ConversationalContext>
         return Task.FromResult(AgentCallbackResult.Break);
     }
 
-    public override async Task<AgentCallbackResult> HandleToolFinish(AgentRunner<ConversationalContext> runner)
+    public override async Task<AgentCallbackResult> HandleToolFinish(AgentRunner<BasicContext> runner)
     {
         if (runner.TryGetUniqueActiveSubAgentProxyForHandler<PeerReviewSubAgentHandler>(out var peerReviewProxy))
         {

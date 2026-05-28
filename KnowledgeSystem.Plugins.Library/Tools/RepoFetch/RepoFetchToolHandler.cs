@@ -15,9 +15,9 @@ public sealed class RepoFetchToolHandler(
     StringArgument referenceArgument,
     IReadOnlyDocumentStore store,
     RepoFetchToolConfig config
-) : ToolHandler<ConversationalContext>.Plain(tool)
+) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, RepoFetchToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, RepoFetchToolConfig config)
     {
         var fetchTool = new ToolBuilder("repo_fetch")
             .WithDescription("Fetches a single repository reference (file, heading section, or offset range). Simple and direct: no expansion or deduplication. Use fetch_context instead when you have multiple references or want surrounding context expanded to containing paragraphs/sections.")
@@ -35,7 +35,7 @@ public sealed class RepoFetchToolHandler(
         registry.RegisterTool(fetchTool, handler);
     }
     
-    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
+    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<BasicContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var argument = referenceArgument.GetValue(args);
 

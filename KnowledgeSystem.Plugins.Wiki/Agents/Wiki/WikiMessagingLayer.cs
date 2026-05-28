@@ -4,21 +4,21 @@ using KnowledgeSystem.Ai;
 using KnowledgeSystem.Api;
 using KnowledgeSystem.Events.Api;
 using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Events;
+using KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace KnowledgeSystem.Plugins.Wiki;
+namespace KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
 
 /// <summary>
 ///     Messaging layer for one-shot ask and long-running conversations with the wiki agent.
 /// </summary>
 public sealed class WikiMessagingLayer : IAgentMessagingLayer
 {
-    private readonly ConversationalContext _context = new();
+    private readonly BasicContext _context = new();
     private readonly ILogger<WikiMessagingLayer> _logger;
     private readonly IReadOnlyDocumentStore _store;
     private readonly string _name;
@@ -69,7 +69,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         
         // Orchestrates all high-level events and sub-agents.
         // Uses the event manager to dispatch the final output event, after review rewrite:
-        var agent = new ConversationalAgent(
+        var agent = new WikiAgent(
             _store,
             eventManager,
             _name,
@@ -77,7 +77,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
             _config
         );
         
-        var runner = new AgentRunner<ConversationalContext>(
+        var runner = new AgentRunner<BasicContext>(
             client: _chatClient,
             agent: agent,
             parent: null,
@@ -134,7 +134,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         }
     }
 
-    private sealed class AssembledResponsePipeline(ILogger<AssembledResponsePipeline> logger, DiscordMessageIntegration integration, AgentRunner<ConversationalContext> runner) : IResponsePipeline
+    private sealed class AssembledResponsePipeline(ILogger<AssembledResponsePipeline> logger, DiscordMessageIntegration integration, AgentRunner<BasicContext> runner) : IResponsePipeline
     {
         public async Task ExecuteAsync()
         {

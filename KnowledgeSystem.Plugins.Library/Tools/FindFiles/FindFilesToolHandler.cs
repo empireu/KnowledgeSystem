@@ -15,9 +15,9 @@ public sealed class FindFilesToolHandler(
     StringArgument patternArgument,
     IReadOnlyDocumentStore store,
     FindFilesToolConfig config
-) : ToolHandler<ConversationalContext>.Plain(tool)
+) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, FindFilesToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, FindFilesToolConfig config)
     {
         var findTool = new ToolBuilder("find_files")
             .WithDescription("Searches for files by name using a case-insensitive regex pattern on the full file path. Use this to locate files when you know part of the filename or path.")
@@ -35,7 +35,7 @@ public sealed class FindFilesToolHandler(
         registry.RegisterTool(findTool, handler);
     }
 
-    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
+    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<BasicContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var pattern = patternArgument.GetValue(args);
 

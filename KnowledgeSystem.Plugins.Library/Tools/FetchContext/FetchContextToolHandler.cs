@@ -15,9 +15,9 @@ public sealed class FetchContextToolHandler(
     ArrayArgument referencesArgument,
     IReadOnlyDocumentStore store,
     FetchContextToolConfig config
-) : ToolHandler<ConversationalContext>.Plain(tool)
+) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<ConversationalContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, FetchContextToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, FetchContextToolConfig config)
     {
         var fetchTool = new ToolBuilder("fetch_context")
             .WithDescription("Fetches full surrounding context for one or more references. Expands each offset to its containing paragraph or section, shows the heading path, and deduplicates overlapping ranges. Prefer this over repo_fetch when you have multiple references or need expanded context.")
@@ -35,7 +35,7 @@ public sealed class FetchContextToolHandler(
         registry.RegisterTool(fetchTool, handler);
     }
 
-    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
+    public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<BasicContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var rawRefs = referencesArgument.GetValue(args);
 

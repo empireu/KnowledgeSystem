@@ -102,7 +102,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     public bool Verbose { get; set; } = false;
     
     private readonly ILogger<DiscordMessageIntegration> _logger;
-    private readonly AgentRunner<ConversationalContext> _runner;
+    private readonly AgentRunner<BasicContext> _runner;
     private readonly ITokenEstimator? _tokenEstimatorr;
     private readonly IDiscordMessageTarget _target;
     
@@ -129,7 +129,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     ///         <item><description></description></item>
     ///     </list>
     /// </summary>
-    public DiscordMessageIntegration(ILogger<DiscordMessageIntegration> logger, AgentRunner<ConversationalContext> runner, ITokenEstimator? tokenEstimator, IDiscordMessageTarget target)
+    public DiscordMessageIntegration(ILogger<DiscordMessageIntegration> logger, AgentRunner<BasicContext> runner, ITokenEstimator? tokenEstimator, IDiscordMessageTarget target)
     {
         _logger = logger;
         _runner = runner;
@@ -137,7 +137,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
         _target = target;
     }
     
-    public DiscordMessageIntegration(ILogger<DiscordMessageIntegration> logger, AgentRunner<ConversationalContext> runner, IDiscordMessageTarget target)
+    public DiscordMessageIntegration(ILogger<DiscordMessageIntegration> logger, AgentRunner<BasicContext> runner, IDiscordMessageTarget target)
     {
         _logger = logger;
         _runner = runner;

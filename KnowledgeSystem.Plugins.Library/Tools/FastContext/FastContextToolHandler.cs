@@ -20,10 +20,10 @@ public sealed class FastContextToolHandler(
     StringArgument queryArgument,
     IReadOnlyDocumentStore store,
     FastContextToolConfig config
-) : ToolHandler<ConversationalContext>.Plain(tool)
+) : ToolHandler<BasicContext>.Plain(tool)
 {
     public static void Register(
-        AgentToolRegistry<ConversationalContext> registry,
+        AgentToolRegistry<BasicContext> registry,
         IReadOnlyDocumentStore store,
         IServiceProvider serviceProvider,
         FastContextToolConfig config)
@@ -51,7 +51,7 @@ public sealed class FastContextToolHandler(
     private readonly ILexicalSearchCapability _lexicalCapability = store
         .GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
     
-    public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<ConversationalContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
+    public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<BasicContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {
         var query = queryArgument.GetValue(args);
         
