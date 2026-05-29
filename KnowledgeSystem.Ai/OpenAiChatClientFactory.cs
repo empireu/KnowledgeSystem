@@ -11,12 +11,14 @@ public static class OpenAiChatClientFactory
 {
     public static IChatClient Create(ProviderConfig providerConfig)
     {
-        if (providerConfig.ProviderType != ProviderType.Usual)
+        var client = Create(providerConfig.Endpoint, providerConfig.Key, providerConfig.Model);
+
+        return providerConfig.ProviderType switch
         {
-            throw new NotSupportedException("provider is not implemented");
-        }
-        
-        return Create(providerConfig.Endpoint, providerConfig.Key, providerConfig.Model);
+            ProviderType.Usual => client,
+            ProviderType.Deepseek => new DeepseekChatClient(client),
+            _ => throw new NotSupportedException($"Provider type {providerConfig.ProviderType} is not implemented")
+        };
     }
     
     public static IChatClient Create(string endpoint, string apiKey, string model)
