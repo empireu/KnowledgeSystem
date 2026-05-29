@@ -61,23 +61,65 @@ public sealed class MemoryStoreService(
             }
         }
 
-        var dbVectors = await db.Memories
+        var dbIds = await db.Memories
             .Select(x => x.Id)
             .ToListAsync(cancellationToken: cancellationToken);
 
-        if (dbVectors.Count != hnswVectors.Count)
-        {
-            throw new Exception("Vectors count between database and vector index does not match");
-        }
-        
-        for (var index = 0; index < dbVectors.Count; index++)
-        {
-            var vectorId = dbVectors[index];
+        var dbIdSet = new HashSet<int>(dbIds);
 
-            if (!hnswVectors.Contains(vectorId))
+        // Remove HNSW vectors that have no DB record:
+        var orphanedHnswIds = new List<int>();
+        foreach (var hnswId in hnswVectors)
+        {
+            if (!dbIdSet.Contains(hnswId))
             {
-                throw new Exception($"Vector {vectorId} from DB not found in HNSW");
+                orphanedHnswIds.Add(hnswId);
             }
+        }
+
+        for (var i = 0; i < orphanedHnswIds.Count; i++)
+        {
+            var orphanedVector = hnsw.Vectors[orphanedHnswIds[i]];
+            if (orphanedVector != null)
+            {
+                hnsw.Remove(orphanedVector);
+                logger.LogWarning("Reconciled orphaned HNSW vector {id} (not in DB)", orphanedHnswIds[i]);
+            }
+        }
+
+        // Re-embed DB records missing from HNSW (crashed create where DB saved but HNSW file didn't):
+        var missingFromHnsw = new List<int>();
+        foreach (var dbId in dbIds)
+        {
+            if (!hnswVectors.Contains(dbId))
+            {
+                missingFromHnsw.Add(dbId);
+            }
+        }
+
+        if (missingFromHnsw.Count > 0)
+        {
+            var missingRecords = await db.Memories
+                .Where(x => missingFromHnsw.Contains(x.Id))
+                .ToListAsync(cancellationToken: cancellationToken);
+
+            for (var i = 0; i < missingRecords.Count; i++)
+            {
+                var record = missingRecords[i];
+                var embedding = await embeddingService.EmbedAsync(record.Summary, cancellationToken);
+                hnsw.Insert(embedding.ToArray());
+                logger.LogWarning("Re-embedded DB memory {id} into HNSW", record.Id);
+            }
+        }
+
+        if (orphanedHnswIds.Count > 0 || missingFromHnsw.Count > 0)
+        {
+            await using (var fs = File.Open(hnswPath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
+            {
+                hnsw.SaveToFile(fs);
+            }
+
+            logger.LogInformation("Reconciled {orphaned} orphaned HNSW vectors, re-embedded {missing} missing vectors",orphanedHnswIds.Count, missingFromHnsw.Count);
         }
 
         var lexicalIndex = new MemoryLexicalIndex();
@@ -96,7 +138,7 @@ public sealed class MemoryStoreService(
             LexicalIndex = lexicalIndex
         };
         
-        logger.LogInformation("Loaded {count} memories",  dbVectors.Count);
+        logger.LogInformation("Loaded {count} memories", dbIds.Count);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
@@ -170,16 +212,16 @@ public sealed class MemoryStoreService(
             }
 
             var storedVector = _store.Hnsw.Vectors[id];
-            
+
+            _store.Db.Memories.Remove(record);
+            await _store.Db.SaveChangesAsync(CancellationToken.None);
+
             if (storedVector != null)
             {
                 _store.Hnsw.Remove(storedVector);
                 await using var fs = File.Open(_store.HnswPath, FileMode.OpenOrCreate, FileAccess.ReadWrite);
                 _store.Hnsw.SaveToFile(fs);
             }
-
-            _store.Db.Memories.Remove(record);
-            await _store.Db.SaveChangesAsync(CancellationToken.None);
 
             _store.LexicalIndex.Remove(id, record.Summary);
 
