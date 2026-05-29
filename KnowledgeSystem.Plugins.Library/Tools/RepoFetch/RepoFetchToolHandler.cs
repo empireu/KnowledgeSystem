@@ -49,7 +49,7 @@ public sealed class RepoFetchToolHandler(
             ));
         }
 
-        var context = runner.ExecutionContext.ChatContext;
+        var context = runner.ExecutionContext.Timeline;
         switch (refPath.Type)
         {
             case EmdReferencePath.ReferenceType.Directory:

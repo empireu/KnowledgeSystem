@@ -16,5 +16,5 @@ public interface IPluginStartup
     /// <summary>
     ///     Configures the service container of the application.
     /// </summary>
-    public void ConfigureServices(IServiceCollection services) { }
+    public void ConfigureServices(HostBuilderContext context, IServiceCollection services) { }
 }

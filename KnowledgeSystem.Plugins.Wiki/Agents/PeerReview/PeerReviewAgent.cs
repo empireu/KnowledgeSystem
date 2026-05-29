@@ -82,7 +82,7 @@ public sealed class PeerReviewAgent : Agent<PeerReviewContext>
         {
             // LLM output text without calling approve/reject first.
             //Prompt it to use a tool:
-            runner.ExecutionContext.ChatContext.InsertAssistant("I must call either approve or reject before writing my final output.");
+            runner.ExecutionContext.Timeline.InsertAssistant("I must call either approve or reject before writing my final output.");
             return Task.FromResult(AgentCallbackResult.Continue);
         }
         

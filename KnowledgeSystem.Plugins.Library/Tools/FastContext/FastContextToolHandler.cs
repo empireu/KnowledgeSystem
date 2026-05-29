@@ -119,7 +119,7 @@ public sealed class FastContextToolHandler(
         activity?.SetTag("result_size", result.Length);
         activity?.SetStatus(ActivityStatusCode.Ok);
         
-        runner.ExecutionContext.ChatContext.InsertElement(new FastContextMarker
+        runner.ExecutionContext.Timeline.InsertElement(new FastContextMarker
         {
             Output = result,
             Ranges = ranges

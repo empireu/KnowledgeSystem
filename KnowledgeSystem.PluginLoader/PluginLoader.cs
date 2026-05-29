@@ -169,19 +169,25 @@ public static class PluginLoader
             pluginInfo.Startup?.ConfigureHost(builder);
         }
 
-        builder.ConfigureServices((_, services) =>
+        builder.ConfigureServices((hostBuilderContext, services) =>
         {
             services.AddHostedService(provider => ActivatorUtilities.CreateInstance<PluginLoaderService>(provider, orderedPlugins));
 
             foreach (var plugin in orderedPlugins)
             {
-                plugin.Startup?.ConfigureServices(services);
+                try
+                {
+                    plugin.Startup?.ConfigureServices(hostBuilderContext, services);
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e, "Failed to configure services for {plugin}", plugin.Package);
+                }
             }
         });
 
         return builder;
     }
-
 
     /// <summary>
     ///     Probes the directory for candidate DLL files (libraries and plugins).

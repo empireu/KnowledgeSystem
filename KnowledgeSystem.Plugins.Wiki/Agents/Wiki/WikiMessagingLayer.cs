@@ -5,6 +5,7 @@ using KnowledgeSystem.Api;
 using KnowledgeSystem.Events.Api;
 using KnowledgeSystem.Plugins.Library;
 using KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
+using KnowledgeSystem.Plugins.Wiki.Memory;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,10 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
     
     private readonly IChatClient _chatClient;
     private readonly ITokenEstimator _tokenEstimator;
+
+    private readonly IMemoryExtractionService? _memoryExtractionService;
+
+    private DateTime _utcStart;
     
     public WikiMessagingLayer(
         ILogger<WikiMessagingLayer> logger,
@@ -51,18 +56,22 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
             ChatFormat = _config.Template,
             TokenizerDir = _config.TokenizerDir
         });
+        
+        _memoryExtractionService = serviceProvider.GetService<IMemoryExtractionService>();
     }
 
     public async Task PrepareAsync(CancellationToken cancellationToken)
     {
         var systemPrompt = await File.ReadAllTextAsync(_config.SystemPromptFile, cancellationToken);
         _logger.LogInformation("Loaded system prompt {hash}", systemPrompt.GetHashCode().ToString("X"));
-        _context.ChatContext.InsertSystem(systemPrompt);
+        _context.Timeline.InsertSystem(systemPrompt);
+        
+        _utcStart = DateTime.UtcNow;
     }
 
     public Task<IResponsePipeline> CreateResponsePipeline(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken)
     {
-        _context.ChatContext.InsertUser($"{userMessageInfo.Username}: {userMessageInfo.Message}");
+        _context.Timeline.InsertUser($"{userMessageInfo.Username}: {userMessageInfo.Message}");
         
         // Creates the event manager, used by the agent's orchestration logic:
         var eventManager = ActivatorUtilities.CreateInstance<AgentEventManager>(_serviceProvider);
@@ -149,6 +158,14 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
                     turns
                 );
             }
+        }
+    }
+
+    public async Task CloseAsync(LayerCloseReason reason, CancellationToken cancellationToken)
+    {
+        if (_memoryExtractionService != null && reason is LayerCloseReason.ConversationTimeout or LayerCloseReason.ConversationEnded)
+        {
+            await _memoryExtractionService.EnqueueChatAsync(new PendingChat(_context, _utcStart, DateTime.UtcNow), cancellationToken);
         }
     }
 }

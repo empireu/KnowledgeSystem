@@ -61,7 +61,7 @@ public class PeerReviewSubAgentHandler(
         var sb = new StringBuilder();
         sb.AppendLine(systemPrompt);
 
-        var elements = runContext.ChatContext.MutableElements;
+        var elements = runContext.Timeline.MutableElements;
         
         // Distills the effective data used by the main agent:
         var startIndex = elements.FindLastIndex(element => element is ChatElement { Message: var msg } && msg.Role == ChatRole.User);

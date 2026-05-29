@@ -173,7 +173,7 @@ public sealed class GrepContentToolHandler(
 
         var result = sb.ToString();
 
-        runner.ExecutionContext.ChatContext.InsertElement(new GrepContentMarker
+        runner.ExecutionContext.Timeline.InsertElement(new GrepContentMarker
         {
             Output = result,
             Ranges = contentRanges

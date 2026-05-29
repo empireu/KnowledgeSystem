@@ -10,13 +10,14 @@ using KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
 using KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
 
 public sealed class WikiAgent : Agent<BasicContext>
 {
     private readonly IEventManager _eventManager;
-
+    
     public WikiAgent(IReadOnlyDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options) : base(agentId)
     {
         _eventManager = eventManager;
@@ -63,7 +64,7 @@ public sealed class WikiAgent : Agent<BasicContext>
             new FetchContextToolConfig()
         );
         
-        if (options.ReviewProvider != null && options.ReviewSystemPromptFile != null)
+        if (options is { ReviewProvider: not null, ReviewSystemPromptFile: not null })
         {
             PeerReviewSubAgentHandler.Register(
                 ToolRegistry,
@@ -78,7 +79,7 @@ public sealed class WikiAgent : Agent<BasicContext>
     {
         if (string.IsNullOrWhiteSpace(response.Text))
         {
-            runner.ExecutionContext.ChatContext.InsertAssistant("I should write my final output now.");
+            runner.ExecutionContext.Timeline.InsertAssistant("I should write my final output now.");
             return Task.FromResult(AgentCallbackResult.Continue);
         }
 
@@ -94,6 +95,11 @@ public sealed class WikiAgent : Agent<BasicContext>
 
             if (proxy.ReviewContext.FinalStatus == PeerReviewContext.Status.Approved)
             {
+                runner.ExecutionContext.Timeline.InsertElement(new ReviewedWikiResponseMarker
+                {
+                    VerifiedReport = proxy.ReviewContext.Report
+                });
+                
                 await _eventManager.SendAsync(new AgentPeerReviewedMessageEvent(proxy.ReviewContext.Report));
                 
                 return AgentCallbackResult.Break;

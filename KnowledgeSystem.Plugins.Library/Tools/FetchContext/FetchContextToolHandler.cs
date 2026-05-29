@@ -245,7 +245,7 @@ public sealed class FetchContextToolHandler(
 
         foreach (var (document, ranges, content) in fetchedDocumentData)
         {
-            runner.ExecutionContext.ChatContext.InsertElement(new RepositoryFetchedTextMarker
+            runner.ExecutionContext.Timeline.InsertElement(new RepositoryFetchedTextMarker
             {
                 Document = document,
                 FetchedRanges = ranges,

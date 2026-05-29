@@ -57,7 +57,7 @@ public sealed class PeerReviewContext : BasicContext
     {
         ToolCallId = toolCallId;
         Report = report;
-        ChatContext.InsertSystem(systemPrompt);
-        ChatContext.InsertUser(report);
+        Timeline.InsertSystem(systemPrompt);
+        Timeline.InsertUser(report);
     }
 }

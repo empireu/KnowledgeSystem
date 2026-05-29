@@ -6,13 +6,13 @@ namespace KnowledgeSystem.Plugins.Library;
 
 public class BasicContext : AgentExecutionContext
 {
-    public AgentContext ChatContext { get; } = new();
+    public AgentContext Timeline { get; } = new();
 
-    public override IReadOnlyList<ChatMessage> ChatMessages => ChatContext.ChatMessages;
+    public override IReadOnlyList<ChatMessage> ChatMessages => Timeline.ChatMessages;
 
     public override void InsertAssistantCompletion(ChatResponse response)
     {
-        ChatContext.InsertAssistant(response);
+        Timeline.InsertAssistant(response);
     }
 
     public override void InsertToolResult(string toolCallId, string output)
@@ -22,6 +22,6 @@ public class BasicContext : AgentExecutionContext
             new FunctionResultContent(toolCallId, output)
         };
         
-        ChatContext.InsertChat(new ChatMessage(ChatRole.Tool, contents));
+        Timeline.InsertChat(new ChatMessage(ChatRole.Tool, contents));
     }
 }
