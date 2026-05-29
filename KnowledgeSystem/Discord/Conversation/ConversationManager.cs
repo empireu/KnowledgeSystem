@@ -148,8 +148,16 @@ public sealed class ConversationManager(
                 var key = _sorted.Keys[0];
                 var conversation = _sorted.Values[0];
                 _sorted.RemoveAt(0);
-                _byChannel.Remove(key.ChannelId);
-                expired.Add(conversation);
+                
+                if (conversation.ExpiresAt <= now)
+                {
+                    _byChannel.Remove(key.ChannelId);
+                    expired.Add(conversation);
+                }
+                else
+                {
+                    _sorted[(conversation.ExpiresAt, conversation.ScopeInfo.Id)] = conversation;
+                }
             }
         }
 
