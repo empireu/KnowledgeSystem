@@ -453,55 +453,50 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     private string BuildStatusContent()
     {
         const int maxLines = 35;
-        var sb = new StringBuilder();
-        var lineCount = 0;
+        var lines = new List<string>();
 
         foreach (var round in _rounds)
         {
-            if (lineCount >= maxLines)
-            {
-                sb.AppendLine("> ... *(truncated)*");
-                break;
-            }
+            lines.Add($"> ── Round {_rounds.IndexOf(round) + 1} ──");
 
-            // Round header
-            sb.AppendLine($"> ── Round {_rounds.IndexOf(round) + 1} ──");
-            lineCount++;
-
-            // Output trace:
             if (!string.IsNullOrWhiteSpace(round.OutputTrace))
             {
-                var trace = Truncate(EscapeNewlines(round.OutputTrace), 200);
-                sb.AppendLine($"> “{trace}”");
-                lineCount++;
+                var trace = Truncate(EscapeNewlines(round.OutputTrace), 200).Replace("`", "'");
+                lines.Add($"> “{trace}”");
             }
 
-            // Tool calls in this round:
             foreach (var call in round.ToolCalls)
             {
-                if (lineCount >= maxLines)
-                {
-                    break;
-                }
-                
-                AppendToolCallNode(sb, call, 0, ref lineCount);
+                AppendToolCallNode(lines, call, 0);
             }
 
-            sb.AppendLine("> ");
-            lineCount++;
+            lines.Add("> ");
         }
 
-        // Status indicator:
         var hasRunning = _rounds.Any(r => r.ToolCalls.Any(t => t.State == ToolState.Running));
-        sb.AppendLine(hasRunning
+        var statusLine = hasRunning
             ? "> · Working..."
-            : "> ▸ Processing..."
-        );
+            : "> ▸ Processing...";
 
-        return sb.ToString();
+        var result = new StringBuilder();
+        var startIndex = Math.Max(0, lines.Count - maxLines);
+
+        if (startIndex > 0)
+        {
+            result.AppendLine("> ... *(truncated)*");
+        }
+
+        for (var i = startIndex; i < lines.Count; i++)
+        {
+            result.AppendLine(lines[i]);
+        }
+
+        result.AppendLine(statusLine);
+
+        return result.ToString();
     }
 
-    private static void AppendToolCallNode(StringBuilder sb, ToolCallNode call, int depth, ref int lineCount)
+    private static void AppendToolCallNode(List<string> lines, ToolCallNode call, int depth)
     {
         var indent = depth > 0 ? new string(' ', depth * 2) + "└ " : "";
         var prefix = call.State switch
@@ -512,11 +507,10 @@ public sealed class DiscordMessageIntegration : IEventReceiver
             _ => "·"
         };
 
-        var args = string.IsNullOrEmpty(call.Arguments) ? "" : $" : {call.Arguments}";
+        var args = string.IsNullOrEmpty(call.Arguments) ? "" : $" {call.Arguments}";
         var error = call.Error != null ? $" — {call.Error}" : "";
 
-        sb.AppendLine($"> {indent}{prefix} *{call.ToolId}*{args}{error}");
-        lineCount++;
+        lines.Add($"> {indent}{prefix} **{call.ToolId}**{args}{error}");
         
         if (call.SubTree != null)
         {
@@ -525,8 +519,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
             {
                 foreach (var subCall in subRound.ToolCalls)
                 {
-                    if (lineCount >= 35) return;
-                    AppendToolCallNode(sb, subCall, depth + 1, ref lineCount);
+                    AppendToolCallNode(lines, subCall, depth + 1);
                 }
             }
         }
@@ -726,19 +719,23 @@ public sealed class DiscordMessageIntegration : IEventReceiver
         var parts = args.Arguments.Select(kvp =>
         {
             var value = Truncate(ChatMessageHelpers.FormatContentValue(kvp.Value) ?? "null", 40);
+            value = value.Replace("`", "'");
             value = EscapeNewlines(value);
-            value = $"`{value}`";
 
-            value = kvp.Key switch
+            if (kvp.Key is StringArgument)
             {
-                StringArgument _ => $"\"{value}\"",
-                _ => value
-            };
+                value = $"\"{value}\"";
+            }
 
-            return $"{kvp.Key.ArgumentName}: {value}";
-        });
+            return $"{kvp.Key.ArgumentName}: `{value}`";
+        }).ToList();
 
-        return string.Join(", ", parts);
+        if (parts.Count == 0)
+        {
+            return "";
+        }
+
+        return $"({string.Join(", ", parts)})";
     }
 
     private static string Truncate(string value, int maxLength)
