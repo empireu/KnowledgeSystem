@@ -40,7 +40,7 @@ public sealed class MemoryStoreService(
             .UseSqlite($"Data Source={wikiConfig.RepoPath}_memory.db")
             .Options;
 
-        var hnswPath = $"{wikiConfig.RepoPath}_vector.hnsw";
+        var hnswPath = $"{wikiConfig.RepoPath}_memory.hnsw";
         
         var db = new MemoryDbContext(dbContextOptions);
         
@@ -174,11 +174,8 @@ public sealed class MemoryStoreService(
             if (storedVector != null)
             {
                 _store.Hnsw.Remove(storedVector);
-                
-                await using (var fs = File.Open(_store.HnswPath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
-                {
-                    _store.Hnsw.SaveToFile(fs);
-                }
+                await using var fs = File.Open(_store.HnswPath, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+                _store.Hnsw.SaveToFile(fs);
             }
 
             _store.Db.Memories.Remove(record);
@@ -186,12 +183,8 @@ public sealed class MemoryStoreService(
 
             _store.LexicalIndex.Remove(id, record.Summary);
 
-            logger.LogInformation(
-                "Deleted memory {index}: {summary}",
-                id,
-                record.Summary
-            );
-
+            logger.LogInformation("Deleted memory {index}: {summary}", id, record.Summary);
+            
             return true;
         }
         finally

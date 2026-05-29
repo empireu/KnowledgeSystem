@@ -181,7 +181,7 @@ public sealed class MemoryExtractionService : IMemoryExtractionService, IHostedS
         
         for (var turn = 0;; turn++)
         {
-            if (turn == 10)
+            if (turn == 50)
             {
                 _logger.LogError(
                     "Hit {number} turns for memory extraction agent. Dropping memory from {startTime}!",
