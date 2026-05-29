@@ -36,6 +36,7 @@
       <ProjectReference Include="..\KnowledgeSystem.Api\KnowledgeSystem.Api.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.PluginLoader\KnowledgeSystem.PluginLoader.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Reranking\KnowledgeSystem.Reranking.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval.Persistent\KnowledgeSystem.Retrieval.Persistent.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />
       <ProjectReference Include="..\KnowledgeSystems.Extensions\KnowledgeSystems.Extensions.csproj" />

@@ -11,4 +11,6 @@ public class KnowledgeSystemConfig
     public ProviderConfig? EmbeddingProvider { get; set; }
     
     public EmbeddingConfig? EmbeddingConfig { get; set; }
+    
+    public ProviderConfig? RerankingProvider { get; set; }
 }

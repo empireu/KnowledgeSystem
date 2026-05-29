@@ -2,10 +2,12 @@ using KnowledgeSystem.Agents.Telemetry;
 using KnowledgeSystem.Api;
 using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Embedding;
+using KnowledgeSystem.Reranking;
 using KnowledgeSystem.Retrieval.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 using OpenTelemetry.Resources;
@@ -48,7 +50,7 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<ResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
             
             // Embedding:
-            if (options.EmbeddingProvider != null && options.EmbeddingConfig != null)
+            if (options is { EmbeddingProvider: not null, EmbeddingConfig: not null })
             {
                 services.AddSingleton<IEmbeddingService>(_ =>
                     new OpenAiEmbeddingService(
@@ -58,6 +60,22 @@ public static class ServiceCollectionExtensions
                         options.EmbeddingConfig.Dimension,
                         options.EmbeddingConfig.SystemPrompt
                     ));
+            }
+            
+            // Reranking:
+            if (options.RerankingProvider != null)
+            {
+                services.AddSingleton<IRerankingService>(sp =>
+                {
+                    var logger = sp.GetRequiredService<ILogger<RawRestRerankingService>>();
+
+                    return new RawRestRerankingService(
+                        logger,
+                        options.RerankingProvider.Endpoint,
+                        options.RerankingProvider.Model,
+                        options.RerankingProvider.Key
+                    );
+                });
             }
         });
 
