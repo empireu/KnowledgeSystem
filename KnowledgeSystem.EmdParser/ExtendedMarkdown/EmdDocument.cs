@@ -57,9 +57,8 @@ public sealed class EmdDocument
         NodesWithDefinition = nodesWithDefinition;
     }
 
-    private sealed class ParseData(EmdRepository repository, string documentPath)
+    private sealed class ParseData(string documentPath)
     {
-        public readonly EmdRepository Repository = repository;
         public readonly string DocumentPath = documentPath;
         public readonly Dictionary<MarkdownNode, EmdNode> Attachments = new();
         public readonly Dictionary<string, EmdNode> LocalRefs = new();
@@ -71,11 +70,11 @@ public sealed class EmdDocument
     ///     The references will not be checked or resolved.
     /// </summary>
     /// <returns>The fully parsed EMD document.</returns>
-    public static EmdDocument Parse(EmdRepository repository, string path, string content)
+    public static EmdDocument Parse(string path, string content)
     {
         var root = MarkdownTreeParser.Parse(content);
         
-        var data = new ParseData(repository, path);
+        var data = new ParseData(path);
         
         InitializeTreeAndParseTags(root, data);
         ParseRefs(data);

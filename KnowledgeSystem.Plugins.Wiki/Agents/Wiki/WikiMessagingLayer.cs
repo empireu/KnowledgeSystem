@@ -1,4 +1,5 @@
-﻿using KnowledgeSystem.Agents.Context.TokenEstimation;
+﻿using System.Text;
+using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Ai;
 using KnowledgeSystem.Api;
@@ -30,7 +31,8 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
     private readonly ITokenEstimator _tokenEstimator;
 
     private readonly IMemoryExtractionService? _memoryExtractionService;
-
+    private readonly MemoryStoreService? _memoryStore;
+    
     private DateTime _utcStart;
     
     public WikiMessagingLayer(
@@ -58,6 +60,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         });
         
         _memoryExtractionService = serviceProvider.GetService<IMemoryExtractionService>();
+        _memoryStore = serviceProvider.GetService<MemoryStoreService>();
     }
 
     public async Task PrepareAsync(CancellationToken cancellationToken)
@@ -69,9 +72,17 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         _utcStart = DateTime.UtcNow;
     }
 
-    public Task<IResponsePipeline> CreateResponsePipeline(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken)
+    public async Task<IResponsePipeline> CreateResponsePipeline(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken)
     {
         _context.Timeline.InsertUser($"{userMessageInfo.Username}: {userMessageInfo.Message}");
+        
+        if (_memoryStore != null)
+        {
+            await InjectMemoryHintsAsync(
+                userMessageInfo.Message,
+                cancellationToken
+            );
+        }
         
         // Creates the event manager, used by the agent's orchestration logic:
         var eventManager = ActivatorUtilities.CreateInstance<AgentEventManager>(_serviceProvider);
@@ -117,7 +128,31 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
             runner
         );
 
-        return Task.FromResult(pipeline);
+        return pipeline;
+    }
+    
+    private async Task InjectMemoryHintsAsync(string userMessage, CancellationToken cancellationToken)
+    {
+        var results = await _memoryStore!.SearchAsync(
+            userMessage,
+            cancellationToken
+        );
+
+        if (results.Length == 0)
+        {
+            return;
+        }
+        
+        var sb = new StringBuilder();
+        sb.AppendLine("Potentially relevant memories:");
+        foreach (var memory in results)
+        {
+            sb.AppendLine($"{memory.Id}: {memory.Summary}");
+        }
+
+        _context.Timeline.InsertSystem(sb.ToString(), index: 1);
+
+        _logger.LogInformation("Injected {count} memory hints for {query}", results.Length, userMessage);
     }
     
     /// <summary>

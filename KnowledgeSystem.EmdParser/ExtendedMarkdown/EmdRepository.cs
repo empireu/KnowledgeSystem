@@ -36,7 +36,7 @@ public sealed class EmdRepository(string rootDirectory, Dictionary<EmdReferenceP
             {
                 var relativePath = GetRepositoryRelativePath(rootDirectory, filePath);
                 var content = await File.ReadAllTextAsync(filePath, token);
-                var document = EmdDocument.Parse(repo, relativePath, content);
+                var document = EmdDocument.Parse(relativePath, content);
                 var key = EmdReferencePath.CreateFile(relativePath);
 
                 lock (obj)

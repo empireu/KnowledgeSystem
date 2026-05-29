@@ -13,7 +13,7 @@ public sealed class CreateMemoryToolHandler(
     AgentTool tool,
     StringArgument summaryArgument,
     StringArgument contentArgument,
-    MemoryStore memoryStore
+    MemoryStoreService memoryStoreService
 ) : ToolHandler<BasicContext>.Plain(tool)
 {
     public static void Register(AgentToolRegistry<BasicContext> registry, IServiceProvider serviceProvider)
@@ -59,7 +59,12 @@ public sealed class CreateMemoryToolHandler(
 
         try
         {
-            var id = await memoryStore.CreateMemory(summary, content, cancellationToken);
+            var id = await memoryStoreService.CreateMemory(
+                summary,
+                content,
+                DateTime.UtcNow, // Close enough
+                cancellationToken
+            );
             
             return Success($"Memory created with ID `{id}`.");
         }

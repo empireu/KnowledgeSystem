@@ -29,7 +29,7 @@ public class StoreTests
     private static EmdDocument CreateTestDocument(string path, string content)
     {
         var repository = new EmdRepository("", new Dictionary<EmdReferencePath, EmdDocument>());
-        var document = EmdDocument.Parse(repository, path, content);
+        var document = EmdDocument.Parse(path, content);
         document.GenerateChunksAndLookups(new Chunker());
         return document;
     }

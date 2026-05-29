@@ -8,6 +8,7 @@ using KnowledgeSystem.Plugins.Library.Tools.GrepContent;
 using KnowledgeSystem.Plugins.Library.Tools.ListDir;
 using KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
 using KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
+using KnowledgeSystem.Plugins.Wiki.Memory;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,16 @@ public sealed class WikiAgent : Agent<BasicContext>
     public WikiAgent(IReadOnlyDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options) : base(agentId)
     {
         _eventManager = eventManager;
+
+        var memoryStore = serviceProvider.GetService<MemoryStoreService>();
+
+        if (memoryStore != null)
+        {
+            FetchMemoryToolHandler.Register(
+                ToolRegistry,
+                serviceProvider
+            );
+        }
         
         FastContextToolHandler.Register(
             ToolRegistry,
