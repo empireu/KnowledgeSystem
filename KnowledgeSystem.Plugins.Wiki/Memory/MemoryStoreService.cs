@@ -1,4 +1,5 @@
 ﻿using KnowledgeSystem.Embedding;
+using KnowledgeSystem.Reranking;
 using KnowledgeSystem.Vector.Hnsw;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -11,7 +12,8 @@ namespace KnowledgeSystem.Plugins.Wiki.Memory;
 public sealed class MemoryStoreService(
     ILogger<MemoryStoreService> logger,
     IOptions<WikiOptions> options,
-    IEmbeddingService embeddingService
+    IEmbeddingService embeddingService,
+    IRerankingService rerankingService
 ) : IHostedService
 {
     private sealed class Store
@@ -165,24 +167,21 @@ public sealed class MemoryStoreService(
 
         await _store.DbSemaphore.WaitAsync(cancellationToken);
 
+        MemoryRecord[] memories;
         try
         {
-            var topResults = _store.Hnsw.Search(
-                embedding.Span, 
-                5,
-                1000
-            );
+            var hnswResults = _store.Hnsw.Search(embedding.Span, 20, 1000);
 
-            if (topResults.Length == 0)
+            if (hnswResults.Length == 0)
             {
                 return [];
             }
 
-            var ids = topResults
+            var ids = hnswResults
                 .Select(x => x.Index)
                 .ToHashSet();
 
-            return await _store.Db.Memories
+            memories = await _store.Db.Memories
                 .Where(x => ids.Contains(x.Id))
                 .ToArrayAsync(cancellationToken: cancellationToken);
         }
@@ -190,5 +189,26 @@ public sealed class MemoryStoreService(
         {
             _store.DbSemaphore.Release();
         }
+        
+        var rerankResults = await rerankingService.RerankAsync(query, memories.Select(x => x.Summary).ToList(), 5, cancellationToken);
+
+        if (rerankResults == null)
+        {
+            logger.LogError("Reranking error");
+            return [];
+        }
+
+        var threshold = options.Value.Memory!.RerankingThreshold;
+        var passedResults = rerankResults
+            .Where(x => x.RelevanceScore >= threshold)
+            .ToArray();
+            
+        if (passedResults.Length == 0)
+        {
+            return [];
+        }
+
+        return passedResults.Select(x => memories[x.Index]).ToArray();
+
     }
 }

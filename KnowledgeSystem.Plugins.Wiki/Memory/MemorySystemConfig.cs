@@ -17,4 +17,9 @@ public class MemorySystemConfig
     ///     If true, the extraction agent will be given a single turn.
     /// </summary>
     public bool RunForOneTurn { get; set; } = false;
+    
+    /// <summary>
+    ///     Reranked results are dropped if they are below this score.
+    /// </summary>
+    public float RerankingThreshold { get; set; } = 0.5f;
 }

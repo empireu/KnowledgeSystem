@@ -24,12 +24,14 @@ public sealed class RawRestRerankingService : IRerankingService
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
     }
 
-    public async Task<RerankResult[]?> RerankAsync(string query, List<string> documents, int topN)
+    public async Task<RerankResult[]?> RerankAsync(string query, List<string> documents, int topN, CancellationToken cancellationToken)
     {
-        if (topN <= 0 || topN > documents.Count)
+        if (topN <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(topN));
         }
+
+        topN = Math.Min(topN, documents.Count);
         
         var requestBody = new RerankRequest
         {
@@ -39,11 +41,11 @@ public sealed class RawRestRerankingService : IRerankingService
             TopN = topN
         };
         
-        var response = await _httpClient.PostAsJsonAsync("/rerank", requestBody);
+        var response = await _httpClient.PostAsJsonAsync("/rerank", requestBody, cancellationToken: cancellationToken);
        
         response.EnsureSuccessStatusCode();
 
-        var content = await response.Content.ReadFromJsonAsync<JsonRerankResponse>();
+        var content = await response.Content.ReadFromJsonAsync<JsonRerankResponse>(cancellationToken: cancellationToken);
 
         if (content == null)
         {
