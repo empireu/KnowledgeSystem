@@ -384,7 +384,7 @@ public class PeerReviewSubAgentHandler(
         CancellationToken cancellationToken
     ) : ISubAgentProxy
     {
-        private const int MaxTurns = 7;
+        private const int MaxTurns = 10;
 
         public PeerReviewContext ReviewContext { get; } = reviewContext;
 

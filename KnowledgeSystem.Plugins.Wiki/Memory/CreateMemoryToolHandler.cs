@@ -1,0 +1,77 @@
+using KnowledgeSystem.Agents.Orchestration;
+using KnowledgeSystem.Agents.Orchestration.Tools;
+using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Plugins.Library;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace KnowledgeSystem.Plugins.Wiki.Memory;
+
+/// <summary>
+///     Tool for the memory synthesis agent to persist a distilled memory.
+/// </summary>
+public sealed class CreateMemoryToolHandler(
+    AgentTool tool,
+    StringArgument summaryArgument,
+    StringArgument contentArgument,
+    MemoryStore memoryStore
+) : ToolHandler<BasicContext>.Plain(tool)
+{
+    public static void Register(AgentToolRegistry<BasicContext> registry, IServiceProvider serviceProvider)
+    {
+        var memoryTool = new ToolBuilder("create_memory")
+            .WithDescription("Creates a new memory from the conversation. Call this for each distinct, factual conclusion you can extract. The summary is a one-line description used for future retrieval; the content is the full distilled conclusion.")
+            .WithRequiredStringArgument("summary", "One-line summary used for semantic retrieval (max ~100 chars).", out var summaryArg)
+            .WithRequiredStringArgument("content", "Full distilled conclusion with all relevant details.", out var contentArg)
+            .Build();
+
+        var handler = ActivatorUtilities.CreateInstance<CreateMemoryToolHandler>(
+            serviceProvider,
+            memoryTool,
+            summaryArg,
+            contentArg
+        );
+
+        registry.RegisterTool(memoryTool, handler);
+    }
+
+    public override async Task<ToolExecutionResult> ExecuteAsync(
+        AgentRunner<BasicContext> runner,
+        ArgumentExtractionResult args,
+        CancellationToken cancellationToken)
+    {
+        var summary = summaryArgument.GetValue(args);
+        var content = contentArgument.GetValue(args);
+
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            return Error("Memory summary must not be empty.");
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return Error("Memory content must not be empty.");
+        }
+
+        if (summary.Length > 512)
+        {
+            return Error($"Memory summary too long ({summary.Length} chars, max 512).");
+        }
+
+        try
+        {
+            var id = await memoryStore.CreateMemory(summary, content, cancellationToken);
+            
+            return Success($"Memory created with ID `{id}`.");
+        }
+        catch (Exception ex)
+        {
+            return new ToolExecutionResult(
+                Tool,
+                false,
+                null,
+                "System error. You should end the process now.",
+                ex
+            );
+        }
+    }
+}

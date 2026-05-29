@@ -12,4 +12,9 @@ public class MemorySystemConfig
 
     [Required]
     public string ExtractionSystemPrompt { get; set; } = null!;
+    
+    /// <summary>
+    ///     If true, the extraction agent will be given a single turn.
+    /// </summary>
+    public bool RunForOneTurn { get; set; } = false;
 }

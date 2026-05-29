@@ -31,6 +31,7 @@ public class WikiPluginStartup : IPluginStartup
             services.AddSingleton<MemoryExtractionService>();
             services.AddHostedService<MemoryExtractionService>(sp => sp.GetRequiredService<MemoryExtractionService>());
             services.AddSingleton<IMemoryExtractionService>(sp => sp.GetRequiredService<MemoryExtractionService>());
+            services.AddSingleton<MemoryStore>();
         }
     }
 }

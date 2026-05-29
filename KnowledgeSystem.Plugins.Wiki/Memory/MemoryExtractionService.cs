@@ -1,7 +1,10 @@
 ﻿using System.Text;
 using System.Threading.Channels;
 using KnowledgeSystem.Agents.Context;
+using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Ai;
+using KnowledgeSystem.Events.Implementation;
+using KnowledgeSystem.Plugins.Library;
 using KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Hosting;
@@ -22,19 +25,21 @@ public sealed class MemoryExtractionService : IMemoryExtractionService, IHostedS
 
     private int _pendingChats;
 
+    private readonly ILogger<MemoryExtractionService> _logger;
     private readonly MemorySystemConfig _memoryConfig;
+    private readonly IServiceProvider _serviceProvider;
     private readonly IChatClient _extractionClient;
     private readonly string _systemPrompt;
     
     private Task? _processingTask;
-    private readonly ILogger<MemoryExtractionService> _logger;
-
-    public MemoryExtractionService(ILogger<MemoryExtractionService> logger, IOptions<WikiOptions> options)
+    
+    
+    public MemoryExtractionService(ILogger<MemoryExtractionService> logger, IOptions<WikiOptions> options, IServiceProvider serviceProvider)
     {
         _logger = logger;
-
         var config = options.Value;
         _memoryConfig = config.Memory ?? throw new InvalidOperationException("Created memory service, but the config is null");
+        _serviceProvider = serviceProvider;
         _extractionClient = OpenAiChatClientFactory.Create(_memoryConfig.ExtractionProvider);
         _systemPrompt = File.ReadAllText(config.Memory.ExtractionSystemPrompt);
     }
@@ -120,21 +125,31 @@ public sealed class MemoryExtractionService : IMemoryExtractionService, IHostedS
                 {
                     if (chatElement.Message.Role == ChatRole.User)
                     {
-                        sb.AppendLine($"({ChatRole.User.Value}) {chatElement.Message.Text}");
-                        hasUser = true;
+                        if (!string.IsNullOrWhiteSpace(chatElement.Message.Text))
+                        {
+                            sb.AppendLine($"({ChatRole.User.Value}) {chatElement.Message.Text}");
+                            hasUser = true;
+                        }
                     }
                     else if (chatElement.Message.Role == ChatRole.Assistant)
                     {
-                        sb.AppendLine($"({ChatRole.Assistant.Value}) {chatElement.Message.Text}");
-                        hasAssistant = true;
+                        if (!string.IsNullOrWhiteSpace(chatElement.Message.Text))
+                        {
+                            sb.AppendLine($"({ChatRole.Assistant.Value}) {chatElement.Message.Text}");
+                            hasAssistant = true;   
+                        }
                     }
                     
                     break;
                 }
                 case ReviewedWikiResponseMarker reviewedResponse:
                 {
-                    sb.AppendLine($"({ChatRole.Assistant.Value}) {reviewedResponse.VerifiedReport}");
-                    hasAssistant = true;
+                    if (!string.IsNullOrWhiteSpace(reviewedResponse.VerifiedReport))
+                    {
+                        sb.AppendLine($"({ChatRole.Assistant.Value}) {reviewedResponse.VerifiedReport}");
+                        hasAssistant = true;
+                    }   
+                    
                     break;
                 }
             }
@@ -147,7 +162,59 @@ public sealed class MemoryExtractionService : IMemoryExtractionService, IHostedS
         }
 
         var conversation = sb.ToString();
+
+        var extractionContext = new BasicContext();
+        extractionContext.Timeline.InsertSystem(_systemPrompt);
+        extractionContext.Timeline.InsertSystem(conversation);
+
+        var agent = new MemorySynthesisAgent("memory_synthesis", _serviceProvider);
         
-        Console.WriteLine(conversation);
+        var runner = new AgentRunner<BasicContext>(
+            _extractionClient, 
+            agent,
+            null,
+            extractionContext,
+            NullEventManager.Instance,
+            _cts.Token,
+            AgentRunner.ICompletionFactory.Wrap(_memoryConfig.Extraction.CreateOptions)
+        );
+        
+        for (var turn = 0;; turn++)
+        {
+            if (turn == 10)
+            {
+                _logger.LogError(
+                    "Hit {number} turns for memory extraction agent. Dropping memory from {startTime}!",
+                    turn, 
+                    chat.UtcStarted
+                );
+                
+                return;
+            }
+            
+            var status = await runner.ExecuteTurn();
+
+            if (status == AgentRunner.TurnStatus.CompletedWithError)
+            {
+                _logger.LogError(
+                    "Memory extraction completed with error {error}. Dropping memory from {startTime}!",
+                    runner.FinishError,
+                    chat.UtcStarted
+                );
+                
+                return;
+            }
+
+            if (status == AgentRunner.TurnStatus.CompletedSuccessfully || _memoryConfig.RunForOneTurn)
+            {
+                _logger.LogInformation(
+                    "Memory extraction for {utcStart} - {utcEnd} completed successfully",
+                    chat.UtcStarted,
+                    chat.UtcFinished
+                );
+                
+                return;
+            }
+        }
     }
 }
