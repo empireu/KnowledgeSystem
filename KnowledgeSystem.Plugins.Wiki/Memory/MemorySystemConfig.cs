@@ -17,6 +17,21 @@ public class MemorySystemConfig
     ///     If true, the extraction agent will be given a single turn.
     /// </summary>
     public bool RunForOneTurn { get; set; } = false;
+
+    /// <summary>
+    ///     The number of results to take from each search method.
+    /// </summary>
+    public int ResultsPerMethod { get; set; } = 20;
+
+    /// <summary>
+    ///     The number of results to take from RRF.
+    /// </summary>
+    public int FusedResults { get; set; } = 20;
+    
+    /// <summary>
+    ///     The number of final results to take with reranking.
+    /// </summary>
+    public int TopN { get; set; } = 5;
     
     /// <summary>
     ///     Reranked results are dropped if they are below this score.

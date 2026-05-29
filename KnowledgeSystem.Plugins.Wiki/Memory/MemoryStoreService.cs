@@ -219,10 +219,7 @@ public sealed class MemoryStoreService(
         }
     }
 
-    private const int HnswK = 20;
-    private const int Bm25K = 20;
     private const int RrfK = 60;
-    private const int RerankTopN = 5;
 
     public async Task<MemoryRecord[]> SearchAsync(string query, CancellationToken cancellationToken)
     {
@@ -230,6 +227,8 @@ public sealed class MemoryStoreService(
         {
             throw new InvalidOperationException("Memory store not initialized");
         }
+        
+        var config = options.Value.Memory!;
 
         var embedding = await embeddingService.EmbedAsync(query, cancellationToken);
         
@@ -237,8 +236,16 @@ public sealed class MemoryStoreService(
         await _store.DbSemaphore.WaitAsync(cancellationToken);
         try
         {
-            var hnswResults = _store.Hnsw.Search(embedding.Span, HnswK, 1000);
-            var bm25Results = _store.LexicalIndex.SearchBm25(query, Bm25K);
+            var hnswResults = _store.Hnsw.Search(
+                embedding.Span,
+                config.ResultsPerMethod,
+                1000
+            );
+            
+            var bm25Results = _store.LexicalIndex.SearchBm25(
+                query, 
+                config.ResultsPerMethod
+            );
 
             if (hnswResults.Length == 0 && bm25Results.Length == 0)
             {
@@ -280,7 +287,7 @@ public sealed class MemoryStoreService(
 
             var candidateIds = rrfScores
                 .OrderByDescending(x => x.Value)
-                .Take(HnswK)
+                .Take(config.FusedResults)
                 .Select(x => x.Key)
                 .ToHashSet();
 
@@ -293,7 +300,7 @@ public sealed class MemoryStoreService(
             _store.DbSemaphore.Release();
         }
 
-        if (memories.Length <= RerankTopN)
+        if (memories.Length <= config.TopN)
         {
             return memories;
         }
@@ -302,7 +309,12 @@ public sealed class MemoryStoreService(
             .Select(x => x.Summary)
             .ToList();
         
-        var rerankResults = await rerankingService.RerankAsync(query, summaries, RerankTopN, cancellationToken);
+        var rerankResults = await rerankingService.RerankAsync(
+            query,
+            summaries, 
+            config.TopN,
+            cancellationToken
+        );
 
         if (rerankResults == null)
         {
@@ -310,30 +322,9 @@ public sealed class MemoryStoreService(
             return [];
         }
 
-        var threshold = options.Value.Memory!.RerankingThreshold;
-        var passedResults = rerankResults
-            .Where(x => x.RelevanceScore >= threshold)
+        return rerankResults
+            .Where(x => x.RelevanceScore >= config.RerankingThreshold)
+            .Select(x => memories[x.Index])
             .ToArray();
-
-        if (passedResults.Length == 0)
-        {
-            return [];
-        }
-        
-        Console.WriteLine($"Q: {query}");
-        Console.WriteLine($"Pass: {passedResults.Length}");
-        foreach (var passedResult in passedResults)
-        {
-            Console.WriteLine($"  {memories[passedResult.Index].Summary}");
-        }
-        
-        Console.WriteLine("Rejected:");
-        foreach (var memoryRecord in memories.Where(x => !passedResults.Any(r => r.Index == x.Id)))
-        {
-            Console.WriteLine($"  {memoryRecord.Summary}");
-        }
-       
-
-        return passedResults.Select(x => memories[x.Index]).ToArray();
     }
 }
