@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Reranking;
+﻿namespace KnowledgeSystem.Ai;
 
 /// <summary>
 ///     Abstraction over a result reranking service.

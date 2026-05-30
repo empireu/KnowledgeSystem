@@ -7,11 +7,11 @@ using System.Text.Json.Serialization;
 
 namespace KnowledgeSystem.Ai;
 
-public sealed class RawRestLogprobFilteringService
+public sealed class LlamaCppLogprobFilteringService : ILogprobGatingService
 {
     private readonly HttpClient _httpClient = new();
 
-    public RawRestLogprobFilteringService(string endpoint, string apiKey)
+    public LlamaCppLogprobFilteringService(string endpoint, string apiKey)
     {
         _httpClient.BaseAddress = new Uri(endpoint);
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -80,6 +80,24 @@ public sealed class RawRestLogprobFilteringService
         }
         
         return Math.Exp(yesLogprob.Value) >= threshold;
+    }
+
+    public async Task<bool[]> AreRelevantAsync(string query, string[] documents, double threshold, CancellationToken cancellationToken)
+    {
+        var tasks = documents
+            .Select(document => IsRelevantAsync(query, document, threshold, cancellationToken))
+            .ToArray();
+
+        var results = new bool[documents.Length];
+
+        for (var index = 0; index < tasks.Length; index++)
+        {
+            var task = tasks[index];
+            
+            results[index] = await task;
+        }
+        
+        return results;
     }
 
     private sealed class Request

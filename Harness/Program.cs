@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.Ai;
 
-var client = new RawRestLogprobFilteringService("http://127.0.0.1:8080", "none");
+var client = new LlamaCppLogprobFilteringService("http://127.0.0.1:8080", "none");
 
 var tests = new List<(string Query, string Document, bool Expected)>
 {

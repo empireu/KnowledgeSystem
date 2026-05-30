@@ -1,5 +1,5 @@
-﻿using KnowledgeSystem.Embedding;
-using KnowledgeSystem.Reranking;
+﻿using KnowledgeSystem.Ai;
+using KnowledgeSystem.Embedding;
 using KnowledgeSystem.Vector.Hnsw;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;

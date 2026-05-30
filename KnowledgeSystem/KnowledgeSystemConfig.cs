@@ -13,4 +13,6 @@ public class KnowledgeSystemConfig
     public EmbeddingConfig? EmbeddingConfig { get; set; }
     
     public ProviderConfig? RerankingProvider { get; set; }
+    
+    public ProviderConfig? LogprobeFilteringProvider { get; set; }
 }

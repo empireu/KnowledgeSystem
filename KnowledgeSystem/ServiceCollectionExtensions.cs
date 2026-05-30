@@ -1,8 +1,8 @@
 using KnowledgeSystem.Agents.Telemetry;
+using KnowledgeSystem.Ai;
 using KnowledgeSystem.Api;
 using KnowledgeSystem.Discord.Conversation;
 using KnowledgeSystem.Embedding;
-using KnowledgeSystem.Reranking;
 using KnowledgeSystem.Retrieval.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,6 +76,15 @@ public static class ServiceCollectionExtensions
                         options.RerankingProvider.Key
                     );
                 });
+            }
+
+            // Filter:
+            if (options.LogprobeFilteringProvider != null)
+            {
+                services.AddSingleton<ILogprobGatingService>(_ => new LlamaCppLogprobFilteringService(
+                    options.LogprobeFilteringProvider.Endpoint,
+                    options.LogprobeFilteringProvider.Key
+                ));
             }
         });
 

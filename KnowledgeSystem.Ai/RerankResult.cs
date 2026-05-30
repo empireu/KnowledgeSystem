@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Reranking;
+﻿namespace KnowledgeSystem.Ai;
 
 public readonly struct RerankResult(int index, double relevanceScore)
 {

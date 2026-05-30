@@ -15,7 +15,6 @@
       <ProjectReference Include="..\KnowledgeSystem.Api\KnowledgeSystem.Api.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.PluginLoader\KnowledgeSystem.PluginLoader.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Plugins.Library\KnowledgeSystem.Plugins.Library.csproj" />
-      <ProjectReference Include="..\KnowledgeSystem.Reranking\KnowledgeSystem.Reranking.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval.InMemory\KnowledgeSystem.Retrieval.InMemory.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval.Persistent\KnowledgeSystem.Retrieval.Persistent.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />
