@@ -12,5 +12,5 @@ public interface ILogprobGatingService
     /// <summary>
     ///     Batch version of <see cref="IsRelevantAsync"/>.
     /// </summary>
-    public Task<bool[]> AreRelevantAsync(string query, string[] documents, double threshold, CancellationToken cancellationToken);
+    public Task<bool[]> AreRelevantAsync(string query, IReadOnlyList<string> documents, double threshold, CancellationToken cancellationToken);
 }

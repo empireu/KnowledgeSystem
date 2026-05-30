@@ -82,13 +82,13 @@ public sealed class LlamaCppLogprobFilteringService : ILogprobGatingService
         return Math.Exp(yesLogprob.Value) >= threshold;
     }
 
-    public async Task<bool[]> AreRelevantAsync(string query, string[] documents, double threshold, CancellationToken cancellationToken)
+    public async Task<bool[]> AreRelevantAsync(string query, IReadOnlyList<string> documents, double threshold, CancellationToken cancellationToken)
     {
         var tasks = documents
             .Select(document => IsRelevantAsync(query, document, threshold, cancellationToken))
             .ToArray();
 
-        var results = new bool[documents.Length];
+        var results = new bool[documents.Count];
 
         for (var index = 0; index < tasks.Length; index++)
         {

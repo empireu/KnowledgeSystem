@@ -34,7 +34,7 @@ public class MemorySystemConfig
     public int TopN { get; set; } = 5;
     
     /// <summary>
-    ///     Reranked results are dropped if they are below this score.
+    ///     Results are dropped if they are below this threshold.
     /// </summary>
-    public float RerankingThreshold { get; set; } = 0.5f;
+    public double GateThreshold { get; set; } = 0.5;
 }

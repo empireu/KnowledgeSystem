@@ -14,7 +14,7 @@ public sealed class MemoryStoreService(
     ILogger<MemoryStoreService> logger,
     IOptions<WikiOptions> options,
     IEmbeddingService embeddingService,
-    IRerankingService rerankingService
+    ILogprobGatingService gateService
 ) : IHostedService
 {
     private sealed class Store
@@ -334,32 +334,16 @@ public sealed class MemoryStoreService(
         {
             _store.DbSemaphore.Release();
         }
-
-        if (memories.Length <= config.TopN)
-        {
-            return memories;
-        }
-
-        var summaries = memories
-            .Select(x => x.Summary)
-            .ToList();
         
-        var rerankResults = await rerankingService.RerankAsync(
+        var gateResults = await gateService.AreRelevantAsync(
             query,
-            summaries, 
-            config.TopN,
-            cancellationToken
+            memories.Select(x => x.Summary).ToList(),
+            config.GateThreshold, cancellationToken
         );
 
-        if (rerankResults == null)
-        {
-            logger.LogError("Reranking error");
-            return [];
-        }
-
-        return rerankResults
-            .Where(x => x.RelevanceScore >= config.RerankingThreshold)
-            .Select(x => memories[x.Index])
+        return memories
+            .Where((_, index) => gateResults[index])
+            .Take(config.TopN)
             .ToArray();
     }
 }
