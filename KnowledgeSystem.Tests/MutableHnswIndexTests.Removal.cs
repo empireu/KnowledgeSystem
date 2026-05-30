@@ -66,6 +66,91 @@ public partial class MutableHnswIndexTests
     }
 
     [Fact]
+    public void Remove_Repair_WhenCandidateEdgeListIsFull_DoesNotCorruptSavedIndex()
+    {
+        var index = new MutableHnswIndex(
+            dimension: Dimension,
+            maxConnectionsLane: 2,
+            maxConnectionsDense: 2,
+            efConstruction: 20,
+            seed: Seed
+        );
+
+        var random = new Random(Seed);
+        var vectors = new List<IStoredVector>();
+        while (vectors.Count < 6)
+        {
+            var vector = index.Insert(GetTestVector(random, Dimension));
+
+            if (index.VectorsInternal[vector.Index]!.TargetLayer == 0)
+            {
+                vectors.Add(vector);
+            }
+        }
+
+        var removed = vectors[0];
+        var neighbor = vectors[1];
+        var intermediary = vectors[2];
+        var candidate = vectors[3];
+        var extra1 = vectors[4];
+        var extra2 = vectors[5];
+
+        foreach (var vector in index.VectorsInternal)
+        {
+            if (vector == null)
+            {
+                continue;
+            }
+
+            vector.GetEdgesInLayer(0).Clear();
+        }
+
+        var removedNode = index.VectorsInternal[removed.Index]!;
+        var neighborNode = index.VectorsInternal[neighbor.Index]!;
+        var intermediaryNode = index.VectorsInternal[intermediary.Index]!;
+        var candidateNode = index.VectorsInternal[candidate.Index]!;
+        var extraNode1 = index.VectorsInternal[extra1.Index]!;
+        var extraNode2 = index.VectorsInternal[extra2.Index]!;
+
+        removedNode.GetEdgesInLayer(0).Clear();
+        removedNode.GetEdgesInLayer(0).Add(neighbor.Index);
+
+        neighborNode.GetEdgesInLayer(0).Clear();
+        neighborNode.GetEdgesInLayer(0).Add(removed.Index);
+        neighborNode.GetEdgesInLayer(0).Add(intermediary.Index);
+
+        intermediaryNode.GetEdgesInLayer(0).Clear();
+        intermediaryNode.GetEdgesInLayer(0).Add(neighbor.Index);
+        intermediaryNode.GetEdgesInLayer(0).Add(candidate.Index);
+
+        candidateNode.GetEdgesInLayer(0).Clear();
+        candidateNode.GetEdgesInLayer(0).Add(intermediary.Index);
+        candidateNode.GetEdgesInLayer(0).Add(extra1.Index);
+        candidateNode.GetEdgesInLayer(0).Add(extra2.Index);
+
+        extraNode1.GetEdgesInLayer(0).Clear();
+        extraNode1.GetEdgesInLayer(0).Add(candidate.Index);
+
+        extraNode2.GetEdgesInLayer(0).Clear();
+        extraNode2.GetEdgesInLayer(0).Add(candidate.Index);
+
+        var removedCountBefore = index.Vectors.Count(v => v == null);
+        Assert.True(index.Remove(removed));
+        Assert.Equal(removedCountBefore + 1, index.Vectors.Count(v => v == null));
+
+        using var stream = new MemoryStream();
+        index.SaveToFile(stream);
+        stream.Position = 0;
+
+        var loaded = MutableHnswIndex.Load(stream);
+        Assert.Null(loaded.Vectors[removed.Index]);
+
+        var liveVector = loaded.VectorsInternal.First(v => v != null)!;
+        var results = loaded.Search(liveVector.VectorView, 1);
+        Assert.NotEmpty(results);
+    }
+
+    [Fact]
     public void Remove_PreservesSymmetricEdges()
     {
         const int smallMaxConnections = 4;

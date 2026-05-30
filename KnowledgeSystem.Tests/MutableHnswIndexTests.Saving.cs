@@ -1,4 +1,4 @@
-﻿using KnowledgeSystem.Vector;
+using KnowledgeSystem.Vector;
 using KnowledgeSystem.Vector.Hnsw;
 
 // ReSharper disable ForCanBeConvertedToForeach
@@ -438,5 +438,67 @@ public partial class MutableHnswIndexTests
 
         var averageRecall = totalRecall / queryCount;
         Assert.True(averageRecall >= 0.90, $"Bad recall after incremental save: {averageRecall:P1}");
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(16)]
+    [InlineData(48)]
+    public void IncrementalSave_Stress_InsertRemoveSaveLoad_CyclesRoundTrip(int seed)
+    {
+        var random = new Random(seed);
+        var index = new MutableHnswIndex(Dimension, 16, 32, efConstruction: 200, seed: seed);
+
+        var liveIndices = new List<int>();
+        for (var i = 0; i < 200; i++)
+        {
+            liveIndices.Add(index.Insert(GetTestVector(random, Dimension)).Index);
+        }
+
+        using var stream = new MemoryStream();
+        index.SaveToFile(stream);
+
+        for (var cycle = 0; cycle < 6; cycle++)
+        {
+            const int batchSize = 10;
+
+            for (var i = 0; i < batchSize; i++)
+            {
+                var liveIndex = liveIndices[random.Next(liveIndices.Count)];
+                var vector = index.VectorsInternal[liveIndex];
+
+                if (vector == null)
+                {
+                    liveIndices.Remove(liveIndex);
+                    i--;
+                    continue;
+                }
+
+                Assert.True(index.Remove(vector));
+                liveIndices.Remove(liveIndex);
+            }
+
+            for (var i = 0; i < batchSize; i++)
+            {
+                liveIndices.Add(index.Insert(GetTestVector(random, Dimension)).Index);
+            }
+
+            AssertGraphIntegrity(index);
+
+            index.SaveToFile(stream);
+            stream.Position = 0;
+            index = MutableHnswIndex.Load(stream);
+
+            AssertGraphIntegrity(index);
+
+            liveIndices = index.VectorsInternal
+                .Select((vector, vectorIndex) => vector == null ? -1 : vectorIndex)
+                .Where(vectorIndex => vectorIndex >= 0)
+                .ToList();
+        }
+
+        var query = GetTestVector(random, Dimension);
+        var results = index.Search(query, 10, efSearch: 200);
+        Assert.NotEmpty(results);
     }
 }

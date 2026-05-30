@@ -90,27 +90,29 @@ public sealed partial class MutableHnswIndex
             // If the stream is empty (first save), always do a full rewrite:
             var isFirstSave = stream is { CanSeek: true, Length: 0 };
 
-            // Snapshot and clear the dirty set under _dirtyLock:
+            // Snapshot the dirty state while holding the graph lock so we do not observe a structural header change without the matching slot update:
             List<int> dirtySnapshot;
             bool structuralSnapshot;
+            int vectorCountSnapshot;
+            bool needsRewrite;
 
-            lock (_dirtyLock)
-            {
-                dirtySnapshot = [.._dirtyVectorIndices];
-                _dirtyVectorIndices.Clear();
-                structuralSnapshot = _hasStructuralChanges;
-                _hasStructuralChanges = false;
-            }
-
-            if (dirtySnapshot.Count == 0 && !structuralSnapshot && !isFirstSave)
-            {
-                return;
-            }
-
-            // Check whether any dirty vector exceeds MaxLayersAllocated:
-            var needsRewrite = isFirstSave;
             lock (_graphLock)
             {
+                lock (_dirtyLock)
+                {
+                    dirtySnapshot = [.._dirtyVectorIndices];
+                    _dirtyVectorIndices.Clear();
+                    structuralSnapshot = _hasStructuralChanges;
+                    _hasStructuralChanges = false;
+                }
+
+                if (dirtySnapshot.Count == 0 && !structuralSnapshot && !isFirstSave)
+                {
+                    return;
+                }
+
+                // Check whether any dirty vector exceeds MaxLayersAllocated:
+                needsRewrite = isFirstSave;
                 for (var index = 0; index < dirtySnapshot.Count; index++)
                 {
                     var vectorIndex = dirtySnapshot[index];
@@ -127,6 +129,8 @@ public sealed partial class MutableHnswIndex
                         break;
                     }
                 }
+
+                vectorCountSnapshot = VectorsInternal.Count;
             }
 
             if (needsRewrite)
@@ -139,7 +143,7 @@ public sealed partial class MutableHnswIndex
             if (stream.CanSeek)
             {
                 var currentSlotCount = (int)((stream.Length - HeaderSize) / SlotSize);
-                var neededSlotCount = VectorsInternal.Count;
+                var neededSlotCount = vectorCountSnapshot;
 
                 if (neededSlotCount > currentSlotCount)
                 {

@@ -110,13 +110,17 @@ public sealed partial class MutableHnswIndex
                         neighborEdges.Add(candidateIndex);
                         var candidateNode = vectors[candidateIndex]!;
                         var candidateEdges = candidateNode.GetEdgesInLayer(layer);
-                        candidateEdges.Add(neighbor.Index);
-                        MarkVectorDirty(candidateIndex);
-
-                        if (candidateEdges.Count > maxConnections)
+                        if (!candidateEdges.TryAdd(neighbor.Index))
+                        {
+                            TrimEdges(insertCtx.TrimEdgesData, candidateNode, layer, maxConnections);
+                            candidateNode.GetEdgesInLayer(layer).Add(neighbor.Index);
+                        }
+                        else if (candidateEdges.Count > maxConnections)
                         {
                             TrimEdges(insertCtx.TrimEdgesData, candidateNode, layer, maxConnections);
                         }
+
+                        MarkVectorDirty(candidateIndex);
 
                         if (neighborEdges.Count >= maxConnections)
                         {
