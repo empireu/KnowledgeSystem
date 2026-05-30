@@ -46,6 +46,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Plugins.Wik
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Core", "Core", "{FBA93E4B-4022-41B4-98DB-65E3A1C1FA7F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness", "Harness\Harness.csproj", "{FA4B79EC-D099-47B5-B73D-4F370AD9A75B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -128,6 +130,10 @@ Global
 		{9020CB54-F431-4732-BB28-FECEED8A8F46}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9020CB54-F431-4732-BB28-FECEED8A8F46}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9020CB54-F431-4732-BB28-FECEED8A8F46}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA4B79EC-D099-47B5-B73D-4F370AD9A75B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA4B79EC-D099-47B5-B73D-4F370AD9A75B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA4B79EC-D099-47B5-B73D-4F370AD9A75B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA4B79EC-D099-47B5-B73D-4F370AD9A75B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
