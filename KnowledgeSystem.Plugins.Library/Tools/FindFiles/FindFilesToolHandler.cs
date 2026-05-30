@@ -13,11 +13,11 @@ namespace KnowledgeSystem.Plugins.Library.Tools.FindFiles;
 public sealed class FindFilesToolHandler(
     AgentTool tool,
     StringArgument patternArgument,
-    IReadOnlyDocumentStore store,
+    IReadOnlyMarkdownDocumentStore store,
     FindFilesToolConfig config
 ) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, FindFilesToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyMarkdownDocumentStore store, IServiceProvider serviceProvider, FindFilesToolConfig config)
     {
         var findTool = new ToolBuilder("find_files")
             .WithDescription("Searches for files by name using a case-insensitive regex pattern on the full file path. Use this to locate files when you know part of the filename or path.")

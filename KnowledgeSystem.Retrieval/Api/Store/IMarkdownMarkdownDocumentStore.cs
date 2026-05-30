@@ -2,7 +2,7 @@
 
 namespace KnowledgeSystem.Retrieval.Api.Store;
 
-public interface IDocumentStore : IReadOnlyDocumentStore
+public interface IMarkdownMarkdownDocumentStore : IReadOnlyMarkdownDocumentStore
 {
     /// <summary>
     ///     Adds a document to the store. This can result in many heavy operations, depending on the capabilities.

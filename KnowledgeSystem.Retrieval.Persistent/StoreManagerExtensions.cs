@@ -13,7 +13,7 @@ public static class StoreManagerExtensions
     ///     Creates a new disk-backed store and initializes it.
     ///     The store syncs its content from the repository on disk.
     /// </summary>
-    public static async Task<IReadOnlyDocumentStore> CreateStaticWikiStoreAsync(this StoreManager manager, StaticDiskWikiStoreConfig config, CancellationToken cancellationToken = default)
+    public static async Task<IReadOnlyMarkdownDocumentStore> CreateStaticWikiStoreAsync(this StoreManager manager, StaticDiskWikiStoreConfig config, CancellationToken cancellationToken = default)
     {
         return await manager.CreateStoreAsync(config.StoreId, async () =>
         {

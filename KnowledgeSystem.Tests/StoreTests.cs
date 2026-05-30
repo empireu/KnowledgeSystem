@@ -99,8 +99,8 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        var store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        var store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
         var document = CreateSimpleDocument("test.md", "Hello world content for testing");
         await store.AddDocument(document);
@@ -115,8 +115,8 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        var store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        var store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
         var document = CreateSimpleDocument("path/to/file.md", "Some content here");
         await store.AddDocument(document);
@@ -130,8 +130,8 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        var store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        var store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
         var document = CreateSimpleDocument("doc.md", "Content that will be chunked and indexed properly");
         await store.AddDocument(document);
@@ -150,8 +150,8 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        var store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        var store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
         var document = CreateSimpleDocument("doc.md", "Red Judas vs Blue Judas");
         await store.AddDocument(document);
@@ -165,8 +165,8 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        var store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        var store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
         var document = CreateSimpleDocument("doc.md", "Content to be removed");
         await store.AddDocument(document);
@@ -183,8 +183,8 @@ public class StoreTests
         {
             var embeddingService = new MockEmbeddingService();
             var stateTracker = new InMemoryIndexStateTracker();
-            var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-            var store = new InMemoryDocumentStore(logger, "my-store", stateTracker, embeddingService);
+            var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+            var store = new InMemoryMarkdownMarkdownDocumentStore(logger, "my-store", stateTracker, embeddingService);
 
             Assert.Equal("my-store", store.StoreId);
             return Task.CompletedTask;
@@ -202,10 +202,10 @@ public class StoreTests
         {
             var embeddingService = new MockEmbeddingService();
             var stateTracker = new InMemoryIndexStateTracker();
-            var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-            var store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+            var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+            var store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
-            Assert.IsType<IDocumentStore>(store, exactMatch: false);
+            Assert.IsType<IMarkdownMarkdownDocumentStore>(store, exactMatch: false);
             Assert.True(store.HasCapability(IVectorSearchCapability.CapabilityType));
             Assert.True(store.HasCapability(ILexicalSearchCapability.CapabilityType));
             return Task.CompletedTask;
@@ -221,8 +221,8 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        var store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        var store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
         await store.AddDocument(CreateSimpleDocument("a.md", "Alpha content about rockets"));
         await store.AddDocument(CreateSimpleDocument("b.md", "Beta content about satellites"));
@@ -326,7 +326,7 @@ public class StoreTests
 
         Assert.NotNull(store);
         Assert.Equal("test", store.StoreId);
-        Assert.IsAssignableFrom<IDocumentStore>(store);
+        Assert.IsAssignableFrom<IMarkdownMarkdownDocumentStore>(store);
     }
 
     [Fact]
@@ -408,12 +408,12 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        IReadOnlyDocumentStore store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        IReadOnlyMarkdownDocumentStore store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
         // Add a document via the writable interface:
         var document = CreateSimpleDocument("doc.md", "Test content");
-        await ((IDocumentStore)store).AddDocument(document);
+        await ((IMarkdownMarkdownDocumentStore)store).AddDocument(document);
 
         // Pattern: check capability via HasCapability/GetCapability
         if (store.HasCapability(IVectorSearchCapability.CapabilityType))
@@ -433,11 +433,11 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        IReadOnlyDocumentStore store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        IReadOnlyMarkdownDocumentStore store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
         var document = CreateSimpleDocument("doc.md", "Test content for lexical search");
-        await ((IDocumentStore)store).AddDocument(document);
+        await ((IMarkdownMarkdownDocumentStore)store).AddDocument(document);
 
         if (store.HasCapability(ILexicalSearchCapability.CapabilityType))
         {
@@ -456,10 +456,10 @@ public class StoreTests
     {
         var embeddingService = new MockEmbeddingService();
         var stateTracker = new InMemoryIndexStateTracker();
-        var logger = _loggerFactory.CreateLogger<InMemoryDocumentStore>();
-        await using IReadOnlyDocumentStore store = new InMemoryDocumentStore(logger, "test", stateTracker, embeddingService);
+        var logger = _loggerFactory.CreateLogger<InMemoryMarkdownMarkdownDocumentStore>();
+        await using IReadOnlyMarkdownDocumentStore store = new InMemoryMarkdownMarkdownDocumentStore(logger, "test", stateTracker, embeddingService);
 
-        if (store is IDocumentStore writableStore)
+        if (store is IMarkdownMarkdownDocumentStore writableStore)
         {
             var document = CreateSimpleDocument("new.md", "New document content");
             await writableStore.AddDocument(document);

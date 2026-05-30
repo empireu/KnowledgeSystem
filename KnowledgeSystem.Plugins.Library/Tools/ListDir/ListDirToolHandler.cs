@@ -10,11 +10,11 @@ namespace KnowledgeSystem.Plugins.Library.Tools.ListDir;
 public sealed class ListDirToolHandler(
     AgentTool tool,
     StringArgument pathArgument,
-    IReadOnlyDocumentStore store,
+    IReadOnlyMarkdownDocumentStore store,
     ListDirToolConfig config
 ) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, ListDirToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyMarkdownDocumentStore store, IServiceProvider serviceProvider, ListDirToolConfig config)
     {
         var listTool = new ToolBuilder("list_dir")
             .WithDescription("Lists the immediate files and subdirectories in a directory path. Does NOT recurse into subdirectories. Use this to explore the repository structure before searching.")

@@ -16,9 +16,9 @@ namespace KnowledgeSystem.Retrieval.InMemory;
 ///     An in-memory document store that supports adding and removing documents at runtime.
 ///     Implements vector search (via HNSW) and lexical search (via BM25).
 /// </summary>
-public sealed class InMemoryDocumentStore : StoreBase, IDocumentStore, IDisposable
+public sealed class InMemoryMarkdownMarkdownDocumentStore : StoreBase, IMarkdownMarkdownDocumentStore, IDisposable
 {
-    private readonly ILogger<InMemoryDocumentStore> _logger;
+    private readonly ILogger<InMemoryMarkdownMarkdownDocumentStore> _logger;
     private readonly IIndexStateTracker _stateTracker;
     private readonly IEmbeddingService _embeddingService;
     private readonly MutableHnswIndex _hnsw;
@@ -26,7 +26,7 @@ public sealed class InMemoryDocumentStore : StoreBase, IDocumentStore, IDisposab
     private readonly Dictionary<int, EmdChunk> _chunkById = new();
     private readonly Dictionary<string, EmdDocument> _documentsByPath = new(StringComparer.OrdinalIgnoreCase);
 
-    public InMemoryDocumentStore(ILogger<InMemoryDocumentStore> logger, string storeId, IIndexStateTracker stateTracker, IEmbeddingService embeddingService)
+    public InMemoryMarkdownMarkdownDocumentStore(ILogger<InMemoryMarkdownMarkdownDocumentStore> logger, string storeId, IIndexStateTracker stateTracker, IEmbeddingService embeddingService)
     {
         _logger = logger;
         StoreId = storeId;
@@ -136,7 +136,7 @@ public sealed class InMemoryDocumentStore : StoreBase, IDocumentStore, IDisposab
         return ValueTask.CompletedTask;
     }
 
-    private sealed class VectorSearchCapability(InMemoryDocumentStore store) : IVectorSearchCapability
+    private sealed class VectorSearchCapability(InMemoryMarkdownMarkdownDocumentStore store) : IVectorSearchCapability
     {
         public IEmbeddingService EmbeddingService => store._embeddingService;
 
@@ -155,7 +155,7 @@ public sealed class InMemoryDocumentStore : StoreBase, IDocumentStore, IDisposab
         }
     }
 
-    private sealed class LexicalSearchCapability(InMemoryDocumentStore store) : ILexicalSearchCapability
+    private sealed class LexicalSearchCapability(InMemoryMarkdownMarkdownDocumentStore store) : ILexicalSearchCapability
     {
         public int GetChunkFrequency(string term) => store.LexicalIndex.GetChunkFrequency(term);
 

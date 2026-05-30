@@ -10,7 +10,7 @@ public static class StoreManagerExtensions
     ///     Creates a new in-memory store.
     ///     The store starts empty and supports adding documents at runtime.
     /// </summary>
-    public static async Task<IReadOnlyDocumentStore> CreateInMemoryStoreAsync(this StoreManager manager, InMemoryStoreDescription description, CancellationToken cancellationToken = default)
+    public static async Task<IReadOnlyMarkdownDocumentStore> CreateInMemoryStoreAsync(this StoreManager manager, InMemoryStoreDescription description, CancellationToken cancellationToken = default)
     {
         return await manager.CreateStoreAsync(description.StoreId, () =>
         {
@@ -18,16 +18,16 @@ public static class StoreManagerExtensions
             // They require an IDocumentStore implementation for adding documents at runtime
             // For now, create a lightweight in-memory store backed by the InMemoryIndexStateTracker
             var stateTracker = new InMemoryIndexStateTracker();
-            var logger = manager.ServiceProvider.GetRequiredService<ILogger<InMemoryDocumentStore>>();
+            var logger = manager.ServiceProvider.GetRequiredService<ILogger<InMemoryMarkdownMarkdownDocumentStore>>();
 
-            var store = new InMemoryDocumentStore(
+            var store = new InMemoryMarkdownMarkdownDocumentStore(
                 logger,
                 description.StoreId, 
                 stateTracker,
                 manager.EmbeddingService
             );
             
-            return Task.FromResult<IReadOnlyDocumentStore>(store);
+            return Task.FromResult<IReadOnlyMarkdownDocumentStore>(store);
         }, cancellationToken);
     }
 }

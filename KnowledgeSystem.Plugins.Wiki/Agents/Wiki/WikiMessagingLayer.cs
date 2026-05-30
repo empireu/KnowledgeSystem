@@ -22,7 +22,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 {
     private readonly BasicContext _context = new();
     private readonly ILogger<WikiMessagingLayer> _logger;
-    private readonly IReadOnlyDocumentStore _store;
+    private readonly IReadOnlyMarkdownDocumentStore _store;
     private readonly string _name;
     private readonly WikiOptions _config;
     private readonly IServiceProvider _serviceProvider;

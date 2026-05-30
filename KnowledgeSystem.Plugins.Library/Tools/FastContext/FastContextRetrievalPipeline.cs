@@ -17,7 +17,7 @@ namespace KnowledgeSystem.Plugins.Library.Tools.FastContext;
 
 public sealed class FastContextRetrievalPipeline
 {
-    private readonly IReadOnlyDocumentStore _documentStore;
+    private readonly IReadOnlyMarkdownDocumentStore _markdownDocumentStore;
     private readonly IVectorSearchCapability _vectorCapability;
     private readonly ILexicalSearchCapability _lexicalCapability;
     private readonly string _query;
@@ -37,9 +37,9 @@ public sealed class FastContextRetrievalPipeline
     /// </summary>
     public readonly Dictionary<EmdDocument, ReferencedDocument> ReferencedDocuments = [];
     
-    public FastContextRetrievalPipeline(IReadOnlyDocumentStore documentStore, IVectorSearchCapability vectorCapability, ILexicalSearchCapability lexicalCapability, Description description)
+    public FastContextRetrievalPipeline(IReadOnlyMarkdownDocumentStore markdownDocumentStore, IVectorSearchCapability vectorCapability, ILexicalSearchCapability lexicalCapability, Description description)
     {
-        _documentStore = documentStore;
+        _markdownDocumentStore = markdownDocumentStore;
         _vectorCapability = vectorCapability;
         _lexicalCapability = lexicalCapability;
         _query = description.Query;
@@ -88,7 +88,7 @@ public sealed class FastContextRetrievalPipeline
             var bm25Result = bm25Results[index];
             ++passedCount;
                 
-            var chunk = _documentStore.GetChunk(bm25Result.ChunkId);
+            var chunk = _markdownDocumentStore.GetChunk(bm25Result.ChunkId);
             
             if (!ReferencedDocuments.TryGetValue(chunk.Node.Document, out var referencedDocument))
             {
@@ -156,7 +156,7 @@ public sealed class FastContextRetrievalPipeline
             }
 
             accepted++;
-            var chunk = _documentStore.GetChunk(vectorSearchResult.Index);
+            var chunk = _markdownDocumentStore.GetChunk(vectorSearchResult.Index);
 
             if (!ReferencedDocuments.TryGetValue(chunk.Node.Document, out var referencedDocument))
             {

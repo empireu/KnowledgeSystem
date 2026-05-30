@@ -3,7 +3,7 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 
 namespace KnowledgeSystem.Retrieval.Api.Store;
 
-public interface IReadOnlyDocumentStore : IAsyncDisposable
+public interface IReadOnlyMarkdownDocumentStore : IAsyncDisposable
 {
     /// <summary>
     ///     Whether this store supports the given capability.

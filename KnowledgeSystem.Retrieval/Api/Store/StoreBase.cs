@@ -6,7 +6,7 @@ namespace KnowledgeSystem.Retrieval.Api.Store;
 /// <summary>
 ///     Useful base for stores.
 /// </summary>
-public abstract class StoreBase : IReadOnlyDocumentStore
+public abstract class StoreBase : IReadOnlyMarkdownDocumentStore
 {
     private readonly Dictionary<StoreCapabilityType, ISearchCapability> _capabilities = [];
 

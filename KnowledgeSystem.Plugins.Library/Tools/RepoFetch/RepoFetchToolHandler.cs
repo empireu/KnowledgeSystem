@@ -13,11 +13,11 @@ namespace KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
 public sealed class RepoFetchToolHandler(
     AgentTool tool, 
     StringArgument referenceArgument,
-    IReadOnlyDocumentStore store,
+    IReadOnlyMarkdownDocumentStore store,
     RepoFetchToolConfig config
 ) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, RepoFetchToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyMarkdownDocumentStore store, IServiceProvider serviceProvider, RepoFetchToolConfig config)
     {
         var fetchTool = new ToolBuilder("repo_fetch")
             .WithDescription("Fetches a single repository reference (file, heading section, or offset range). Simple and direct: no expansion or deduplication. Use fetch_context instead when you have multiple references or want surrounding context expanded to containing paragraphs/sections.")

@@ -13,11 +13,11 @@ namespace KnowledgeSystem.Plugins.Library.Tools.FetchContext;
 public sealed class FetchContextToolHandler(
     AgentTool tool,
     ArrayArgument referencesArgument,
-    IReadOnlyDocumentStore store,
+    IReadOnlyMarkdownDocumentStore store,
     FetchContextToolConfig config
 ) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, FetchContextToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyMarkdownDocumentStore store, IServiceProvider serviceProvider, FetchContextToolConfig config)
     {
         var fetchTool = new ToolBuilder("fetch_context")
             .WithDescription("Fetches full surrounding context for one or more references. Expands each offset to its containing paragraph or section, shows the heading path, and deduplicates overlapping ranges. Prefer this over repo_fetch when you have multiple references or need expanded context.")

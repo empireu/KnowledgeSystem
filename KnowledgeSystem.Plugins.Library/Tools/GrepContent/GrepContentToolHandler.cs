@@ -14,11 +14,11 @@ public sealed class GrepContentToolHandler(
     AgentTool tool,
     StringArgument queryArgument,
     StringArgument pathFilterArgument,
-    IReadOnlyDocumentStore store,
+    IReadOnlyMarkdownDocumentStore store,
     GrepContentToolConfig config
 ) : ToolHandler<BasicContext>.Plain(tool)
 {
-    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyDocumentStore store, IServiceProvider serviceProvider, GrepContentToolConfig config)
+    public static void Register(AgentToolRegistry<BasicContext> registry, IReadOnlyMarkdownDocumentStore store, IServiceProvider serviceProvider, GrepContentToolConfig config)
     {
         var grepTool = new ToolBuilder("grep_content")
             .WithDescription("Searches the text content of documents using keyword (BM25) matching. Returns file paths and character offsets where matches occur. Use this to quickly locate where specific terms appear without a full semantic search.")

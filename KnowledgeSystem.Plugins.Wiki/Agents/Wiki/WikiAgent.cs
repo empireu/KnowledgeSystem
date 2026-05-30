@@ -19,7 +19,7 @@ public sealed class WikiAgent : Agent<BasicContext>
 {
     private readonly IEventManager _eventManager;
     
-    public WikiAgent(IReadOnlyDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options) : base(agentId)
+    public WikiAgent(IReadOnlyMarkdownDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options) : base(agentId)
     {
         _eventManager = eventManager;
 

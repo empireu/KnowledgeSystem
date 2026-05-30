@@ -18,13 +18,13 @@ namespace KnowledgeSystem.Plugins.Library.Tools.FastContext;
 public sealed class FastContextToolHandler(
     AgentTool tool,
     StringArgument queryArgument,
-    IReadOnlyDocumentStore store,
+    IReadOnlyMarkdownDocumentStore store,
     FastContextToolConfig config
 ) : ToolHandler<BasicContext>.Plain(tool)
 {
     public static void Register(
         AgentToolRegistry<BasicContext> registry,
-        IReadOnlyDocumentStore store,
+        IReadOnlyMarkdownDocumentStore store,
         IServiceProvider serviceProvider,
         FastContextToolConfig config)
     {

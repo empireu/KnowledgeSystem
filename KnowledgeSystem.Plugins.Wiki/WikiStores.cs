@@ -11,7 +11,7 @@ public class WikiStores(ILogger<WikiStores> logger, IServiceProvider serviceProv
 {
     private readonly StoreManager _storeManager = ActivatorUtilities.CreateInstance<StoreManager>(serviceProvider);
 
-    public IReadOnlyDocumentStore Store { get; private set; } = null!;
+    public IReadOnlyMarkdownDocumentStore Store { get; private set; } = null!;
     
     public async Task StartAsync(CancellationToken cancellationToken)
     {
