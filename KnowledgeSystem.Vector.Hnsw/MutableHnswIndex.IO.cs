@@ -345,10 +345,11 @@ public sealed partial class MutableHnswIndex
         }
 
         // Dense edges:
-        writer.Write(snapshot.DenseEdges.Length);
+        var denseCount = Math.Min(snapshot.DenseEdges.Length, MaxConnectionsDense);
+        writer.Write(denseCount);
         for (var j = 0; j < MaxConnectionsDense; j++)
         {
-            writer.Write(j < snapshot.DenseEdges.Length ? snapshot.DenseEdges[j] : 0);
+            writer.Write(j < denseCount ? snapshot.DenseEdges[j] : 0);
         }
 
         // Sparse layers:
@@ -359,12 +360,13 @@ public sealed partial class MutableHnswIndex
             if (layerIdx < snapshot.SparseEdges.Length)
             {
                 var edges = snapshot.SparseEdges[layerIdx];
+                var sparseCount = Math.Min(edges.Length, MaxConnectionsLane);
                 
-                writer.Write(edges.Length);
+                writer.Write(sparseCount);
             
                 for (var j = 0; j < MaxConnectionsLane; j++)
                 {
-                    writer.Write(j < edges.Length ? edges[j] : 0);
+                    writer.Write(j < sparseCount ? edges[j] : 0);
                 }
             }
             else
@@ -660,7 +662,7 @@ public sealed partial class MutableHnswIndex
         {
             index.VectorsInternal.Add(null);
         }
-
+        
         // Read each slot:
         for (var i = 0; i < vectorSlotCount; i++)
         {
@@ -681,6 +683,11 @@ public sealed partial class MutableHnswIndex
 
             var targetLayer = reader.ReadInt32();
 
+            if (targetLayer < 0 || targetLayer > maxLayersAllocated)
+            {
+                throw new InvalidDataException($"Slot {i} has invalid targetLayer {targetLayer}");
+            }
+
             var vectorData = new float[dimension];
             for (var j = 0; j < dimension; j++)
             {
@@ -689,14 +696,22 @@ public sealed partial class MutableHnswIndex
 
             // Dense edges:
             var denseEdgeCount = reader.ReadInt32();
-            var denseEdges = new int[denseEdgeCount];
-            for (var j = 0; j < denseEdgeCount; j++)
+
+            if (denseEdgeCount < 0)
+            {
+                throw new InvalidDataException($"Slot {i} has invalid denseEdgeCount {denseEdgeCount}");
+            }
+
+            // The slot stores MaxConnectionsDense values. Cap to that:
+            var effectiveDenseCount = Math.Min(denseEdgeCount, maxConnectionsDense);
+            var denseEdges = new int[effectiveDenseCount];
+            for (var j = 0; j < effectiveDenseCount; j++)
             {
                 denseEdges[j] = reader.ReadInt32();
             }
 
-            // Skip padding in dense edge section:
-            var densePadding = maxConnectionsDense - denseEdgeCount;
+            // Always skip the remainder of the fixed-size dense section:
+            var densePadding = maxConnectionsDense - effectiveDenseCount;
             if (densePadding > 0)
             {
                 stream.Position += densePadding * 4;
@@ -709,17 +724,25 @@ public sealed partial class MutableHnswIndex
                 var sparseEdgeCount = reader.ReadInt32();
                 var layerIdx = layer - 1;
 
+                if (sparseEdgeCount < 0)
+                {
+                    throw new InvalidDataException($"Slot {i} layer {layer} has invalid sparseEdgeCount {sparseEdgeCount}");
+                }
+
+                // The slot stores MaxConnectionsLane values per layer:
+                var effectiveSparseCount = Math.Min(sparseEdgeCount, maxConnectionsLane);
+
                 if (layerIdx < targetLayer)
                 {
-                    sparseEdgesPerLayer[layerIdx] = new int[sparseEdgeCount];
-                    for (var j = 0; j < sparseEdgeCount; j++)
+                    sparseEdgesPerLayer[layerIdx] = new int[effectiveSparseCount];
+                    for (var j = 0; j < effectiveSparseCount; j++)
                     {
                         sparseEdgesPerLayer[layerIdx][j] = reader.ReadInt32();
                     }
                 }
 
-                // Skip padding:
-                var sparsePadding = maxConnectionsLane - sparseEdgeCount;
+                // Always skip the remainder of the fixed-size sparse section:
+                var sparsePadding = maxConnectionsLane - effectiveSparseCount;
              
                 if (sparsePadding > 0)
                 {

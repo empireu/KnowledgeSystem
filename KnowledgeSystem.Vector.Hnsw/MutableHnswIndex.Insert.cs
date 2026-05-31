@@ -360,7 +360,8 @@ public sealed partial class MutableHnswIndex
                             TrimEdges(insertCtx.TrimEdgesData, neighbor, layer, maxConnections);
                             neighbor.GetEdgesInLayer(layer).Add(vector.Index);
                         }
-                        else if (neighborEdges.Count > maxConnections)
+
+                        if (neighborEdges.Count > maxConnections)
                         {
                             TrimEdges(insertCtx.TrimEdgesData, neighbor, layer, maxConnections);
                         }
