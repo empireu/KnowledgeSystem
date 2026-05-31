@@ -176,7 +176,13 @@ public sealed partial class MutableHnswIndex
             // Write header if structural changes (or file was just extended):
             if (structuralSnapshot)
             {
-                WriteHeader(stream);
+                lock (_allocationLock)
+                {
+                    lock (_graphLock)
+                    {
+                        WriteHeader(stream);
+                    }
+                }
             }
 
             for (var i = 0; i < dirtySnapshot.Count; i++)
@@ -296,7 +302,7 @@ public sealed partial class MutableHnswIndex
         writer.Write(MaxLayersAllocated);
         writer.Write(VectorsInternal.Count);
 
-        const int written = 4 + 2 + 4 * 7;
+        const int written = 4 + 2 + 4 * 8;
         const int padding = HeaderSize - written;
         
         for (var i = 0; i < padding; i++)
