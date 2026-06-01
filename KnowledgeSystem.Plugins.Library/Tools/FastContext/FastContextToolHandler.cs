@@ -45,11 +45,11 @@ public sealed class FastContextToolHandler(
     }
     
     
-    private readonly IVectorSearchCapability _vectorCapability = store
-        .GetCapability<IVectorSearchCapability>(IVectorSearchCapability.CapabilityType);
+    private readonly IMarkdownVectorSearchCapability _vectorCapability = store
+        .GetCapability<IMarkdownVectorSearchCapability>(IMarkdownVectorSearchCapability.CapabilityType);
     
-    private readonly ILexicalSearchCapability _lexicalCapability = store
-        .GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
+    private readonly ILexicalMarkdownSearchCapability _lexicalCapability = store
+        .GetCapability<ILexicalMarkdownSearchCapability>(ILexicalMarkdownSearchCapability.CapabilityType);
     
     public override async Task<ToolExecutionResult> ExecuteAsync(AgentRunner<BasicContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {

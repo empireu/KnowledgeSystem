@@ -2,7 +2,7 @@
 
 namespace KnowledgeSystem.Retrieval.Api.Store;
 
-public interface ILexicalSearchCapability : ISearchCapability
+public interface ILexicalMarkdownSearchCapability : ISearchCapability
 {
     /// <summary>
     ///     The capability type for lexical search.

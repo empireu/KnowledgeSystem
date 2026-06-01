@@ -3,13 +3,13 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 // ReSharper disable EntityFramework.ModelValidation.UnlimitedStringLength
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
-namespace KnowledgeSystem.Retrieval.Persistent;
+namespace KnowledgeSystem.Retrieval.Persistent.Document;
 
 /// <summary>
 ///     Represents a single chunk tracked in the RAG database.
 ///     Maps a chunk hash to its integer ID in the HNSW index.
 /// </summary>
-public class ChunkRecord
+public class MarkdownDocumentChunkRecord
 {
     /// <summary>
     ///     The hex-encoded SHA256 hash of the chunk, produced by <see cref="EmdChunkHash.ToHexString"/>.
@@ -24,12 +24,12 @@ public class ChunkRecord
 
     /// <summary>
     ///     The repository-relative path of the document containing this chunk.
-    ///     Foreign key to <see cref="DocumentRecord.Path"/>.
+    ///     Foreign key to <see cref="MarkdownDocumentRecord.Path"/>.
     /// </summary>
     public string DocumentPath { get; set; } = null!;
 
     /// <summary>
     ///     Navigation to the parent document.
     /// </summary>
-    public DocumentRecord Document { get; set; } = null!;
+    public MarkdownDocumentRecord Document { get; set; } = null!;
 }

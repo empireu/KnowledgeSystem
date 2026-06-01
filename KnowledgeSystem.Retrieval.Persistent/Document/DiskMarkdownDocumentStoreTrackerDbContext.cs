@@ -1,30 +1,25 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace KnowledgeSystem.Retrieval.Persistent;
+namespace KnowledgeSystem.Retrieval.Persistent.Document;
 
 /// <summary>
 ///     Database context for the RAG system.
 ///     Tracks known documents and their chunk-to-HNSW mappings for sync diffing.
 /// </summary>
-public class RagDbContext : DbContext
+public class DiskMarkdownDocumentStoreTrackerDbContext(DbContextOptions<DiskMarkdownDocumentStoreTrackerDbContext> options) : DbContext(options)
 {
-    public DbSet<DocumentRecord> Documents => Set<DocumentRecord>();
-    public DbSet<ChunkRecord> Chunks => Set<ChunkRecord>();
-
-    public RagDbContext(DbContextOptions<RagDbContext> options) : base(options)
-    {
-        
-    }
+    public DbSet<MarkdownDocumentRecord> Documents => Set<MarkdownDocumentRecord>();
+    public DbSet<MarkdownDocumentChunkRecord> Chunks => Set<MarkdownDocumentChunkRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<DocumentRecord>(entity =>
+        modelBuilder.Entity<MarkdownDocumentRecord>(entity =>
         {
             entity.HasKey(d => d.Path);
             entity.Property(d => d.Path).IsRequired();
         });
 
-        modelBuilder.Entity<ChunkRecord>(entity =>
+        modelBuilder.Entity<MarkdownDocumentChunkRecord>(entity =>
         {
             entity.HasKey(c => c.HashHex);
             entity.Property(c => c.HashHex).IsRequired();

@@ -18,8 +18,8 @@ namespace KnowledgeSystem.Plugins.Library.Tools.FastContext;
 public sealed class FastContextRetrievalPipeline
 {
     private readonly IReadOnlyMarkdownDocumentStore _markdownDocumentStore;
-    private readonly IVectorSearchCapability _vectorCapability;
-    private readonly ILexicalSearchCapability _lexicalCapability;
+    private readonly IMarkdownVectorSearchCapability _vectorCapability;
+    private readonly ILexicalMarkdownSearchCapability _lexicalCapability;
     private readonly string _query;
     private readonly int _bootstrapCount;
     private readonly float _parameter;
@@ -37,7 +37,7 @@ public sealed class FastContextRetrievalPipeline
     /// </summary>
     public readonly Dictionary<EmdDocument, ReferencedDocument> ReferencedDocuments = [];
     
-    public FastContextRetrievalPipeline(IReadOnlyMarkdownDocumentStore markdownDocumentStore, IVectorSearchCapability vectorCapability, ILexicalSearchCapability lexicalCapability, Description description)
+    public FastContextRetrievalPipeline(IReadOnlyMarkdownDocumentStore markdownDocumentStore, IMarkdownVectorSearchCapability vectorCapability, ILexicalMarkdownSearchCapability lexicalCapability, Description description)
     {
         _markdownDocumentStore = markdownDocumentStore;
         _vectorCapability = vectorCapability;

@@ -1,11 +1,11 @@
 using KnowledgeSystem.Retrieval.Api;
 
-namespace KnowledgeSystem.Retrieval.Persistent;
+namespace KnowledgeSystem.Retrieval.Persistent.Document;
 
 /// <summary>
 ///     SQLite-backed index state tracker. Persists sync state across restarts.
 /// </summary>
-public sealed class SqliteIndexStateTracker(RagDbContext db) : IIndexStateTracker
+public sealed class SqliteMarkdownIndexStateTracker(DiskMarkdownDocumentStoreTrackerDbContext db) : IDocumentIndexStateTracker
 {
     public async Task PrepareForUseAsync(CancellationToken cancellationToken = default)
     {
@@ -42,12 +42,12 @@ public sealed class SqliteIndexStateTracker(RagDbContext db) : IIndexStateTracke
 
     public void AddDocument(string path)
     {
-        db.Documents.Add(new DocumentRecord { Path = path });
+        db.Documents.Add(new MarkdownDocumentRecord { Path = path });
     }
 
     public void AddChunk(string hashHex, int chunkId, string documentPath)
     {
-        db.Chunks.Add(new ChunkRecord
+        db.Chunks.Add(new MarkdownDocumentChunkRecord
         {
             HashHex = hashHex,
             ChunkId = chunkId,
@@ -59,7 +59,7 @@ public sealed class SqliteIndexStateTracker(RagDbContext db) : IIndexStateTracke
     {
         var chunks = db.Chunks.Where(c => c.DocumentPath == path).ToList();
         db.Chunks.RemoveRange(chunks);
-        db.Documents.Remove(new DocumentRecord { Path = path });
+        db.Documents.Remove(new MarkdownDocumentRecord { Path = path });
     }
 
     public void RemoveChunk(string hashHex)
@@ -71,18 +71,18 @@ public sealed class SqliteIndexStateTracker(RagDbContext db) : IIndexStateTracke
         }
     }
 
-    public List<TrackedChunkRecord> ReadAllChunkRecords()
+    public List<TrackedDocumentChunkRecord> ReadAllChunkRecords()
     {
         return db.Chunks
-            .Select(c => new TrackedChunkRecord(c.HashHex, c.ChunkId, c.DocumentPath))
+            .Select(c => new TrackedDocumentChunkRecord(c.HashHex, c.ChunkId, c.DocumentPath))
             .ToList();
     }
 
-    public List<TrackedChunkRecord> ReadAllChunkRecords(string documentPath)
+    public List<TrackedDocumentChunkRecord> ReadAllChunkRecords(string documentPath)
     {
         return db.Chunks
             .Where(c => c.DocumentPath == documentPath)
-            .Select(c => new TrackedChunkRecord(c.HashHex, c.ChunkId, c.DocumentPath))
+            .Select(c => new TrackedDocumentChunkRecord(c.HashHex, c.ChunkId, c.DocumentPath))
             .ToList();
     }
 

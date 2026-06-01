@@ -38,7 +38,7 @@ public sealed class GrepContentToolHandler(
         registry.RegisterTool(grepTool, handler);
     }
     
-    private readonly ILexicalSearchCapability _lexicalCapability = store.GetCapability<ILexicalSearchCapability>(ILexicalSearchCapability.CapabilityType);
+    private readonly ILexicalMarkdownSearchCapability _lexicalCapability = store.GetCapability<ILexicalMarkdownSearchCapability>(ILexicalMarkdownSearchCapability.CapabilityType);
 
     public override Task<ToolExecutionResult> ExecuteAsync(AgentRunner<BasicContext> runner, ArgumentExtractionResult args, CancellationToken cancellationToken)
     {

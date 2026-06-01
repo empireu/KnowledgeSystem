@@ -6,7 +6,7 @@ namespace KnowledgeSystem.Retrieval.Api.Store;
 ///     Manages the lifecycle of knowledge stores.
 ///     Supports dynamic creation, retrieval, and removal of stores at runtime.
 /// </summary>
-public sealed class StoreManager(IServiceProvider serviceProvider, IEmbeddingService embeddingService)
+public sealed class MarkdownDocumentStoreManager(IServiceProvider serviceProvider, IEmbeddingService embeddingService)
 {
     public readonly IServiceProvider ServiceProvider = serviceProvider;
     public readonly IEmbeddingService EmbeddingService = embeddingService;

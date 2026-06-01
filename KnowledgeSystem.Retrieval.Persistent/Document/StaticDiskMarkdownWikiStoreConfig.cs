@@ -1,9 +1,9 @@
-﻿namespace KnowledgeSystem.Retrieval.Persistent;
+﻿namespace KnowledgeSystem.Retrieval.Persistent.Document;
 
 /// <summary>
 ///     Configuration for creating a disk-backed store.
 /// </summary>
-public sealed class StaticDiskWikiStoreConfig
+public sealed class StaticDiskMarkdownWikiStoreConfig
 {
     /// <summary>
     ///     Unique ID for the store.

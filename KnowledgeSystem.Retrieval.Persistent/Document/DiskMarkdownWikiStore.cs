@@ -14,17 +14,17 @@ using Microsoft.Extensions.Options;
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Retrieval.Persistent;
+namespace KnowledgeSystem.Retrieval.Persistent.Document;
 
 /// <summary>
 ///     The RAG engine handles embedding queries and retrieving extracts from the repo using the HNSW.
 /// </summary>
-public sealed class DiskWikiStore : StoreBase
+public sealed class DiskMarkdownWikiStore : MarkdownDocumentStoreBase
 {
-    private readonly ILogger<DiskWikiStore> _logger;
-    private readonly IIndexStateTracker _stateTracker;
+    private readonly ILogger<DiskMarkdownWikiStore> _logger;
+    private readonly IDocumentIndexStateTracker _stateTracker;
     private readonly IEmbeddingService _embeddingService;
-    private readonly WikiDiskStoreDescription _options;
+    private readonly WikiDiskMarkdownStoreDescription _options;
     private readonly Chunker _chunker;
 
     private MutableHnswIndex? _hnsw;
@@ -37,7 +37,7 @@ public sealed class DiskWikiStore : StoreBase
     /// </summary>
     private readonly Dictionary<int, EmdChunk> _chunkById = new();
 
-    public DiskWikiStore(ILogger<DiskWikiStore> logger, IIndexStateTracker stateTracker, IEmbeddingService embeddingService, IOptions<WikiDiskStoreDescription> options)
+    public DiskMarkdownWikiStore(ILogger<DiskMarkdownWikiStore> logger, IDocumentIndexStateTracker stateTracker, IEmbeddingService embeddingService, IOptions<WikiDiskMarkdownStoreDescription> options)
     {
         _logger = logger;
         _stateTracker = stateTracker;
@@ -103,8 +103,8 @@ public sealed class DiskWikiStore : StoreBase
         }
 
         _vectorStoreAdapter = new HnswVectorStoreAdapter(_hnsw);
-        RegisterCapability(IVectorSearchCapability.CapabilityType, new VectorSearchCapability(this));
-        RegisterCapability(ILexicalSearchCapability.CapabilityType, new LexicalSearchCapability(this));
+        RegisterCapability(IMarkdownVectorSearchCapability.CapabilityType, new VectorSearchCapability(this));
+        RegisterCapability(ILexicalMarkdownSearchCapability.CapabilityType, new LexicalSearchCapability(this));
         
         await SynchronizeAsync(cancellationToken);
     }
@@ -461,11 +461,11 @@ public sealed class DiskWikiStore : StoreBase
         return ValueTask.CompletedTask;
     }
 
-    private sealed class VectorSearchCapability(DiskWikiStore engine) : IVectorSearchCapability
+    private sealed class VectorSearchCapability(DiskMarkdownWikiStore engine) : IMarkdownVectorSearchCapability
     {
         public IEmbeddingService EmbeddingService => engine._embeddingService;
 
-        IReadOnlyVectorStore IVectorSearchCapability.VectorStore => engine._vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
+        IReadOnlyVectorStore IMarkdownVectorSearchCapability.VectorStore => engine._vectorStoreAdapter ?? throw new InvalidOperationException("RAG engine not initialized");
 
         public async Task<VectorSearchResult[]> SearchAsync(string query, int k, CancellationToken cancellationToken = default)
         {
@@ -482,7 +482,7 @@ public sealed class DiskWikiStore : StoreBase
         }
     }
 
-    private sealed class LexicalSearchCapability(DiskWikiStore engine) : ILexicalSearchCapability
+    private sealed class LexicalSearchCapability(DiskMarkdownWikiStore engine) : ILexicalMarkdownSearchCapability
     {
         public int GetChunkFrequency(string term) => engine.LexicalIndex.GetChunkFrequency(term);
 

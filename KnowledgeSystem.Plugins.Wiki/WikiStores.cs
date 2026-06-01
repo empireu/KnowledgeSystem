@@ -1,5 +1,6 @@
 ﻿using KnowledgeSystem.Retrieval.Api.Store;
 using KnowledgeSystem.Retrieval.Persistent;
+using KnowledgeSystem.Retrieval.Persistent.Document;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,7 @@ namespace KnowledgeSystem.Plugins.Wiki;
 
 public class WikiStores(ILogger<WikiStores> logger, IServiceProvider serviceProvider, IOptions<WikiOptions> options) : IHostedService
 {
-    private readonly StoreManager _storeManager = ActivatorUtilities.CreateInstance<StoreManager>(serviceProvider);
+    private readonly MarkdownDocumentStoreManager _storeManager = ActivatorUtilities.CreateInstance<MarkdownDocumentStoreManager>(serviceProvider);
 
     public IReadOnlyMarkdownDocumentStore Store { get; private set; } = null!;
     
@@ -21,7 +22,7 @@ public class WikiStores(ILogger<WikiStores> logger, IServiceProvider serviceProv
         
         // Might corrupt the HNSW on cancellation:
         // ReSharper disable once MethodSupportsCancellation
-        Store = await _storeManager.CreateStaticWikiStoreAsync(new StaticDiskWikiStoreConfig
+        Store = await _storeManager.CreateStaticWikiStoreAsync(new StaticDiskMarkdownWikiStoreConfig
         {
             StoreId = "wiki",
             RepositoryPath = config.RepoPath,

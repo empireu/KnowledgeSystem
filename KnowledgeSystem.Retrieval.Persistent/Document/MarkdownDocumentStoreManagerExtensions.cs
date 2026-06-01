@@ -5,19 +5,19 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace KnowledgeSystem.Retrieval.Persistent;
+namespace KnowledgeSystem.Retrieval.Persistent.Document;
 
-public static class StoreManagerExtensions
+public static class MarkdownDocumentStoreManagerExtensions
 {
     /// <summary>
     ///     Creates a new disk-backed store and initializes it.
     ///     The store syncs its content from the repository on disk.
     /// </summary>
-    public static async Task<IReadOnlyMarkdownDocumentStore> CreateStaticWikiStoreAsync(this StoreManager manager, StaticDiskWikiStoreConfig config, CancellationToken cancellationToken = default)
+    public static async Task<IReadOnlyMarkdownDocumentStore> CreateStaticWikiStoreAsync(this MarkdownDocumentStoreManager manager, StaticDiskMarkdownWikiStoreConfig config, CancellationToken cancellationToken = default)
     {
         return await manager.CreateStoreAsync(config.StoreId, async () =>
         {
-            var options = new WikiDiskStoreDescription
+            var options = new WikiDiskMarkdownStoreDescription
             {
                 StoreId = config.StoreId,
                 RepositoryPath = config.RepositoryPath,
@@ -30,15 +30,15 @@ public static class StoreManagerExtensions
                 MaxChunkLength = 1000
             };
 
-            var dbContextOptions = new DbContextOptionsBuilder<RagDbContext>()
+            var dbContextOptions = new DbContextOptionsBuilder<DiskMarkdownDocumentStoreTrackerDbContext>()
                 .UseSqlite($"Data Source={config.DatabasePath}")
                 .Options;
 
-            var dbContext = new RagDbContext(dbContextOptions);
-            var stateTracker = new SqliteIndexStateTracker(dbContext);
-            var logger = manager.ServiceProvider.GetRequiredService<ILogger<DiskWikiStore>>();
+            var dbContext = new DiskMarkdownDocumentStoreTrackerDbContext(dbContextOptions);
+            var stateTracker = new SqliteMarkdownIndexStateTracker(dbContext);
+            var logger = manager.ServiceProvider.GetRequiredService<ILogger<DiskMarkdownWikiStore>>();
 
-            var store = new DiskWikiStore(
+            var store = new DiskMarkdownWikiStore(
                 logger,
                 stateTracker,
                 manager.EmbeddingService,

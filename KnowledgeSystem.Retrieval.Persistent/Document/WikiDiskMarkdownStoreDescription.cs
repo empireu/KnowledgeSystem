@@ -3,12 +3,12 @@
 using System.ComponentModel.DataAnnotations;
 using KnowledgeSystem.Ai;
 
-namespace KnowledgeSystem.Retrieval.Persistent;
+namespace KnowledgeSystem.Retrieval.Persistent.Document;
 
 /// <summary>
 ///     Configuration options for the RAG system, bound from IConfiguration.
 /// </summary>
-public class WikiDiskStoreDescription
+public class WikiDiskMarkdownStoreDescription
 {
     [Required]
     public string RepositoryPath { get; set; } = null!;

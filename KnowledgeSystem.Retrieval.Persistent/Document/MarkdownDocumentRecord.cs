@@ -3,12 +3,12 @@ using KnowledgeSystem.EmdParser.ExtendedMarkdown;
 // ReSharper disable EntityFramework.ModelValidation.UnlimitedStringLength
 // ReSharper disable PropertyCanBeMadeInitOnly.Global
 
-namespace KnowledgeSystem.Retrieval.Persistent;
+namespace KnowledgeSystem.Retrieval.Persistent.Document;
 
 /// <summary>
 ///     Represents a known document in the repository, tracked for sync diffing.
 /// </summary>
-public class DocumentRecord
+public class MarkdownDocumentRecord
 {
     /// <summary>
     ///     The repository-relative normalized path.
@@ -19,5 +19,5 @@ public class DocumentRecord
     /// <summary>
     ///     All chunks belonging to this document.
     /// </summary>
-    public ICollection<ChunkRecord> Chunks { get; set; } = [];
+    public ICollection<MarkdownDocumentChunkRecord> Chunks { get; set; } = [];
 }

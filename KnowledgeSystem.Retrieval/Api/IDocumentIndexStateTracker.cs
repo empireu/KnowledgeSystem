@@ -4,7 +4,7 @@ namespace KnowledgeSystem.Retrieval.Api;
 ///     Tracks the sync state of indexed documents and chunks.
 ///     Used to diff the current repository against what was last indexed.
 /// </summary>
-public interface IIndexStateTracker
+public interface IDocumentIndexStateTracker
 {
     /// <summary>
     ///     Prepares the tracker for use (e.g. ensures database exists for persistent implementations).
@@ -50,12 +50,12 @@ public interface IIndexStateTracker
     /// <summary>
     ///     Reads all tracked chunk records into a new list.
     /// </summary>
-    List<TrackedChunkRecord> ReadAllChunkRecords();
+    List<TrackedDocumentChunkRecord> ReadAllChunkRecords();
 
     /// <summary>
     ///     Reads all tracked chunk records for the given document into a new list.
     /// </summary>
-    List<TrackedChunkRecord> ReadAllChunkRecords(string documentPath);
+    List<TrackedDocumentChunkRecord> ReadAllChunkRecords(string documentPath);
     
     /// <summary>
     ///     Persists changes. No-op for in-memory implementations.
