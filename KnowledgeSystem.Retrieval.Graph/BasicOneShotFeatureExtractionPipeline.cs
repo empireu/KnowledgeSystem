@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using KnowledgeSystem.Lexical;
 using KnowledgeSystem.Retrieval.Api.Graph;
 using Microsoft.Extensions.AI;
@@ -131,12 +132,12 @@ public sealed class BasicOneShotFeatureExtractionPipeline(BasicOneShotFeatureExt
 
         foreach (var jsonRelationship in extracted.Relationships)
         {
-            if (!entityMap.TryGetValue(jsonRelationship.Source, out var sourceEntity))
+            if (!TryResolveEntity(entityMap, jsonRelationship.Source, out var sourceEntity))
             {
                 throw new Exception($"LLM created relationship with source \"{jsonRelationship.Source}\", which was not matched.");
             }
 
-            if (!entityMap.TryGetValue(jsonRelationship.Target, out var targetEntity))
+            if (!TryResolveEntity(entityMap, jsonRelationship.Target, out var targetEntity))
             {
                 throw new Exception($"LLM created relationship with target \"{jsonRelationship.Target}\", which was not matched.");
             }
@@ -175,6 +176,38 @@ public sealed class BasicOneShotFeatureExtractionPipeline(BasicOneShotFeatureExt
             Relationships = relationships.ToArray(),
             Attributes = attributes.ToArray()
         };
+    }
+
+    /// <summary>
+    ///     Resolves an entity name by exact match first, then by substring/alias fallback.
+    ///     Handles cases where the LLM uses a shortened name (e.g. "Miller" instead of "Detective Miller").
+    /// </summary>
+    private static bool TryResolveEntity(
+        Dictionary<string, RawExtractedEntity> entityMap,
+        string name,
+        [NotNullWhen(true)] out RawExtractedEntity? entity)
+    {
+        if (entityMap.TryGetValue(name, out entity))
+        {
+            return true;
+        }
+
+        foreach (var (_, candidate) in entityMap)
+        {
+            // Check all known names for this entity:
+            var allNames = candidate.DefinedNames;
+            for (var i = 0; i < allNames.Length; i++)
+            {
+                if (allNames[i].Contains(name, StringComparison.OrdinalIgnoreCase) || name.Contains(allNames[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    entity = candidate;
+                    return true;
+                }
+            }
+        }
+
+        entity = null;
+        return false;
     }
 
     /// <summary>
