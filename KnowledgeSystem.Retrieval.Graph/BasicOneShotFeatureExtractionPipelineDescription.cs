@@ -38,7 +38,14 @@ public class BasicOneShotFeatureExtractionPipelineDescription
               "source": "name of the source entity",
               "target": "name of the target entity",
               "description": "the action or connection between them",
-              "relationship_type": "application" or "relation",
+              "evidence": "exact quoted sentence(s) from the text"
+            }
+          ],
+          "attributes": [
+            {
+              "entity": "name of the entity this property belongs to",
+              "name": "property name, e.g. \"length\", \"color\", \"intelligence\"",
+              "value": "the literal value of the property",
               "evidence": "exact quoted sentence(s) from the text"
             }
           ]
@@ -48,7 +55,8 @@ public class BasicOneShotFeatureExtractionPipelineDescription
         - Provide the primary name for each entity. If the entity is referred to by multiple names or aliases in the text, include them in the "names" array.
         - The "type" field is free-form (e.g. "military commander", "corporation", "philosophical concept").
         - The "evidence" field must be the exact sentence(s) from the text, character-for-character.
-        - For relationships, classify as "application" (directed action: X does something to Y) or "relation" (mutual connection: X is connected to Y).
+        - For relationships, describe the action or connection between the two entities.
+        - For attributes, attach property/value pairs to a single entity (e.g. "scar" has attribute "length" with value "3 inches").
         - Only extract what is explicitly stated or can be directly inferred from the provided text.
         - Do not fabricate entities or relationships.
         """; // (make no mistakes)

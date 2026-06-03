@@ -53,13 +53,25 @@ foreach (var entity in result.Entities)
     Console.WriteLine();
 }
 
-Console.WriteLine("▔▔▔▔▔▔ Relationships▔▔▔▔▔▔ ");
+Console.WriteLine("▔▔▔▔▔▔ Relationships ▔▔▔▔▔▔");
 foreach (var rel in result.Relationships)
 {
     Console.WriteLine($"  {rel.Source.DefinedNames[0]} --[{rel.ActionDescription}]--> {rel.Target.DefinedNames[0]}");
-    Console.WriteLine($"  Type: {rel.RelationshipType}");
     Console.WriteLine($"  Evidence: \"{rel.Evidence.QuotedText}\"");
     if (rel.Evidence.Span is { } span)
+    {
+        Console.WriteLine($"  Span: [{span.Start}..{span.EndExclusive})");
+    }
+
+    Console.WriteLine();
+}
+
+Console.WriteLine("▔▔▔▔▔▔ Attributes ▔▔▔▔▔▔");
+foreach (var attr in result.Attributes)
+{
+    Console.WriteLine($"  {attr.EntityName}.{attr.AttributeName} = {attr.Value}");
+    Console.WriteLine($"  Evidence: \"{attr.Evidence.QuotedText}\"");
+    if (attr.Evidence.Span is { } span)
     {
         Console.WriteLine($"  Span: [{span.Start}..{span.EndExclusive})");
     }

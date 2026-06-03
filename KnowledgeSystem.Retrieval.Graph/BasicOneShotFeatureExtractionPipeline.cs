@@ -56,14 +56,29 @@ public sealed class BasicOneShotFeatureExtractionPipeline(BasicOneShotFeatureExt
                         source = new { type = "string" },
                         target = new { type = "string" },
                         description = new { type = "string" },
-                        relationship_type = new { type = "string", @enum = new[] { "application", "relation" } },
                         evidence = new { type = "string" }
                     },
-                    required = new[] { "source", "target", "relationship_type", "evidence" }
+                    required = new[] { "source", "target", "description", "evidence" }
+                }
+            },
+            attributes = new
+            {
+                type = "array",
+                items = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        entity = new { type = "string" },
+                        name = new { type = "string" },
+                        value = new { type = "string" },
+                        evidence = new { type = "string" }
+                    },
+                    required = new[] { "entity", "name", "value", "evidence" }
                 }
             }
         },
-        required = new[] { "entities", "relationships" }
+        required = new[] { "entities", "relationships", "attributes" }
     });
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -126,30 +141,39 @@ public sealed class BasicOneShotFeatureExtractionPipeline(BasicOneShotFeatureExt
                 throw new Exception($"LLM created relationship with target \"{jsonRelationship.Target}\", which was not matched.");
             }
 
-            var type = jsonRelationship.RelationshipType.ToLowerInvariant() switch
-            {
-                "relation" => RawRelationshipType.Relation,
-                "application" => RawRelationshipType.Application,
-                _ => throw new Exception($"LLM hallucinated relationship type \"{jsonRelationship.RelationshipType}\"")
-            };
-            
             var evidence = MatchEvidence(source.Content, jsonRelationship.Evidence);
             
             var relationship = new RawEntityApplication(
                 evidence, 
                 sourceEntity,
                 targetEntity,
-                jsonRelationship.Description,
-                type
+                jsonRelationship.Description
             );
 
             relationships.Add(relationship);
         }
 
+        // Build attributes:
+        var attributes = new List<RawEntityAttribute>(extracted.Attributes.Length);
+
+        foreach (var jsonAttribute in extracted.Attributes)
+        {
+            var evidence = MatchEvidence(source.Content, jsonAttribute.Evidence);
+            var attribute = new RawEntityAttribute(
+                evidence,
+                jsonAttribute.Entity,
+                jsonAttribute.Name,
+                jsonAttribute.Value
+            );
+
+            attributes.Add(attribute);
+        }
+
         return new RawProcessedIngestionChunk(source)
         {
             Entities = entities.ToArray(),
-            Relationships = relationships.ToArray()
+            Relationships = relationships.ToArray(),
+            Attributes = attributes.ToArray()
         };
     }
 
@@ -172,6 +196,15 @@ public sealed class BasicOneShotFeatureExtractionPipeline(BasicOneShotFeatureExt
         {
             var relationship = extracted.Relationships[index];
             if (!IsEvidenceMatch(content, relationship.Evidence))
+            {
+                return false;
+            }
+        }
+
+        for (var index = 0; index < extracted.Attributes.Length; index++)
+        {
+            var attribute = extracted.Attributes[index];
+            if (!IsEvidenceMatch(content, attribute.Evidence))
             {
                 return false;
             }
@@ -382,6 +415,8 @@ public sealed class BasicOneShotFeatureExtractionPipeline(BasicOneShotFeatureExt
         public JsonEntity[] Entities { get; set; } = [];
         
         public JsonRelationship[] Relationships { get; set; } = [];
+        
+        public JsonAttribute[] Attributes { get; set; } = [];
     }
 
     internal sealed class JsonEntity
@@ -398,7 +433,14 @@ public sealed class BasicOneShotFeatureExtractionPipeline(BasicOneShotFeatureExt
         public required string Source { get; set; }
         public required string Target { get; set; }
         public required string Description { get; set; }
-        public required string RelationshipType { get; set; }
+        public required string Evidence { get; set; }
+    }
+
+    internal sealed class JsonAttribute
+    {
+        public required string Entity { get; set; }
+        public required string Name { get; set; }
+        public required string Value { get; set; }
         public required string Evidence { get; set; }
     }
 }
