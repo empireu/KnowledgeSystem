@@ -9,6 +9,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Retrieval.Graph\KnowledgeSystem.Retrieval.Graph.csproj" />
     </ItemGroup>
 
     <ItemGroup>
