@@ -10,9 +10,7 @@ public sealed class ExtractionCacheRecord
 
     public CacheEntity[] Entities { get; init; } = [];
 
-    public CacheRelationship[] Relationships { get; init; } = [];
-
-    public CacheAttribute[] Attributes { get; init; } = [];
+    public CacheClaim[] Claims { get; init; } = [];
 }
 
 public sealed class CacheEntity
@@ -24,19 +22,13 @@ public sealed class CacheEntity
     public CacheEvidence? Evidence { get; init; }
 }
 
-public sealed class CacheRelationship
+public sealed class CacheClaim
 {
-    public required string SourceName { get; init; }
-    public required string TargetName { get; init; }
-    public required string Description { get; init; }
-    public CacheEvidence? Evidence { get; init; }
-}
-
-public sealed class CacheAttribute
-{
-    public required string EntityName { get; init; }
-    public required string AttributeName { get; init; }
-    public required string Value { get; init; }
+    public required string SubjectName { get; init; }
+    public required string Predicate { get; init; }
+    public string? ObjectEntityName { get; init; }
+    public string? ObjectLiteral { get; init; }
+    public required string Modality { get; init; }
     public CacheEvidence? Evidence { get; init; }
 }
 
@@ -58,28 +50,23 @@ public static class ExtractionCacheConvert
     {
         return new ExtractionCacheRecord
         {
-            SourceContent = chunk.Source.Content,
-            Entities = chunk.Entities.Select(e => new CacheEntity
+            SourceContent = chunk.SourceContent,
+            Entities = chunk.Entities.Select(entity => new CacheEntity
             {
-                Name = e.DefinedNames[0],
-                Names = e.DefinedNames.Length > 1 ? e.DefinedNames : null,
-                Type = e.Type,
-                Description = e.Description,
-                Evidence = ToCache(e.Evidence)
+                Name = entity.DefinedNames[0],
+                Names = entity.DefinedNames.Length > 1 ? entity.DefinedNames : null,
+                Type = entity.Type,
+                Description = entity.Description,
+                Evidence = ToCache(entity.Evidence)
             }).ToArray(),
-            Relationships = chunk.Relationships.Select(r => new CacheRelationship
+            Claims = chunk.Claims.Select(claim => new CacheClaim
             {
-                SourceName = r.Source.DefinedNames[0],
-                TargetName = r.Target.DefinedNames[0],
-                Description = r.ActionDescription,
-                Evidence = ToCache(r.Evidence)
-            }).ToArray(),
-            Attributes = chunk.Attributes.Select(a => new CacheAttribute
-            {
-                EntityName = a.EntityName,
-                AttributeName = a.AttributeName,
-                Value = a.Value,
-                Evidence = ToCache(a.Evidence)
+                SubjectName = claim.Subject.DefinedNames[0],
+                Predicate = claim.Predicate,
+                ObjectEntityName = claim.ObjectEntity?.DefinedNames[0],
+                ObjectLiteral = claim.ObjectLiteral,
+                Modality = claim.Modality,
+                Evidence = ToCache(claim.Evidence)
             }).ToArray()
         };
     }

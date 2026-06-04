@@ -1,12 +1,10 @@
 ﻿namespace KnowledgeSystem.Retrieval.Api.Graph;
 
-public class RawProcessedIngestionChunk(IngestionChunkSource source)
+public class RawProcessedIngestionChunk(string sourceContent)
 {
-    public IngestionChunkSource Source { get; } = source;
+    public string SourceContent { get; } = sourceContent;
 
     public RawExtractedEntity[] Entities { get; init; } = [];
 
-    public RawEntityApplication[] Relationships { get; init; } = [];
-
-    public RawEntityAttribute[] Attributes { get; init; } = [];
+    public RawExtractedClaim[] Claims { get; init; } = [];
 }
