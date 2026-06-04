@@ -19,29 +19,46 @@ public sealed class RecordClaimToolHandler(
     {
         var modalities = new[]
         {
+            // Epistemic:
             "fact",
             "opinion",
             "speculation",
             "negation",
+            // Speech acts:
             "command",
             "question",
-            "joke"
+            "joke",
+            // Internal states:
+            "emotion",
+            "desire",
+            "intention",
+            "sensation",
+            // Behavioral:
+            "action",
+            // Deontic:
+            "obligation",
+            "permission",
+            "ability",
+            // Relational / structural:
+            "state",
+            "possession",
+            "identity",
+            "causation",
+            "attribution",
+            "comparison"
         };
 
         var recordClaimTool = new ToolBuilder("record_claim")
             .WithDescription(
-                "Records a claim (a statement about entities) extracted from the text. " +
-                "The subject MUST be the primary name of an entity already recorded via record_entity. " +
-                "Use object_entity when the object is a named entity (must already be recorded); use object_literal for values, phrases, or descriptions. " +
-                "Exactly one of object_entity and object_literal must be provided. " +
-                "The evidence MUST be an exact, character-for-character substring of the source text. " +
-                "Call this tool in parallel for all claims you find.")
-            .WithRequiredStringArgument("subject", "Primary name of the subject entity (must match a previously recorded entity).", out var subject)
-            .WithRequiredStringArgument("predicate", "The relationship or action (e.g. 'invented', 'is', 'ordered', 'works for'). Use a semantic predicate, NOT 'said'.", out var predicate)
-            .WithStringArgument("object_entity", "Primary name of the object entity, if the object is a named entity. Must match a recorded entity.", out var objectEntity)
-            .WithStringArgument("object_literal", "A literal value, phrase, or description as the object, if not a named entity.", out var objectLiteral)
-            .WithRequiredEnumArgument("modality", "The modality of the claim.", modalities, out var modality)
-            .WithRequiredStringArgument("evidence", "EXACT quoted text from the source that supports this claim. Must be a verbatim substring.", out var evidence)
+                "Records a claim about entities. Subject must be a recorded entity. " +
+                "Use object_entity for named entities (must be recorded), object_literal for values/phrases. Exactly one required. " +
+                "Evidence must be an exact source substring. Call in parallel for all claims.")
+            .WithRequiredStringArgument("subject", "Primary name of subject entity (must be recorded).", out var subject)
+            .WithRequiredStringArgument("predicate", "Semantic relationship, NOT 'said' (e.g. 'invented', 'is', 'ordered').", out var predicate)
+            .WithStringArgument("object_entity", "Name of object entity (must be recorded).", out var objectEntity)
+            .WithStringArgument("object_literal", "Literal value, phrase, or description.", out var objectLiteral)
+            .WithRequiredEnumArgument("modality", "Claim modality.", modalities, out var modality)
+            .WithRequiredStringArgument("evidence", "Exact source substring.", out var evidence)
             .Build();
 
         var handler = new RecordClaimToolHandler(
@@ -62,15 +79,15 @@ public sealed class RecordClaimToolHandler(
         var context = runner.ExecutionContext;
         var subjectName = subjectArgument.GetValue(args);
         var predicate = predicateArgument.GetValue(args);
-        var objectEntityName = objectEntityArgument.GetValueOrNull(args);
-        var objectLiteralValue = objectLiteralArgument.GetValueOrNull(args);
+        var objectEntityName = NormalizeNullString(objectEntityArgument.GetValueOrNull(args));
+        var objectLiteralValue = NormalizeNullString(objectLiteralArgument.GetValueOrNull(args));
         var modality = modalityArgument.GetValue(args);
         var evidenceText = evidenceArgument.GetValue(args);
 
         // Resolve subject:
         if (!context.RecordedEntities.TryGetValue(subjectName, out var subjectEntity))
         {
-            return Task.FromResult(Error($"Subject '{subjectName}' is not a recorded entity. Record it with record_entity first."));
+            return Task.FromResult(Error($"Unknown subject '{subjectName}'. Record it first."));
         }
 
         RawExtractedEntity? objectEntity = null;
@@ -110,30 +127,39 @@ public sealed class RecordClaimToolHandler(
         }
         else
         {
-            return Task.FromResult(Error("Exactly one of object_entity or object_literal must be provided."));
+            return Task.FromResult(Error("Provide exactly one of object_entity or object_literal."));
         }
 
-        // Exact-match evidence against source:
-        var evidenceIndex = context.SourceContent.IndexOf(evidenceText, StringComparison.Ordinal);
-      
-        if (evidenceIndex < 0)
+        // Match evidence against source (exact, then normalized fallback):
+        var matchResult = EvidenceMatcher.TryMatch(context.SourceContent, evidenceText);
+        if (!matchResult.IsSuccess)
         {
-            return Task.FromResult(Error(
-                $"Evidence text not found verbatim in source. Make sure the 'evidence' argument is an exact, character-for-character substring of the source text. " +
-                $"Check for whitespace, punctuation, and formatting differences."
-            ));
+            var diagnostic = matchResult.FailureDiagnostic ?? "Use exact source substring.";
+            return Task.FromResult(Error($"Evidence not found. {diagnostic}"));
         }
 
-        var span = new TextSpan(evidenceIndex, evidenceText.Length);
-        var evidence = new RawEvidence(evidenceText, context.SourceContent, span);
-
-        var claim = new RawExtractedClaim(subjectEntity, predicate, objectEntity, objectLiteral, modality, evidence);
+        var claim = new RawExtractedClaim(subjectEntity, predicate, objectEntity, objectLiteral, modality, matchResult.Evidence!);
         context.RecordedClaims.Add(claim);
 
         var objectDesc = objectEntity != null 
             ? $"[{objectEntity.DefinedNames[0]}]" 
             : $"\"{objectLiteral}\"";
         
-        return Task.FromResult(Success($"Recorded claim: [{subjectName}] {predicate} → {objectDesc} ({modality})"));
+        return Task.FromResult(Success($"OK: [{subjectName}] {predicate} {objectDesc} ({modality})"));
+    }
+
+    private static string? NormalizeNullString(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (value.Equals("null", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return value;
     }
 }

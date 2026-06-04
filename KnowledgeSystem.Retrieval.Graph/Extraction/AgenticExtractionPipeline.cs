@@ -33,15 +33,24 @@ public sealed class AgenticExtractionPipeline(AgenticExtractionPipelineDescripti
             completionFactory: null
         );
 
-        for (var i = 0; !runner.IsFinished; i++)
+        for (var turn = 0; !runner.IsFinished; cancellationToken.ThrowIfCancellationRequested())
         {
-            if (i > description.MaxTurns)
+            if (turn > description.MaxTurns)
             {
                 throw new Exception("Agent exceeded turn limit");
             }
-            
-            cancellationToken.ThrowIfCancellationRequested();
-            await runner.ExecuteTurn();
+         
+            var status = await runner.ExecuteTurn();
+
+            switch (status)
+            {
+                case AgentRunner.TurnStatus.ToolCallsReceived:
+                case AgentRunner.TurnStatus.CompletedSuccessfully:
+                case AgentRunner.TurnStatus.CompletedWithError:
+                case AgentRunner.TurnStatus.CompletionHandled:
+                    turn++;
+                    break;
+            }
         }
 
         var entities = context.RecordedEntities.Values.ToArray();

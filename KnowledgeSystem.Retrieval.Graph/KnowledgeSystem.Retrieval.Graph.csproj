@@ -7,6 +7,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="KnowledgeSystem.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />

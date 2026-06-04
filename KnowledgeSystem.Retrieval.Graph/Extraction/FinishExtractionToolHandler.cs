@@ -9,7 +9,7 @@ public sealed class FinishExtractionToolHandler(AgentTool tool) : ToolHandler<Ex
     public static void Register(AgentToolRegistry<ExtractionContext> registry)
     {
         var finishTool = new ToolBuilder("finish_extraction")
-            .WithDescription("Call this when you have finished extracting all entities and claims from the text. This signals that the extraction is complete.")
+            .WithDescription("Call when extraction is complete.")
             .Build();
 
         var handler = new FinishExtractionToolHandler(finishTool);
@@ -22,6 +22,6 @@ public sealed class FinishExtractionToolHandler(AgentTool tool) : ToolHandler<Ex
         runner.ExecutionContext.MarkedFinished = true;
         var entityCount = runner.ExecutionContext.RecordedEntities.Count;
         var claimCount = runner.ExecutionContext.RecordedClaims.Count;
-        return Task.FromResult(Success($"Extraction complete: {entityCount} entities, {claimCount} claims recorded."));
+        return Task.FromResult(Success($"Done: {entityCount} entities, {claimCount} claims."));
     }
 }

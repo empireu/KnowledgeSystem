@@ -5,8 +5,10 @@ using Microsoft.Extensions.Logging;
 
 namespace KnowledgeSystem.Events.Implementation;
 
-public class DefaultEventManager(ILogger<DefaultEventManager>? errorLogger, IServiceProvider serviceProvider) : IEventManager
+public class DefaultEventManager(ILogger<DefaultEventManager>? errorLogger, IServiceProvider? serviceProvider) : IEventManager
 {
+    private readonly IServiceProvider _serviceProvider = serviceProvider ?? EmptyServiceProvider.Instance;
+   
     private sealed class DisposeList : IDisposable
     {
         public List<IDisposable> Disposables { get; } = [];
@@ -79,13 +81,13 @@ public class DefaultEventManager(ILogger<DefaultEventManager>? errorLogger, ISer
         {
             if (errorLogger == null || eventListener.IsCritical)
             {
-                await eventListener.InvokeAsync(handler, @event, serviceProvider, cancellationToken);
+                await eventListener.InvokeAsync(handler, @event, _serviceProvider, cancellationToken);
             }
             else
             {
                 try
                 {
-                    await eventListener.InvokeAsync(handler, @event, serviceProvider, cancellationToken);
+                    await eventListener.InvokeAsync(handler, @event, _serviceProvider, cancellationToken);
                 }
                 catch (Exception e)
                 {
@@ -111,7 +113,7 @@ public class DefaultEventManager(ILogger<DefaultEventManager>? errorLogger, ISer
             }
         }
 
-        foreach (var handler in serviceProvider.GetServices<IEventReceiver>())
+        foreach (var handler in _serviceProvider.GetServices<IEventReceiver>())
         {
             var events = ExpressionEventBus.FromType(handler.GetType());
 
@@ -132,6 +134,24 @@ public class DefaultEventManager(ILogger<DefaultEventManager>? errorLogger, ISer
             {
                 yield return new EventHandler(null, eventListener);
             }
+        }
+    }
+
+    private sealed class EmptyServiceProvider : IServiceProvider
+    {
+        public static readonly EmptyServiceProvider Instance = new();
+
+        private EmptyServiceProvider() { }
+
+        public object? GetService(Type serviceType)
+        {
+            if (serviceType.IsGenericType && serviceType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            {
+                var elementType = serviceType.GetGenericArguments()[0];
+                return Array.CreateInstance(elementType, 0);
+            }
+
+            return null;
         }
     }
 }

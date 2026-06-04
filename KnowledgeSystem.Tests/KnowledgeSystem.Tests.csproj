@@ -28,6 +28,7 @@
       <ProjectReference Include="..\KnowledgeSystem\KnowledgeSystem.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.EmdParser\KnowledgeSystem.EmdParser.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Retrieval.Graph\KnowledgeSystem.Retrieval.Graph.csproj" />
     </ItemGroup>
 
 </Project>
