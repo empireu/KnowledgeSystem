@@ -90,3 +90,26 @@ foreach (var mdFile in mdFiles)
 
     Console.WriteLine($"done. ({result.Entities.Length} entities, {result.Relationships.Length} rels, {result.Attributes.Length} attrs)");
 }
+
+var cacheFiles = sourceDir.GetFiles("*.extraction.json");
+
+var allEntities = new List<(string SourceFile, CacheEntity Entity)>();
+
+foreach (var cacheFile in cacheFiles)
+{
+    var json = await File.ReadAllTextAsync(cacheFile.FullName);
+    var record = JsonSerializer.Deserialize<ExtractionCacheRecord>(json, jsonOptions);
+    
+    if (record == null)
+    {
+        continue;
+    }
+
+    foreach (var entity in record.Entities)
+    {
+        allEntities.Add((cacheFile.Name.Replace(".md.extraction.json", ""), entity));
+    }
+}
+
+Console.WriteLine($"\nLoaded {allEntities.Count} entities across {cacheFiles.Length} chapters.");
+

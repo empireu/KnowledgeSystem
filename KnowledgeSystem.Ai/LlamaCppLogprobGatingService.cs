@@ -24,6 +24,29 @@ public sealed class LlamaCppLogprobFilteringService : ILogprobGatingService
                      $"Document: '{document}'\n\n" +
                      $"Answer:";
 
+        return await ExecuteAsync(prompt, threshold, cancellationToken);
+    }
+    
+    public async Task<bool[]> AreRelevantAsync(string query, IReadOnlyList<string> documents, double threshold, CancellationToken cancellationToken)
+    {
+        var tasks = documents
+            .Select(document => IsRelevantAsync(query, document, threshold, cancellationToken))
+            .ToArray();
+
+        var results = new bool[documents.Count];
+
+        for (var index = 0; index < tasks.Length; index++)
+        {
+            var task = tasks[index];
+            
+            results[index] = await task;
+        }
+        
+        return results;
+    }
+
+    public async Task<bool> ExecuteAsync(string prompt, double threshold, CancellationToken cancellationToken)
+    {
         var requestBody = new Request
         {
             Prompt = prompt,
@@ -81,25 +104,7 @@ public sealed class LlamaCppLogprobFilteringService : ILogprobGatingService
         
         return Math.Exp(yesLogprob.Value) >= threshold;
     }
-
-    public async Task<bool[]> AreRelevantAsync(string query, IReadOnlyList<string> documents, double threshold, CancellationToken cancellationToken)
-    {
-        var tasks = documents
-            .Select(document => IsRelevantAsync(query, document, threshold, cancellationToken))
-            .ToArray();
-
-        var results = new bool[documents.Count];
-
-        for (var index = 0; index < tasks.Length; index++)
-        {
-            var task = tasks[index];
-            
-            results[index] = await task;
-        }
-        
-        return results;
-    }
-
+    
     private sealed class Request
     {
         [JsonPropertyName("prompt")]

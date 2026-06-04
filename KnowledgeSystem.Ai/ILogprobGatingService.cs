@@ -13,4 +13,10 @@ public interface ILogprobGatingService
     ///     Batch version of <see cref="IsRelevantAsync"/>.
     /// </summary>
     public Task<bool[]> AreRelevantAsync(string query, IReadOnlyList<string> documents, double threshold, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Executes the LLM with a custom crafted prompt for gating.
+    /// </summary>
+    /// <returns></returns>
+    public Task<bool> ExecuteAsync(string prompt, double threshold, CancellationToken cancellationToken);
 }
