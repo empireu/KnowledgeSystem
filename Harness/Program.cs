@@ -7,23 +7,9 @@ using KnowledgeSystem.Retrieval.Graph.Extraction;
 using Microsoft.EntityFrameworkCore;
 
 var archive = DiscordArchiveParser.Parse("D:\\Scrape\\DISCORD\\pit.json");
-var c = new MessageChunker();
-
-var chunks = c.Chunk(archive);
-
-/*
-for (var index = 0; index < chunks.Count; index++)
-{
-    var chunk = chunks[index];
-    Console.WriteLine($"{index}: {chunk.SourceContent.Length}ch, {(chunk.EndedAt - chunk.StartedAt).TotalHours:F}h");
-    Console.WriteLine(chunk.SourceContent.Replace("\n", "\n  "));
-    Console.WriteLine("\n\n");
-}
-*/
-
-var target = chunks[1433];
-
-Console.WriteLine($"\n\nTARGET:\n{target.SourceContent}");
+Console.WriteLine($"Loaded {archive.Count} messages from archive.");
+Console.WriteLine($"Channel: {archive[0].Channel.Name}, Guild: {archive[0].Guild.Name}");
+Console.WriteLine($"Time range: {archive[0].DateTime} — {archive[^1].DateTime}");
 
 var seenUsers = new HashSet<ulong>();
 var users = archive
@@ -149,10 +135,8 @@ await db.Database.EnsureCreatedAsync();
 var chunker = new MessageChunker();
 var service = new IngestionService(db, chunker);
 
-var targetMessages = target.LineMappings.Select(m => m.Message).ToList();
-
-Console.WriteLine($"Ingesting {targetMessages.Count} messages from target chunk...");
-var batch = await service.IngestAsync(targetMessages, pipeline, CancellationToken.None);
+Console.WriteLine($"Starting ingestion of {archive.Count} messages...");
+var batch = await service.IngestAsync(archive, pipeline, CancellationToken.None);
 
 if (batch == null)
 {
@@ -162,12 +146,11 @@ if (batch == null)
 
 Console.WriteLine($"Batch {batch.Id}: {batch.Messages.Count} messages, {batch.Chunks.Count} chunks");
 
-var totalEntities = await db.Entities.CountAsync(e => e.Chunk.BatchId == batch.Id);
-var totalClaims = await db.Claims.CountAsync(c => c.Chunk.BatchId == batch.Id);
-Console.WriteLine($"Stored {totalEntities} entities and {totalClaims} claims");
+var totalEntities = await db.Entities.CountAsync();
+var totalClaims = await db.Claims.CountAsync();
+Console.WriteLine($"DB now has {totalEntities} entities and {totalClaims} claims total");
 
 var modalityCounts = await db.Claims
-    .Where(c => c.Chunk.BatchId == batch.Id)
     .GroupBy(c => c.Modality)
     .Select(g => new { Modality = g.Key, Count = g.Count() })
     .OrderByDescending(x => x.Count)

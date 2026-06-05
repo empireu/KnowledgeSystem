@@ -30,7 +30,6 @@ public sealed class IngestionService(IngestionDbContext db, IMessageChunker chun
         }
 
         var first = messages[0];
-        
         var batch = new IngestionBatch
         {
             GuildId = first.Guild.GuildId,
@@ -43,33 +42,36 @@ public sealed class IngestionService(IngestionDbContext db, IMessageChunker chun
         };
 
         db.Batches.Add(batch);
-
-        foreach (var message in newMessages)
-        {
-            db.Messages.Add(new IngestionMessage
-            {
-                Batch = batch,
-                MessageId = message.MessageId,
-                UserId = message.User.UserId,
-                Username = message.User.Username,
-                Nickname = message.User.Nickname,
-                Content = NormalizeLineEndings(message.Content),
-                Timestamp = message.DateTime
-            });
-        }
-
         await db.SaveChangesAsync(cancellationToken);
-
-        var messageIdToDbId = await db.Messages
-            .Where(m => m.BatchId == batch.Id)
-            .ToDictionaryAsync(m => m.MessageId, m => m.Id, cancellationToken);
 
         var chunks = chunker.Chunk(newMessages);
 
         for (var i = 0; i < chunks.Count; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var chunk = chunks[i];
-          
+
+            foreach (var mapping in chunk.LineMappings)
+            {
+                db.Messages.Add(new IngestionMessage
+                {
+                    Batch = batch,
+                    MessageId = mapping.Message.MessageId,
+                    UserId = mapping.Message.User.UserId,
+                    Username = mapping.Message.User.Username,
+                    Nickname = mapping.Message.User.Nickname,
+                    Content = NormalizeLineEndings(mapping.Message.Content),
+                    Timestamp = mapping.Message.DateTime
+                });
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            var messageIdToDbId = await db.Messages
+                .Where(m => m.BatchId == batch.Id)
+                .ToDictionaryAsync(m => m.MessageId, m => m.Id, cancellationToken);
+
             var dbChunk = new IngestionChunk
             {
                 Batch = batch,
@@ -80,16 +82,8 @@ public sealed class IngestionService(IngestionDbContext db, IMessageChunker chun
             };
 
             db.Chunks.Add(dbChunk);
-        }
+            await db.SaveChangesAsync(cancellationToken);
 
-        await db.SaveChangesAsync(cancellationToken);
-
-        for (var i = 0; i < chunks.Count; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var chunk = chunks[i];
-            var dbChunk = batch.Chunks[i];
             var source = new IngestionChunkSource(chunk.SourceContent);
             var result = await pipeline.IngestAsync(source, cancellationToken);
 
