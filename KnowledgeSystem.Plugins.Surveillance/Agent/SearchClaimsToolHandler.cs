@@ -20,6 +20,8 @@ public sealed class SearchClaimsToolHandler(
     EnumArgument sortByArgument,
     IntegerArgument limitArgument,
     BooleanArgument semanticArgument,
+    StringArgument channelArgument,
+    StringArgument guildArgument,
     CanonicalDbContext canonicalDb,
     IEmbeddingService embeddingService
 ) : ToolHandler<BasicContext>.Plain(tool)
@@ -40,6 +42,8 @@ public sealed class SearchClaimsToolHandler(
             .WithEnumArgument("sort_by", "Sort order.", ["date_asc", "date_desc"], out var sortByArg)
             .WithIntegerArgument("limit", $"Max results. Default {DefaultLimit}, hard cap {MaxLimit}.", out var limitArg)
             .WithBooleanArgument("semantic", "When true, uses semantic vector search on claim sentences instead of FTS5.", out var semanticArg)
+            .WithStringArgument("channel", "Filter by Discord channel name (exact match).", out var channelArg)
+            .WithStringArgument("guild", "Filter by Discord guild/server name (exact match).", out var guildArg)
             .Build();
 
         var handler = ActivatorUtilities.CreateInstance<SearchClaimsToolHandler>(
@@ -53,7 +57,9 @@ public sealed class SearchClaimsToolHandler(
             dateToArg,
             sortByArg,
             limitArg,
-            semanticArg
+            semanticArg,
+            channelArg,
+            guildArg
         );
 
         registry.RegisterTool(searchTool, handler);
@@ -67,15 +73,32 @@ public sealed class SearchClaimsToolHandler(
         var modality = modalityArgument.GetValueOrNull(args);
         var dateFrom = dateFromArgument.GetValueOrNull(args);
         var dateTo = dateToArgument.GetValueOrNull(args);
+        var channel = channelArgument.GetValueOrNull(args);
+        var guild = guildArgument.GetValueOrNull(args);
         var semantic = semanticArgument.TryGetValue(args, out var sem) && sem;
         var sortAsc = !sortByArgument.TryGetValue(args, out var sortVal) || sortVal == "date_asc";
 
-        // Treat empty/whitespace query as if it wasn't provided:
+        // Treat empty/whitespace as if it wasn't provided:
+        
         if (string.IsNullOrWhiteSpace(query))
         {
             query = null;
             semantic = false;
         }
+        if (string.IsNullOrWhiteSpace(channel))
+        {
+            channel = null;
+        }
+        else if (channel.StartsWith('#'))
+        {
+            channel = channel[1..];
+        }
+        
+        if (string.IsNullOrWhiteSpace(guild))
+        {
+            guild = null;
+        }
+        
         var limit = limitArgument.TryGetValue(args, out var lim) 
             ? Math.Clamp(lim, 1, MaxLimit)
             : DefaultLimit;
@@ -106,8 +129,8 @@ public sealed class SearchClaimsToolHandler(
         }
 
         var results = semantic && query != null
-            ? await SemanticSearchAsync(query, subjectId, objectId, modality, dateFrom, dateTo, sortAsc, limit, cancellationToken)
-            : Fts5Search(query, subjectId, objectId, modality, dateFrom, dateTo, sortAsc, limit);
+            ? await SemanticSearchAsync(query, subjectId, objectId, modality, dateFrom, dateTo, channel, guild, sortAsc, limit, cancellationToken)
+            : Fts5Search(query, subjectId, objectId, modality, dateFrom, dateTo, channel, guild, sortAsc, limit);
 
         if (results.Count == 0)
         {
@@ -116,10 +139,10 @@ public sealed class SearchClaimsToolHandler(
 
         var sb = new StringBuilder();
 
-        foreach (var (id, subjName, predicate, objLabel, claimModality, timestamp, evidence) in results)
+        foreach (var (id, subjName, predicate, objLabel, claimModality, timestamp, evidence, channelName, guildName) in results)
         {
             var date = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).ToString("yyyy-MM-dd");
-            sb.AppendLine($"#{id} [{subjName}] {predicate} {objLabel} ({claimModality}) — {date}");
+            sb.AppendLine($"#{id} [{subjName}] {predicate} {objLabel} ({claimModality}) — {date} — #{channelName} @{guildName}");
             sb.AppendLine($"  \"{Truncate(evidence, 120)}\"");
         }
 
@@ -133,6 +156,8 @@ public sealed class SearchClaimsToolHandler(
         string? modality,
         string? dateFrom,
         string? dateTo,
+        string? channel,
+        string? guild,
         bool sortAsc,
         int limit,
         CancellationToken cancellationToken)
@@ -156,6 +181,8 @@ public sealed class SearchClaimsToolHandler(
             modality,
             dateFrom,
             dateTo,
+            channel,
+            guild,
             sortAsc,
             limit
         );
@@ -168,6 +195,8 @@ public sealed class SearchClaimsToolHandler(
         string? modality,
         string? dateFrom,
         string? dateTo,
+        string? channel,
+        string? guild,
         bool sortAsc,
         int limit)
     {
@@ -180,7 +209,7 @@ public sealed class SearchClaimsToolHandler(
             baseParams.Add(("@query", SanitizeFts5Query(query)));
         }
 
-        return ExecuteFilteredClaimQuery(baseWhere, baseParams, subjectId, objectId, modality, dateFrom, dateTo, sortAsc, limit);
+        return ExecuteFilteredClaimQuery(baseWhere, baseParams, subjectId, objectId, modality, dateFrom, dateTo, channel, guild, sortAsc, limit);
     }
 
     private List<ClaimResult> BatchGetClaims(
@@ -190,12 +219,14 @@ public sealed class SearchClaimsToolHandler(
         string? modality,
         string? dateFrom,
         string? dateTo,
+        string? channel,
+        string? guild,
         bool sortAsc,
         int limit)
     {
         var baseWhere = new List<string> { "c.id IN (" + string.Join(", ", claimIds) + ")" };
         var baseParams = new List<(string Name, object Value)>();
-        return ExecuteFilteredClaimQuery(baseWhere, baseParams, subjectId, objectId, modality, dateFrom, dateTo, sortAsc, limit);
+        return ExecuteFilteredClaimQuery(baseWhere, baseParams, subjectId, objectId, modality, dateFrom, dateTo, channel, guild, sortAsc, limit);
     }
 
     private List<ClaimResult> ExecuteFilteredClaimQuery(
@@ -206,6 +237,8 @@ public sealed class SearchClaimsToolHandler(
         string? modality,
         string? dateFrom,
         string? dateTo,
+        string? channel,
+        string? guild,
         bool sortAsc,
         int limit)
     {
@@ -245,6 +278,18 @@ public sealed class SearchClaimsToolHandler(
             parameters.Add(("@to", ms));
         }
 
+        if (channel != null)
+        {
+            where.Add("b.ChannelName = @channel");
+            parameters.Add(("@channel", channel));
+        }
+
+        if (guild != null)
+        {
+            where.Add("b.GuildName = @guild");
+            parameters.Add(("@guild", guild));
+        }
+
         var whereClause = "WHERE " + string.Join(" AND ", where);
         var order = sortAsc ? "ASC" : "DESC";
 
@@ -252,10 +297,13 @@ public sealed class SearchClaimsToolHandler(
         cmd.CommandText = $"""
             SELECT c.id, s.primary_name, c.predicate,
                    COALESCE(o.primary_name, c.object_literal, '?') AS obj_label,
-                   c.modality, c.timestamp, c.evidence_text
+                   c.modality, c.timestamp, c.evidence_text,
+                   b.ChannelName, b.GuildName
             FROM canonical_claims c
             JOIN canonical_entities s ON c.subject_entity_id = s.id
             LEFT JOIN canonical_entities o ON c.object_entity_id = o.id
+            JOIN Messages m ON c.source_message_id = m.Id
+            JOIN Batches b ON m.BatchId = b.Id
             {whereClause}
             ORDER BY c.timestamp {order}
             LIMIT @limit;
@@ -279,7 +327,9 @@ public sealed class SearchClaimsToolHandler(
                 reader.GetString(3),
                 reader.GetString(4),
                 reader.GetInt64(5),
-                reader.GetString(6)
+                reader.GetString(6),
+                reader.GetString(7),
+                reader.GetString(8)
             ));
         }
 
@@ -305,6 +355,8 @@ public sealed class SearchClaimsToolHandler(
         string ObjectLabel,
         string Modality,
         long Timestamp,
-        string Evidence
+        string Evidence,
+        string ChannelName,
+        string GuildName
     );
 }

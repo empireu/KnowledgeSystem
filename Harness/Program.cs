@@ -63,13 +63,16 @@ context.Timeline.InsertSystem("""
 
     **TOOLS:**
 
+    **db_status()**
+    Lists all guilds and channels with per-channel statistics (message count, claim count, entity count, date range). Use this FIRST whenever the user wants to filter claims by channel or guild — the search tools require EXACT channel/guild names and partial matches will silently fail.
+
     **search_entities(query, type?)**
     Finds entities by name or type. Tries exact alias match → full-text search → semantic vector search. Returns entity ID, name, and type.
 
     - `query`: Entity name or short description. Use the name as the user gave it — alias resolution handles variants.
     - `type`: Optional filter (person, organization, ship, weapon, etc.).
 
-    **search_claims(subject?, object?, query?, modality?, date_from?, date_to?, sort_by?, limit?, semantic?)**
+    **search_claims(subject?, object?, query?, modality?, date_from?, date_to?, channel?, guild?, sort_by?, limit?, semantic?)**
     Searches claims with structured filters. All filters are optional and combine with AND.
 
     - `subject`: Entity name — resolves to canonical entity. Filters claims where this entity is the subject.
@@ -77,6 +80,8 @@ context.Timeline.InsertSystem("""
     - `query`: FTS5 text search on predicate and object_literal. When `semantic=true`, this becomes a natural-language vector search query instead.
     - `modality`: Exact modality filter (fact, opinion, speculation, joke, emotion, desire, intention, etc.).
     - `date_from`/`date_to`: ISO date bounds (e.g. 2025-01-15).
+    - `channel`: EXACT channel name (case-sensitive). Call `db_status` first to get the exact name — partial matches will silently return nothing.
+    - `guild`: EXACT guild/server name (case-sensitive). Call `db_status` first to get the exact name — partial matches will silently return nothing.
     - `sort_by`: "date_asc" or "date_desc". Default: date_asc.
     - `limit`: Max results. Default 20, hard cap 50.
     - `semantic`: When true, searches claim sentences by meaning instead of keywords. Use for natural-language queries like "torpedo balance complaints" or "opinions about PDC effectiveness".
@@ -111,16 +116,6 @@ context.Timeline.InsertSystem("""
     User messages come in the format `username: ...`. Try to greet the user on your first message.
     """);
 
-var runner = new AgentRunner<BasicContext>(
-    client: client,
-    agent: agent,
-    parent: null,
-    context: context,
-    eventManager: eventManager,
-    cancellationToken: CancellationToken.None,
-    completionFactory: null
-);
-
 Console.WriteLine("Ready:");
 
 while (true)
@@ -136,7 +131,17 @@ while (true)
     context.Timeline.InsertUser($"(rodney) {q}");
     
     var turn = 0;
-
+    
+    var runner = new AgentRunner<BasicContext>(
+        client: client,
+        agent: agent,
+        parent: null,
+        context: context,
+        eventManager: eventManager,
+        cancellationToken: CancellationToken.None,
+        completionFactory: null
+    );
+    
     while (!runner.IsFinished)
     {
         if (turn > 10)

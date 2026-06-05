@@ -8,6 +8,7 @@ public sealed class KnowledgeGraphAgent : Agent<BasicContext>
 {
     public KnowledgeGraphAgent(string agentId, IServiceProvider serviceProvider) : base(agentId)
     {
+        DbStatusToolHandler.Register(ToolRegistry, serviceProvider);
         SearchEntitiesToolHandler.Register(ToolRegistry, serviceProvider);
         SearchClaimsToolHandler.Register(ToolRegistry, serviceProvider);
         GetEntityDetailsToolHandler.Register(ToolRegistry, serviceProvider);
