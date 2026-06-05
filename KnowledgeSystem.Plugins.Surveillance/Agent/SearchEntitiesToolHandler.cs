@@ -89,8 +89,7 @@ public sealed class SearchEntitiesToolHandler(
         sb.AppendLine(FormatEntity(
             exactByName.Value.Id,
             exactByName.Value.PrimaryName,
-            exactByName.Value.Type,
-            exactByName.Value.Description
+            exactByName.Value.Type
         ));
     }
 
@@ -107,9 +106,9 @@ public sealed class SearchEntitiesToolHandler(
 
         sb.AppendLine($"Full-text search results:");
         
-        foreach (var (id, name, entityType, desc) in ftsResults)
+        foreach (var (id, name, entityType) in ftsResults)
         {
-            sb.AppendLine(FormatEntity(id, name, entityType, desc));
+            sb.AppendLine(FormatEntity(id, name, entityType));
             visited.Add(id);
         }
     }
@@ -133,7 +132,7 @@ public sealed class SearchEntitiesToolHandler(
         foreach (var (entityId, _) in hits)
         {
             await using var cmd = canonicalDb.Connection.CreateCommand();
-            cmd.CommandText = "SELECT primary_name, type, description FROM canonical_entities WHERE id = @id";
+            cmd.CommandText = "SELECT primary_name, type FROM canonical_entities WHERE id = @id";
             cmd.Parameters.AddWithValue("@id", entityId);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
@@ -151,15 +150,10 @@ public sealed class SearchEntitiesToolHandler(
                 continue;
             }
 
-            var desc = reader.IsDBNull(2) 
-                ? null 
-                : reader.GetString(2);
-
             sb.AppendLine(FormatEntity(
                 entityId, 
                 name, 
-                entityType,
-                desc
+                entityType
             ));
 
             visited.Add(entityId);
@@ -171,15 +165,15 @@ public sealed class SearchEntitiesToolHandler(
         }
     }
     
-    private List<(long Id, string Name, string? Type, string? Description)> DbFts5Search(string query, string? type)
+    private List<(long Id, string Name, string? Type)> DbFts5Search(string query, string? type)
     {
-        var results = new List<(long, string, string?, string?)>();
+        var results = new List<(long, string, string?)>();
 
         using var cmd = canonicalDb.Connection.CreateCommand();
 
         var typeFilter = type != null ? "AND e.type = @type" : "";
         cmd.CommandText = $"""
-            SELECT e.id, e.primary_name, e.type, e.description
+            SELECT e.id, e.primary_name, e.type
             FROM canonical_entities_fts f
             JOIN canonical_entities e ON e.id = f.rowid
             WHERE canonical_entities_fts MATCH @query
@@ -203,19 +197,17 @@ public sealed class SearchEntitiesToolHandler(
             results.Add((
                 reader.GetInt64(0),
                 reader.GetString(1),
-                reader.IsDBNull(2) ? null : reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3)
+                reader.IsDBNull(2) ? null : reader.GetString(2)
             ));
         }
 
         return results;
     }
 
-    private static string FormatEntity(long id, string name, string? type, string? description)
+    private static string FormatEntity(long id, string name, string? type)
     {
         var typeStr = type ?? "unknown";
-        var desc = description != null ? $" — {description}" : "";
-        return $"#{id} \"{name}\" ({typeStr}){desc}";
+        return $"#{id} \"{name}\" ({typeStr})";
     }
 
     private static string SanitizeFts5Query(string query)
