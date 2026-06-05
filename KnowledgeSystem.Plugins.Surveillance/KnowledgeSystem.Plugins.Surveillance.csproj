@@ -8,6 +8,15 @@
 
     <ItemGroup>
       <Folder Include="Database\" />
+      <Folder Include="Extraction\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.0-preview.4.26230.115" />
     </ItemGroup>
 
 </Project>
