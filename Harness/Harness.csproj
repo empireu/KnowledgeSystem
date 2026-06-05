@@ -10,6 +10,7 @@
     <ItemGroup>
       <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Embedding\KnowledgeSystem.Embedding.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Plugins.Surveillance\KnowledgeSystem.Plugins.Surveillance.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval.Graph\KnowledgeSystem.Retrieval.Graph.csproj" />
     </ItemGroup>
 
