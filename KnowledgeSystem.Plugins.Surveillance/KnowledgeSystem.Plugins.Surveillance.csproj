@@ -17,6 +17,7 @@
 
     <ItemGroup>
       <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.0-preview.4.26230.115" />
+      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="11.0.0-preview.4.26230.115" />
     </ItemGroup>
 
 </Project>

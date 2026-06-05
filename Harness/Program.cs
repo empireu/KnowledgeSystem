@@ -1,9 +1,10 @@
 ﻿using KnowledgeSystem.Ai;
 using KnowledgeSystem.Events.Implementation;
+using KnowledgeSystem.Plugins.Surveillance.Database;
 using KnowledgeSystem.Plugins.Surveillance.Extraction;
 using KnowledgeSystem.Plugins.Surveillance.Messages;
-using KnowledgeSystem.Retrieval.Api.Graph;
 using KnowledgeSystem.Retrieval.Graph.Extraction;
+using Microsoft.EntityFrameworkCore;
 
 var archive = DiscordArchiveParser.Parse("D:\\Scrape\\DISCORD\\pit.json");
 var c = new MessageChunker();
@@ -138,42 +139,43 @@ The provided text is:
 """
 });
 
-Console.WriteLine("Running extraction on target chunk...");
+var dbOptions = new DbContextOptionsBuilder<IngestionDbContext>()
+    .UseSqlite("Data Source=ingestion.db")
+    .Options;
 
-var source = new IngestionChunkSource(target.SourceContent);
-var result = await pipeline.IngestAsync(source);
+await using var db = new IngestionDbContext(dbOptions);
+await db.Database.EnsureCreatedAsync();
 
-Console.WriteLine($"Entities: {result.Entities.Length}");
-foreach (var entity in result.Entities)
+var chunker = new MessageChunker();
+var service = new IngestionService(db, chunker);
+
+var targetMessages = target.LineMappings.Select(m => m.Message).ToList();
+
+Console.WriteLine($"Ingesting {targetMessages.Count} messages from target chunk...");
+var batch = await service.IngestAsync(targetMessages, pipeline, CancellationToken.None);
+
+if (batch == null)
 {
-    var names = entity.DefinedNames.Length > 1
-        ? $"{entity.DefinedNames[0]} (aka {string.Join(", ", entity.DefinedNames[1..])})"
-        : entity.DefinedNames[0];
-
-    Console.WriteLine($"  {names}");
-    Console.WriteLine($"    Type: {entity.Type ?? "unknown"}");
-    Console.WriteLine($"    Description: {entity.Description ?? "(none)"}");
-    Console.WriteLine($"    Evidence: {entity.Evidence.QuotedText}");
-    Console.WriteLine();
+    Console.WriteLine("No new messages to ingest.");
+    return;
 }
 
-Console.WriteLine($"Claims: {result.Claims.Length}");
-foreach (var claim in result.Claims)
-{
-    var objectStr = claim.ObjectEntity is not null
-        ? $"→ [{claim.ObjectEntity.DefinedNames[0]}]"
-        : $"→ \"{claim.ObjectLiteral}\"";
+Console.WriteLine($"Batch {batch.Id}: {batch.Messages.Count} messages, {batch.Chunks.Count} chunks");
 
-    Console.WriteLine($"  [{claim.Subject.DefinedNames[0]}] {claim.Predicate} {objectStr}");
-    Console.WriteLine($"    Modality: {claim.Modality}");
-    Console.WriteLine($"    Evidence: {claim.Evidence.QuotedText}");
-    Console.WriteLine();
-}
+var totalEntities = await db.Entities.CountAsync(e => e.Chunk.BatchId == batch.Id);
+var totalClaims = await db.Claims.CountAsync(c => c.Chunk.BatchId == batch.Id);
+Console.WriteLine($"Stored {totalEntities} entities and {totalClaims} claims");
 
-var modalityCounts = result.Claims.GroupBy(c => c.Modality).OrderByDescending(g => g.Count());
+var modalityCounts = await db.Claims
+    .Where(c => c.Chunk.BatchId == batch.Id)
+    .GroupBy(c => c.Modality)
+    .Select(g => new { Modality = g.Key, Count = g.Count() })
+    .OrderByDescending(x => x.Count)
+    .ToListAsync();
+
 Console.WriteLine("Claims by modality:");
 foreach (var g in modalityCounts)
 {
-    Console.WriteLine($"  {g.Key,-14} {g.Count(),4}");
+    Console.WriteLine($"  {g.Modality,-14} {g.Count,4}");
 }
 
