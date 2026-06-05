@@ -1,9 +1,37 @@
-﻿using System.Text.Json;
-using KnowledgeSystem.Ai;
+﻿using KnowledgeSystem.Ai;
 using KnowledgeSystem.Events.Implementation;
+using KnowledgeSystem.Plugins.Surveillance.Extraction;
+using KnowledgeSystem.Plugins.Surveillance.Messages;
 using KnowledgeSystem.Retrieval.Api.Graph;
-using KnowledgeSystem.Retrieval.Graph;
 using KnowledgeSystem.Retrieval.Graph.Extraction;
+
+var archive = DiscordArchiveParser.Parse("D:\\Scrape\\DISCORD\\pit.json");
+var c = new MessageChunker();
+
+var chunks = c.Chunk(archive);
+
+/*
+for (var index = 0; index < chunks.Count; index++)
+{
+    var chunk = chunks[index];
+    Console.WriteLine($"{index}: {chunk.SourceContent.Length}ch, {(chunk.EndedAt - chunk.StartedAt).TotalHours:F}h");
+    Console.WriteLine(chunk.SourceContent.Replace("\n", "\n  "));
+    Console.WriteLine("\n\n");
+}
+*/
+
+var target = chunks[1433];
+
+Console.WriteLine($"\n\nTARGET:\n{target.SourceContent}");
+
+var seenUsers = new HashSet<ulong>();
+var users = archive
+    .Where(m => seenUsers.Add(m.User.UserId))
+    .Select(m => m.User)
+    .ToList();
+
+var userListPrompt = string.Join("\n", users.Select(u =>
+    $"- Nickname \"{u.Nickname}\" (username: {u.Username}, id: {u.UserId})"));
 
 var providerConfig = new ProviderConfig
 {
@@ -100,157 +128,52 @@ var pipeline = new AgenticExtractionPipeline(new AgenticExtractionPipelineDescri
         3. Call record_claim for ALL claims — emotions, desires, intentions, sensations, states, relationships, facts, opinions, and more. Be thorough. You can interleave entity and claim calls if you're confident.
         4. Call finish_extraction when done.
 
-        The provided text is:
         """
+        + $"""
+Known users in this conversation. When registering entities, use the nickname as the primary name and include the username and any other names from the messages as aliases:
+
+{userListPrompt}
+
+The provided text is:
+"""
 });
 
-const string sourceFolder = "extraction_input";
-var sourceDir = new DirectoryInfo(sourceFolder);
+Console.WriteLine("Running extraction on target chunk...");
 
-if (!sourceDir.Exists)
+var source = new IngestionChunkSource(target.SourceContent);
+var result = await pipeline.IngestAsync(source);
+
+Console.WriteLine($"Entities: {result.Entities.Length}");
+foreach (var entity in result.Entities)
 {
-    sourceDir.Create();
-    Console.WriteLine("We need the data");
-    return;
-}
+    var names = entity.DefinedNames.Length > 1
+        ? $"{entity.DefinedNames[0]} (aka {string.Join(", ", entity.DefinedNames[1..])})"
+        : entity.DefinedNames[0];
 
-var mdFiles = sourceDir.GetFiles("*.md");
-
-if (mdFiles.Length == 0)
-{
-    Console.WriteLine($"No .md files found in '{sourceFolder}'.");
-    return;
-}
-
-// Limit to 5 files for testing the agentic pipeline:
-mdFiles = mdFiles.Take(5).ToArray();
-
-var jsonOptions = new JsonSerializerOptions
-{
-    WriteIndented = true,
-    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-};
-
-foreach (var mdFile in mdFiles)
-{
-    var cachePath = Path.Combine(sourceFolder, $"{mdFile.Name}.extraction.json");
-
-    if (File.Exists(cachePath))
-    {
-        Console.WriteLine($"  [{mdFile.Name}] cache exists, skipping.");
-        continue;
-    }
-
-    Console.Write($"  [{mdFile.Name}] extracting... ");
-    var sourceText = await File.ReadAllTextAsync(mdFile.FullName);
-    var chunk = new IngestionChunkSource(sourceText);
-
-    /*RawProcessedIngestionChunk result;
-    try
-    {
-        result = await pipeline.IngestAsync(chunk);
-    }
-    catch (Exception e)
-    {
-        Console.WriteLine($"Failure => {e.Message}");
-        continue;
-    }*/
-    var result = await pipeline.IngestAsync(chunk);
-
-    
-    var cache = result.ToCache();
-    var json = JsonSerializer.Serialize(cache, jsonOptions);
-    await File.WriteAllTextAsync(cachePath, json);
-
-    Console.WriteLine($"done. ({result.Entities.Length} entities, {result.Claims.Length} claims)");
-}
-
-var cacheFiles = sourceDir.GetFiles("*.extraction.json");
-
-var allEntities = new List<(string SourceFile, CacheEntity Entity)>();
-var allClaims = new List<(string SourceFile, CacheClaim Claim)>();
-
-foreach (var cacheFile in cacheFiles)
-{
-    var json = await File.ReadAllTextAsync(cacheFile.FullName);
-    var record = JsonSerializer.Deserialize<ExtractionCacheRecord>(json, jsonOptions);
-    
-    if (record == null)
-    {
-        continue;
-    }
-
-    var sourceFile = cacheFile.Name.Replace(".md.extraction.json", "");
-
-    foreach (var entity in record.Entities)
-    {
-        allEntities.Add((sourceFile, entity));
-    }
-
-    foreach (var claim in record.Claims)
-    {
-        allClaims.Add((sourceFile, claim));
-    }
-}
-
-Console.WriteLine($"\nLoaded {allEntities.Count} entities and {allClaims.Count} claims across {cacheFiles.Length} chapters.");
-
-Console.WriteLine("  ENTITIES");
-
-foreach (var (sourceFile, entity) in allEntities)
-{
-    var names = entity.Names is { Length: > 0 }
-        ? $"{entity.Name} (aka {string.Join(", ", entity.Names)})"
-        : entity.Name;
-
-    Console.WriteLine($"  [{sourceFile}] {names}");
+    Console.WriteLine($"  {names}");
     Console.WriteLine($"    Type: {entity.Type ?? "unknown"}");
     Console.WriteLine($"    Description: {entity.Description ?? "(none)"}");
-    Console.WriteLine($"    Evidence: {entity.Evidence?.QuotedText ?? "(none)"}");
+    Console.WriteLine($"    Evidence: {entity.Evidence.QuotedText}");
     Console.WriteLine();
 }
 
-Console.WriteLine("  CLAIMS");
-
-foreach (var (sourceFile, claim) in allClaims)
+Console.WriteLine($"Claims: {result.Claims.Length}");
+foreach (var claim in result.Claims)
 {
-    var objectStr = claim.ObjectEntityName is not null
-        ? $"→ [{claim.ObjectEntityName}]"
+    var objectStr = claim.ObjectEntity is not null
+        ? $"→ [{claim.ObjectEntity.DefinedNames[0]}]"
         : $"→ \"{claim.ObjectLiteral}\"";
 
-    Console.WriteLine($"  [{sourceFile}] [{claim.SubjectName}] {claim.Predicate} {objectStr}");
+    Console.WriteLine($"  [{claim.Subject.DefinedNames[0]}] {claim.Predicate} {objectStr}");
     Console.WriteLine($"    Modality: {claim.Modality}");
-    Console.WriteLine($"    Evidence: {claim.Evidence?.QuotedText ?? "(none)"}");
+    Console.WriteLine($"    Evidence: {claim.Evidence.QuotedText}");
     Console.WriteLine();
 }
 
-Console.WriteLine("  SUMMARY");
-
-var modalityCounts = allClaims
-    .GroupBy(c => c.Claim.Modality)
-    .OrderByDescending(g => g.Count());
-
-Console.WriteLine($"  Total entities: {allEntities.Count}");
-Console.WriteLine($"  Total claims:   {allClaims.Count}");
-Console.WriteLine();
-Console.WriteLine("  Claims by modality:");
-
-foreach (var group in modalityCounts)
+var modalityCounts = result.Claims.GroupBy(c => c.Modality).OrderByDescending(g => g.Count());
+Console.WriteLine("Claims by modality:");
+foreach (var g in modalityCounts)
 {
-    var bar = new string('█', group.Count());
-    Console.WriteLine($"    {group.Key,-14} {group.Count(),4}  {bar}");
-}
-
-var entityTypes = allEntities
-    .GroupBy(e => e.Entity.Type ?? "(untyped)")
-    .OrderByDescending(g => g.Count());
-
-Console.WriteLine();
-Console.WriteLine("  Entities by type:");
-
-foreach (var group in entityTypes)
-{
-    var str = new string('▒', Math.Min(group.Count(), 40));
-    Console.WriteLine($"    {group.Key,-20} {group.Count(),4}  {str}");
+    Console.WriteLine($"  {g.Key,-14} {g.Count(),4}");
 }
 
