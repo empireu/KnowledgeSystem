@@ -13,6 +13,13 @@ public sealed class ConsoleExtractionObserver : IEventReceiver
     private int _roundNumber;
 
     [SubscribeEvent(IsCritical = false)]
+    public ValueTask OnAgentMessageAsync(AgentMessageEvent @event, CancellationToken cancellationToken)
+    {
+        Console.WriteLine(@event.Response.Text);
+        return ValueTask.CompletedTask;
+    }
+    
+    [SubscribeEvent(IsCritical = false)]
     public ValueTask OnToolCallsAsync(AgentToolCallsEvent @event, CancellationToken cancellationToken)
     {
         _roundNumber++;

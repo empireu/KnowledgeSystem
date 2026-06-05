@@ -93,11 +93,13 @@ public sealed class CanonicalDbContext : IDisposable
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
+            SELECT id, primary_name, type, description FROM canonical_entities
+            WHERE primary_name = @alias COLLATE NOCASE
+            UNION ALL
             SELECT e.id, e.primary_name, e.type, e.description
             FROM canonical_entities e
-            LEFT JOIN canonical_entity_aliases a ON a.entity_id = e.id
-            WHERE e.primary_name = @alias COLLATE NOCASE
-               OR a.alias = @alias COLLATE NOCASE
+            JOIN canonical_entity_aliases a ON a.entity_id = e.id
+            WHERE a.alias = @alias COLLATE NOCASE
             LIMIT 1;
             """;
 

@@ -13,7 +13,9 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Plugins.Library\KnowledgeSystem.Plugins.Library.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Retrieval\KnowledgeSystem.Retrieval.csproj" />
     </ItemGroup>
 
@@ -21,6 +23,10 @@
       <PackageReference Include="Microsoft.Data.Sqlite" Version="11.0.0-preview.4.26230.115" />
       <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.0-preview.4.26230.115" />
       <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="11.0.0-preview.4.26230.115" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Agent\" />
     </ItemGroup>
 
 </Project>
