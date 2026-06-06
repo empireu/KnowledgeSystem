@@ -56,9 +56,9 @@ public sealed class EntityResolver(
     ///         on raw claims.
     ///     </returns>
     /// </summary>
-    public async Task<Dictionary<string, long>> ResolveAsync(CancellationToken ct = default)
+    public async Task<Dictionary<string, long>> ResolveAsync(CancellationToken cancellationToken)
     {
-        var records = await rawDb.Entities.ToListAsync(ct);
+        var records = await rawDb.Entities.ToListAsync(cancellationToken);
 
         if (records.Count == 0)
         {
@@ -70,11 +70,11 @@ public sealed class EntityResolver(
 
         // Stage 2: Similarity:
         var names = groups.Select(g => g.PrimaryName).ToArray();
-        var nameEmbeddings = await embeddingService.EmbedBatchAsync(names, ct);
+        var nameEmbeddings = await embeddingService.EmbedBatchAsync(names, cancellationToken);
         var candidates = FindCrossNameCandidates(nameEmbeddings, groups);
 
         // Stage 3: LLM:
-        var merges = await GateCandidatesAsync(candidates, groups, ct);
+        var merges = await GateCandidatesAsync(candidates, groups, cancellationToken);
 
         // Resolve transitive merges and produce final entity set:
         var resolved = ResolveMerges(groups, merges);

@@ -46,10 +46,11 @@ public sealed class AgenticExtractionPipeline(AgenticExtractionPipelineDescripti
             {
                 case AgentRunner.TurnStatus.ToolCallsReceived:
                 case AgentRunner.TurnStatus.CompletedSuccessfully:
-                case AgentRunner.TurnStatus.CompletedWithError:
                 case AgentRunner.TurnStatus.CompletionHandled:
                     turn++;
                     break;
+                case AgentRunner.TurnStatus.CompletedWithError:
+                    throw new InvalidOperationException($"Extraction agent finished with errors: {runner.FinishError}");
             }
         }
 

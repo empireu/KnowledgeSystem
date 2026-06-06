@@ -85,7 +85,18 @@ public sealed class IngestionService(IngestionDbContext db, IMessageChunker chun
             await db.SaveChangesAsync(cancellationToken);
 
             var source = new IngestionChunkSource(chunk.SourceContent);
-            var result = await pipeline.IngestAsync(source, cancellationToken);
+            RawProcessedIngestionChunk result;
+
+            try
+            {
+                result = await pipeline.IngestAsync(source, cancellationToken);
+            }
+            catch
+            {
+                dbChunk.Status = ChunkStatus.Failed;
+                await db.SaveChangesAsync(cancellationToken);
+                continue;
+            }
 
             foreach (var entity in result.Entities)
             {
