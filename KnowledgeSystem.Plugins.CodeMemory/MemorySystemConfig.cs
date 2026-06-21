@@ -45,4 +45,9 @@ public class MemorySystemConfig
     /// </summary>
     [Required]
     public string ServerUrl { get; set; } = null!;
+
+    /// <summary>
+    ///     Optional API key for Bearer token authentication.
+    /// </summary>
+    public string? ApiKey { get; set; } = null;
 }
