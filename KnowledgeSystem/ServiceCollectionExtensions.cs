@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
+using NetCord.Hosting.Services.ApplicationCommands;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -20,24 +21,25 @@ namespace KnowledgeSystem;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    private static KnowledgeSystemConfig GetCoreConfig(this HostBuilderContext context)
+    {
+        var options = context.Configuration
+            .GetSection(KnowledgeSystemConfig.Section)
+            .Get<KnowledgeSystemConfig>() ?? throw new InvalidOperationException("Core configuration is missing");
+
+        return options;
+    }
+    
     extension(IHostBuilder hostBuilder)
     {
-        internal IHostBuilder WithDiscordIntegration() => hostBuilder.ConfigureServices(services =>
+        internal IHostBuilder WithIntegrationServices() => hostBuilder.ConfigureServices((context, services) =>
         {
-            services.AddDiscordGateway(options =>
+            var config = context.GetCoreConfig();
+
+            if (!config.ProvideDiscordIntegration)
             {
-                options.Intents = GatewayIntents.GuildMessages | GatewayIntents.MessageContent | GatewayIntents.Guilds;
-            });
-
-            // Message handler:
-            services.AddGatewayHandler<ExternalMessageHandler>();
-        });
-
-        internal IHostBuilder WithCoreServices() => hostBuilder.ConfigureServices((context, services) =>
-        {
-            var options = context.Configuration
-                .GetSection(KnowledgeSystemConfig.Section)
-                .Get<KnowledgeSystemConfig>() ?? throw new InvalidOperationException("RAG configuration is missing");
+                return;
+            }
             
             // Conversation manager:
             services.AddSingleton<ConversationManager>();
@@ -48,6 +50,23 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<ResponseTracker>();
             services.AddSingleton<IResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
             services.AddHostedService<ResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
+
+            services.AddDiscordGateway(options =>
+            {
+                options.Intents = GatewayIntents.GuildMessages | GatewayIntents.MessageContent | GatewayIntents.Guilds;
+            });
+
+            // Message handler:
+            services.AddGatewayHandler<ExternalMessageHandler>();
+
+            hostBuilder.UseApplicationCommands();
+        });
+
+        internal IHostBuilder WithCoreServices() => hostBuilder.ConfigureServices((context, services) =>
+        {
+            var options = context.Configuration
+                .GetSection(KnowledgeSystemConfig.Section)
+                .Get<KnowledgeSystemConfig>() ?? throw new InvalidOperationException("RAG configuration is missing");
             
             // Embedding:
             if (options is { EmbeddingProvider: not null, EmbeddingConfig: not null })
@@ -81,7 +100,7 @@ public static class ServiceCollectionExtensions
             // Filter:
             if (options.LogprobeFilteringProvider != null)
             {
-                services.AddSingleton<ILogprobGatingService>(_ => new LlamaCppLogprobFilteringService(
+                services.AddSingleton<ILogprobGatingService>(_ => new ChatTemplatedLogprobGatingService(
                     options.LogprobeFilteringProvider.Endpoint,
                     options.LogprobeFilteringProvider.Key
                 ));

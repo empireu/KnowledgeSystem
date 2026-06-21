@@ -2,7 +2,6 @@ using KnowledgeSystem;
 using KnowledgeSystem.PluginLoader;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using NetCord.Hosting.Services.ApplicationCommands;
 using Serilog;
 
 var builder = Host.CreateDefaultBuilder(args)
@@ -21,8 +20,7 @@ var builder = Host.CreateDefaultBuilder(args)
     })
     .WithCoreServices()
     .UsePluginLoader(PluginLoader.PluginLoaderOptions.Default)
-    .WithDiscordIntegration()
-    .UseApplicationCommands()
+    .WithIntegrationServices()
     .WithTelemetryServices();
 
 var host = builder.Build();

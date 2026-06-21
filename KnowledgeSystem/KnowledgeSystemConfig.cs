@@ -15,4 +15,6 @@ public class KnowledgeSystemConfig
     public ProviderConfig? RerankingProvider { get; set; }
     
     public ProviderConfig? LogprobeFilteringProvider { get; set; }
+
+    public bool ProvideDiscordIntegration { get; set; } = false;
 }

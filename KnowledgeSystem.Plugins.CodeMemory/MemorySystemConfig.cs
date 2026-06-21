@@ -39,4 +39,10 @@ public class MemorySystemConfig
     ///     Results are dropped if they are below this threshold.
     /// </summary>
     public double GateThreshold { get; set; } = 0.5;
+
+    /// <summary>
+    ///     The URL the MCP server listens on.
+    /// </summary>
+    [Required]
+    public string ServerUrl { get; set; } = null!;
 }
