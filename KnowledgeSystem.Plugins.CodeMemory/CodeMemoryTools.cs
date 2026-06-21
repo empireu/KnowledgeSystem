@@ -37,11 +37,10 @@ public sealed class CodeMemoryTools(
     }
 
     [McpServerTool, Description(
-        "Retrieves relevant knowledge from stored project memories. " +
-        "Searches across the specified project's memories using semantic and keyword search, " +
-        "then takes the results that are relevant to the query, based on the judgement of a small language model. " +
-        "Call this before implementing a feature to check for relevant procedures, " +
-        "quirks, and design decisions learned in previous sessions. Use dense language (e.g 'Entity implementation guide') that reads as a query.")]
+        "Searches for relevant memories and returns a compact list of memory IDs with their summaries. " +
+        "Use this first to find what's available — then call fetch_memory with the IDs you want to read in full. " +
+        "Uses hybrid search (semantic + keyword) and returns the top matches. " +
+        "Use dense language (e.g 'Entity implementation guide') that reads as a query.")]
     public async Task<string> RetrieveKnowledge(
         [Description("The project namespace to search in (e.g. 'KnowledgeSystem' or 'MyGame').")] string @namespace,
         [Description("What you need to know — describe the feature, context, or question specifically.")] string query,
@@ -59,10 +58,33 @@ public sealed class CodeMemoryTools(
 
         foreach (var m in results)
         {
-            sb.AppendLine($"# Memory ID {m.Id} ({m.Summary})");
-            sb.AppendLine($"{m.Content}");
-            sb.AppendLine();
+            sb.AppendLine($"  Memory ID {m.Id}: {m.Summary}");
         }
+
+        sb.AppendLine($"\nUse fetch_memory with the desired ID to read the full content.");
+
+        return sb.ToString();
+    }
+
+    [McpServerTool, Description(
+        "Retrieves the full content of a stored memory by its ID. " +
+        "Call this after retrieve_knowledge to read the complete details " +
+        "of a memory whose summary looked relevant.")]
+    public async Task<string> FetchMemory(
+        [Description("The numeric ID of the memory to fetch.")] int memoryId,
+        CancellationToken ct)
+    {
+        var memory = await storeService.GetMemoryAsync(memoryId, ct);
+
+        if (memory == null)
+        {
+            return $"No memory found with ID {memoryId}.";
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"# Memory {memory.Id} (from {memory.Namespace})");
+        sb.AppendLine(memory.Content);
+        sb.AppendLine("---");
 
         return sb.ToString();
     }

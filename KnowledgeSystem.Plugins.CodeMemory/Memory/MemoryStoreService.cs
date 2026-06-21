@@ -1,5 +1,4 @@
-﻿using KnowledgeSystem.Ai;
-using KnowledgeSystem.Embedding;
+﻿using KnowledgeSystem.Embedding;
 using KnowledgeSystem.Vector;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -13,8 +12,7 @@ namespace KnowledgeSystem.Plugins.CodeMemory.Memory;
 public sealed class MemoryStoreService(
     ILogger<MemoryStoreService> logger,
     IOptions<MemorySystemConfig> options,
-    IEmbeddingService embeddingService,
-    ILogprobGatingService gateService
+    IEmbeddingService embeddingService
 ) : IHostedService
 {
     private sealed class Store
@@ -250,11 +248,11 @@ public sealed class MemoryStoreService(
 
             var candidateIds = rrfScores
                 .OrderByDescending(x => x.Value)
-                .Take(config.FusedResults)
+                .Take(config.TopN)
                 .Select(x => x.Key)
                 .ToHashSet();
 
-            memories = await _store.Db.Memories
+            return await _store.Db.Memories
                 .Where(x => candidateIds.Contains(x.Id))
                 .ToArrayAsync(cancellationToken: cancellationToken);
         }
@@ -262,17 +260,5 @@ public sealed class MemoryStoreService(
         {
             _store.DbSemaphore.Release();
         }
-        
-        var gateResults = await gateService.AreRelevantAsync(
-            query,
-            memories.Select(x => x.Summary).ToList(),
-            config.GateThreshold,
-            cancellationToken
-        );
-
-        return memories
-            .Where((_, index) => gateResults[index])
-            .Take(config.TopN)
-            .ToArray();
     }
 }

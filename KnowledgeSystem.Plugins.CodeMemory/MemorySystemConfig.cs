@@ -26,20 +26,10 @@ public class MemorySystemConfig
     public int ResultsPerMethod { get; set; } = 20;
 
     /// <summary>
-    ///     The number of results to take from RRF.
-    /// </summary>
-    public int FusedResults { get; set; } = 20;
-    
-    /// <summary>
     ///     The number of final results to take with reranking.
     /// </summary>
     public int TopN { get; set; } = 5;
     
-    /// <summary>
-    ///     Results are dropped if they are below this threshold.
-    /// </summary>
-    public double GateThreshold { get; set; } = 0.5;
-
     /// <summary>
     ///     The URL the MCP server listens on.
     /// </summary>
