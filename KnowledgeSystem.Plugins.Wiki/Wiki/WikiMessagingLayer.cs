@@ -5,15 +5,15 @@ using KnowledgeSystem.Ai;
 using KnowledgeSystem.Api;
 using KnowledgeSystem.Events.Api;
 using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
 using KnowledgeSystem.Plugins.Wiki.Memory;
+using KnowledgeSystem.Plugins.Wiki.PeerReview;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
+namespace KnowledgeSystem.Plugins.Wiki.Wiki;
 
 /// <summary>
 ///     Messaging layer for one-shot ask and long-running conversations with the wiki agent.

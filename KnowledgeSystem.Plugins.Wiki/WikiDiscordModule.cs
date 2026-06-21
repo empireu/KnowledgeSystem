@@ -1,5 +1,5 @@
 ﻿using KnowledgeSystem.Api;
-using KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
+using KnowledgeSystem.Plugins.Wiki.Wiki;
 using NetCord;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;

@@ -13,7 +13,7 @@ using Microsoft.Extensions.AI;
 
 // ReSharper disable ForCanBeConvertedToForeach
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
+namespace KnowledgeSystem.Plugins.Wiki.PeerReview;
 
 public class PeerReviewSubAgentHandler(
     AgentTool tool,

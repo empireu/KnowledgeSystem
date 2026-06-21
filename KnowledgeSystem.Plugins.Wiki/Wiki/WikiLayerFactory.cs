@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
+namespace KnowledgeSystem.Plugins.Wiki.Wiki;
 
 public class WikiLayerFactory(IServiceProvider serviceProvider)
 {

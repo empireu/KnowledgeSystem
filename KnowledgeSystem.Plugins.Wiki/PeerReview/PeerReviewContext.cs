@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.Plugins.Library;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
+namespace KnowledgeSystem.Plugins.Wiki.PeerReview;
 
 public sealed class PeerReviewContext : BasicContext
 {

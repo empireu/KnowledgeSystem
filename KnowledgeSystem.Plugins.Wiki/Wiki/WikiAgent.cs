@@ -7,13 +7,13 @@ using KnowledgeSystem.Plugins.Library.Tools.FindFiles;
 using KnowledgeSystem.Plugins.Library.Tools.GrepContent;
 using KnowledgeSystem.Plugins.Library.Tools.ListDir;
 using KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
-using KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
 using KnowledgeSystem.Plugins.Wiki.Memory;
+using KnowledgeSystem.Plugins.Wiki.PeerReview;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
+namespace KnowledgeSystem.Plugins.Wiki.Wiki;
 
 public sealed class WikiAgent : Agent<BasicContext>
 {

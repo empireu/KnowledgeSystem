@@ -1,7 +1,7 @@
 ﻿using KnowledgeSystem.Agents.Orchestration;
 using Microsoft.Extensions.AI;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
+namespace KnowledgeSystem.Plugins.Wiki.PeerReview;
 
 public sealed class PeerReviewAgent : Agent<PeerReviewContext>
 {

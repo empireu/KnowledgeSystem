@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.PluginLoader;
-using KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
 using KnowledgeSystem.Plugins.Wiki.Memory;
+using KnowledgeSystem.Plugins.Wiki.Wiki;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

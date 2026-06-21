@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.Events.Api;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
+namespace KnowledgeSystem.Plugins.Wiki.PeerReview;
 
 /// <summary>
 ///     Dispatched when the agent produces a message that passed peer-review.

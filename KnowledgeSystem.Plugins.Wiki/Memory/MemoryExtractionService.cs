@@ -5,7 +5,7 @@ using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Ai;
 using KnowledgeSystem.Events.Implementation;
 using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
+using KnowledgeSystem.Plugins.Wiki.Wiki;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

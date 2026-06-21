@@ -3,7 +3,7 @@ using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Plugins.Library;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.PeerReview;
+namespace KnowledgeSystem.Plugins.Wiki.PeerReview;
 
 public class ReviewFlagToolHandler<TContext>(AgentTool tool, Func<TContext, string> resultProvider) : ToolHandler<TContext>.Plain(tool) where TContext : BasicContext
 {

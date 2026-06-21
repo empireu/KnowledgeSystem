@@ -5,7 +5,7 @@ using KnowledgeSystem.Plugins.Library;
 using KnowledgeSystem.Plugins.Wiki.Memory;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
+namespace KnowledgeSystem.Plugins.Wiki.Wiki;
 
 public sealed class FetchMemoryToolHandler(
     AgentTool tool,

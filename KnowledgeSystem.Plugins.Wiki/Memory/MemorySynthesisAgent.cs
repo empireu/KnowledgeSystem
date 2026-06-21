@@ -1,6 +1,6 @@
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Plugins.Library;
-using KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
+using KnowledgeSystem.Plugins.Wiki.Wiki;
 using Microsoft.Extensions.AI;
 
 namespace KnowledgeSystem.Plugins.Wiki.Memory;

@@ -1,6 +1,6 @@
 ﻿using KnowledgeSystem.Agents.Context;
 
-namespace KnowledgeSystem.Plugins.Wiki.Agents.Wiki;
+namespace KnowledgeSystem.Plugins.Wiki.Wiki;
 
 /// <summary>
 ///     Inserted when the peer-review agent validates a report. 
