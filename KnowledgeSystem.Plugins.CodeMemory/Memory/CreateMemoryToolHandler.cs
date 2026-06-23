@@ -17,7 +17,7 @@ public sealed class CreateMemoryToolHandler<TContext>(
     MemoryStoreService memoryStoreService
 ) : ToolHandler<TContext>.Plain(tool) where TContext : BasicContext
 {
-    public static void Register<TContext>(string @namespace, AgentToolRegistry<TContext> registry, IServiceProvider serviceProvider) where TContext : BasicContext
+    public static void Register(string @namespace, AgentToolRegistry<TContext> registry, IServiceProvider serviceProvider)
     {
         var memoryTool = new ToolBuilder("create_memory")
             .WithDescription("Creates a new memory from the conversation. Call this for each distinct, factual conclusion you can extract. The summary is a one-line description used for future retrieval; the content is the full distilled conclusion.")

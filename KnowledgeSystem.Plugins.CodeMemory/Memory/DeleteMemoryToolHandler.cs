@@ -12,7 +12,7 @@ public sealed class DeleteMemoryToolHandler<TContext>(
     MemoryStoreService memoryStore
 ) : ToolHandler<TContext>.Plain(tool) where TContext : BasicContext
 {
-    public static void Register<TContext>(AgentToolRegistry<TContext> registry, IServiceProvider serviceProvider) where TContext : BasicContext
+    public static void Register(AgentToolRegistry<TContext> registry, IServiceProvider serviceProvider)
     {
         var deleteTool = new ToolBuilder("delete_memory")
             .WithDescription("Deletes a memory by its ID. Use this to remove outdated, superseded, or duplicate memories after you have created a consolidated replacement.")

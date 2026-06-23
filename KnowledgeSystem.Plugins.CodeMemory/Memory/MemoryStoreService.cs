@@ -207,9 +207,9 @@ public sealed class MemoryStoreService(
         var config = options.Value;
 
         var embedding = await embeddingService.EmbedAsync(query, cancellationToken);
-        
-        MemoryRecord[] memories;
+
         await _store.DbSemaphore.WaitAsync(cancellationToken);
+        
         try
         {
             var memoryRecordsInNamespace = await _store.Db.Memories
