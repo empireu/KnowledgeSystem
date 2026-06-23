@@ -96,7 +96,7 @@ public class RecallSystem
 
     private async Task<string?> ExecuteAsync(AgentRunner<RecallContext> runner)
     {
-        for (var turn = 0;; turn++)
+        for (var turn = 0;; )
         {
             if (turn == 15)
             {
@@ -115,6 +115,20 @@ public class RecallSystem
             if (status == AgentRunner.TurnStatus.CompletedSuccessfully || _memoryConfig.RunForOneTurn)
             {
                 return null;
+            }
+
+            // ReSharper disable once SwitchStatementHandlesSomeKnownEnumValuesWithDefault
+            switch (status)
+            {
+                case AgentRunner.TurnStatus.ToolsFinished:
+                case AgentRunner.TurnStatus.CompletionHandled:
+                    turn++;
+                    break;
+                case AgentRunner.TurnStatus.ToolCallsReceived:
+                case AgentRunner.TurnStatus.ToolsStepped:
+                default:
+                    // Ignored
+                    break;
             }
         }
     }
