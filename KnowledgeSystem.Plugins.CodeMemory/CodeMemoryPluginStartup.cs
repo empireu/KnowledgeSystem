@@ -17,5 +17,6 @@ public class CodeMemoryPluginStartup : IPluginStartup
         services.AddHostedService<MemoryExtractionService>(sp => sp.GetRequiredService<MemoryExtractionService>());
         services.AddSingleton<MemoryStoreService>();
         services.AddHostedService<MemoryStoreService>(sp => sp.GetRequiredService<MemoryStoreService>());
+        services.AddSingleton<RecallSystem>();
     }
 }

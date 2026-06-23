@@ -11,10 +11,10 @@ public sealed class MemorySynthesisAgent : Agent<BasicContext>
 {
     public MemorySynthesisAgent(string @namespace, string agentId, IServiceProvider serviceProvider) : base(agentId)
     {
-        SearchMemoriesToolHandler.Register(@namespace, ToolRegistry, serviceProvider);
-        FetchMemoryToolHandler.Register(ToolRegistry, serviceProvider);
-        CreateMemoryToolHandler.Register(@namespace, ToolRegistry, serviceProvider);
-        DeleteMemoryToolHandler.Register(ToolRegistry, serviceProvider);
+        SearchMemoriesToolHandler<BasicContext>.Register(@namespace, ToolRegistry, serviceProvider);
+        FetchMemoryToolHandler<BasicContext>.Register(ToolRegistry, serviceProvider);
+        CreateMemoryToolHandler<BasicContext>.Register(@namespace, ToolRegistry, serviceProvider);
+        DeleteMemoryToolHandler<BasicContext>.Register(ToolRegistry, serviceProvider);
     }
 
     public override Task<AgentCallbackResult> HandleCompletion(AgentRunner<BasicContext> runner, ChatResponse response)

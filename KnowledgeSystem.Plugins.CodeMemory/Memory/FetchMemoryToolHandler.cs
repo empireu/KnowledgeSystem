@@ -6,20 +6,20 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Plugins.CodeMemory.Memory;
 
-public sealed class FetchMemoryToolHandler(
+public sealed class FetchMemoryToolHandler<TContext>(
     AgentTool tool,
     IntegerArgument memoryIdArgument,
     MemoryStoreService memoryStore
-) : ToolHandler<BasicContext>.Plain(tool)
+) : ToolHandler<TContext>.Plain(tool) where TContext : BasicContext
 {
-    public static void Register(AgentToolRegistry<BasicContext> registry, IServiceProvider serviceProvider)
+    public static void Register(AgentToolRegistry<TContext> registry, IServiceProvider serviceProvider)
     {
         var fetchTool = new ToolBuilder("fetch_memory")
             .WithDescription("Fetches the full content of a previously stored memory by its ID. Use this when a 'potentially relevant memory' summary looks useful and you want the full content.")
             .WithRequiredIntegerArgument("memory_id", "The numeric ID of the memory to fetch.", out var idArg)
             .Build();
 
-        var handler = ActivatorUtilities.CreateInstance<FetchMemoryToolHandler>(
+        var handler = ActivatorUtilities.CreateInstance<FetchMemoryToolHandler<TContext>>(
             serviceProvider,
             fetchTool,
             idArg
@@ -29,7 +29,7 @@ public sealed class FetchMemoryToolHandler(
     }
 
     public override async Task<ToolExecutionResult> ExecuteAsync(
-        AgentRunner<BasicContext> runner,
+        AgentRunner<TContext> runner,
         ArgumentExtractionResult args,
         CancellationToken cancellationToken)
     {

@@ -6,20 +6,20 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Plugins.CodeMemory.Memory;
 
-public sealed class DeleteMemoryToolHandler(
+public sealed class DeleteMemoryToolHandler<TContext>(
     AgentTool tool,
     IntegerArgument memoryIdArgument,
     MemoryStoreService memoryStore
-) : ToolHandler<BasicContext>.Plain(tool)
+) : ToolHandler<TContext>.Plain(tool) where TContext : BasicContext
 {
-    public static void Register(AgentToolRegistry<BasicContext> registry, IServiceProvider serviceProvider)
+    public static void Register<TContext>(AgentToolRegistry<TContext> registry, IServiceProvider serviceProvider) where TContext : BasicContext
     {
         var deleteTool = new ToolBuilder("delete_memory")
             .WithDescription("Deletes a memory by its ID. Use this to remove outdated, superseded, or duplicate memories after you have created a consolidated replacement.")
             .WithRequiredIntegerArgument("memory_id", "The numeric ID of the memory to delete.", out var idArg)
             .Build();
 
-        var handler = ActivatorUtilities.CreateInstance<DeleteMemoryToolHandler>(
+        var handler = ActivatorUtilities.CreateInstance<DeleteMemoryToolHandler<TContext>>(
             serviceProvider,
             deleteTool,
             idArg
@@ -29,7 +29,7 @@ public sealed class DeleteMemoryToolHandler(
     }
 
     public override async Task<ToolExecutionResult> ExecuteAsync(
-        AgentRunner<BasicContext> runner,
+        AgentRunner<TContext> runner,
         ArgumentExtractionResult args,
         CancellationToken cancellationToken)
     {

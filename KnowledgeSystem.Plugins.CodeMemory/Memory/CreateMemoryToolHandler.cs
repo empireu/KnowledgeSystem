@@ -9,15 +9,15 @@ namespace KnowledgeSystem.Plugins.CodeMemory.Memory;
 /// <summary>
 ///     Tool for the memory synthesis agent to persist a distilled memory.
 /// </summary>
-public sealed class CreateMemoryToolHandler(
+public sealed class CreateMemoryToolHandler<TContext>(
     string @namespace,
     AgentTool tool,
     StringArgument summaryArgument,
     StringArgument contentArgument,
     MemoryStoreService memoryStoreService
-) : ToolHandler<BasicContext>.Plain(tool)
+) : ToolHandler<TContext>.Plain(tool) where TContext : BasicContext
 {
-    public static void Register(string @namespace, AgentToolRegistry<BasicContext> registry, IServiceProvider serviceProvider)
+    public static void Register<TContext>(string @namespace, AgentToolRegistry<TContext> registry, IServiceProvider serviceProvider) where TContext : BasicContext
     {
         var memoryTool = new ToolBuilder("create_memory")
             .WithDescription("Creates a new memory from the conversation. Call this for each distinct, factual conclusion you can extract. The summary is a one-line description used for future retrieval; the content is the full distilled conclusion.")
@@ -25,7 +25,7 @@ public sealed class CreateMemoryToolHandler(
             .WithRequiredStringArgument("content", "Full distilled conclusion with all relevant details.", out var contentArg)
             .Build();
 
-        var handler = ActivatorUtilities.CreateInstance<CreateMemoryToolHandler>(
+        var handler = ActivatorUtilities.CreateInstance<CreateMemoryToolHandler<TContext>>(
             serviceProvider,
             @namespace,
             memoryTool,
@@ -37,7 +37,7 @@ public sealed class CreateMemoryToolHandler(
     }
 
     public override async Task<ToolExecutionResult> ExecuteAsync(
-        AgentRunner<BasicContext> runner,
+        AgentRunner<TContext> runner,
         ArgumentExtractionResult args,
         CancellationToken cancellationToken)
     {

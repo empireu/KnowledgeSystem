@@ -15,7 +15,8 @@ public class CodeMemoryPlugin(
     MemoryStoreService memoryStoreService,
     MemoryExtractionService memoryExtractionService,
     IOptions<MemorySystemConfig> config,
-    ILoggerFactory loggerFactory
+    ILoggerFactory loggerFactory,
+    RecallSystem recallSystem
 ) : IPlugin
 {
     private WebApplication? _app;
@@ -36,6 +37,7 @@ public class CodeMemoryPlugin(
         // Shared services:
         builder.Services.AddSingleton<MemoryStoreService>(_ => memoryStoreService);
         builder.Services.AddSingleton<MemoryExtractionService>(_ => memoryExtractionService);
+        builder.Services.AddSingleton<RecallSystem>(_ => recallSystem);
 
         // MCP:
         builder.Services.AddMcpServer()

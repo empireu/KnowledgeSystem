@@ -158,7 +158,7 @@ public sealed class MemoryStoreService(
 
         try
         {
-            return await _store.Db.Memories.FirstOrDefaultAsync(x => x.Id == id, cancellationToken: cancellationToken);
+            return await _store.Db.Memories.FindAsync([id], cancellationToken);
         }
         finally
         {
@@ -166,6 +166,30 @@ public sealed class MemoryStoreService(
         }
     }
 
+    public async Task<List<MemoryRecord?>> GetMemoriesAsync(IReadOnlyList<int> ids, CancellationToken cancellationToken)
+    {
+        if (_store == null)
+        {
+            throw new InvalidOperationException("Memory store not initialized");
+        }
+
+        await _store.DbSemaphore.WaitAsync(cancellationToken);
+
+        try
+        {
+            var results = await _store.Db.Memories
+                .Where(x => ids.Contains(x.Id))
+                .ToListAsync(cancellationToken: cancellationToken);
+
+            var resultMap = results.ToDictionary(x => x.Id);
+            return ids.Select(resultMap.GetValueOrDefault).ToList();
+        }
+        finally
+        {
+            _store.DbSemaphore.Release();
+        }
+    }
+    
     private const int RrfK = 60;
     
     public async Task<MemoryRecord[]> SearchAsync(string @namespace, string query, CancellationToken cancellationToken)

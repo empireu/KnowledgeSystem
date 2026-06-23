@@ -7,21 +7,21 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeSystem.Plugins.CodeMemory.Memory;
 
-public sealed class SearchMemoriesToolHandler(
+public sealed class SearchMemoriesToolHandler<TContext>(
     string @namespace,
     AgentTool tool,
     StringArgument queryArgument,
     MemoryStoreService memoryStore
-) : ToolHandler<BasicContext>.Plain(tool)
+) : ToolHandler<TContext>.Plain(tool) where TContext : BasicContext
 {
-    public static void Register(string @namespace, AgentToolRegistry<BasicContext> registry, IServiceProvider serviceProvider)
+    public static void Register(string @namespace, AgentToolRegistry<TContext> registry, IServiceProvider serviceProvider)
     {
         var searchTool = new ToolBuilder("search_memories")
             .WithDescription("Searches existing memories for the given query. Returns the top matching memories with their IDs and summaries. Use this before creating new memories to avoid duplicates.")
             .WithRequiredStringArgument("query", "The search query to find relevant memories.", out var queryArg)
             .Build();
 
-        var handler = ActivatorUtilities.CreateInstance<SearchMemoriesToolHandler>(
+        var handler = ActivatorUtilities.CreateInstance<SearchMemoriesToolHandler<TContext>>(
             serviceProvider,
             @namespace,
             searchTool,
@@ -32,7 +32,7 @@ public sealed class SearchMemoriesToolHandler(
     }
 
     public override async Task<ToolExecutionResult> ExecuteAsync(
-        AgentRunner<BasicContext> runner,
+        AgentRunner<TContext> runner,
         ArgumentExtractionResult args,
         CancellationToken cancellationToken)
     {

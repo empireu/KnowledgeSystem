@@ -40,4 +40,12 @@ public class MemorySystemConfig
     ///     Optional API key for Bearer token authentication.
     /// </summary>
     public string? ApiKey { get; set; } = null;
+    
+    [Required]
+    public ProviderConfig RecallProvider { get; set; } = null!;
+    
+    public ChatOptionsConfig Recall { get; set; } = new();
+    
+    [Required]
+    public string RecallSystemPrompt { get; set; } = null!;
 }

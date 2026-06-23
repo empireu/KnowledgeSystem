@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Text;
 using KnowledgeSystem.Plugins.CodeMemory.Memory;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
 // ReSharper disable UnusedMember.Global
@@ -9,8 +10,11 @@ namespace KnowledgeSystem.Plugins.CodeMemory;
 
 [McpServerToolType]
 public sealed class CodeMemoryTools(
+    ILogger<CodeMemoryTools> logger,
     MemoryExtractionService extractionService,
-    MemoryStoreService storeService)
+    MemoryStoreService storeService,
+    RecallSystem recallSystem
+)
 {
     [McpServerTool, Description(
         "Stores a new discovery, procedure, quirk, or lesson learned during development. " +
@@ -41,11 +45,23 @@ public sealed class CodeMemoryTools(
         "Use this first to find what's available — then call fetch_memory with the IDs you want to read in full. " +
         "Uses hybrid search (semantic + keyword) and returns the top matches. " +
         "Use dense language (e.g 'Entity implementation guide') that reads as a query.")]
-    public async Task<string> RetrieveKnowledge(
+    public async Task<string> SearchMemories(
         [Description("The project namespace to search in (e.g. 'KnowledgeSystem' or 'MyGame').")] string @namespace,
         [Description("What you need to know — describe the feature, context, or question specifically.")] string query,
         CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(@namespace))
+        {
+            logger.LogWarning("Tried to search for empty namespace");
+            return "Error: Cannot have empty namespace!";
+        }
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            logger.LogWarning("Tried to search with empty query");
+            return "Error: Cannot have empty query!";
+        }
+        
         var results = await storeService.SearchAsync(@namespace, query, ct);
 
         if (results.Length == 0)
@@ -61,7 +77,7 @@ public sealed class CodeMemoryTools(
             sb.AppendLine($"  Memory ID {m.Id}: {m.Summary}");
         }
 
-        sb.AppendLine($"\nUse fetch_memory with the desired ID to read the full content.");
+        sb.AppendLine("\nUse fetch_memory with the desired ID to read the full content.");
 
         return sb.ToString();
     }
@@ -84,8 +100,30 @@ public sealed class CodeMemoryTools(
         var sb = new StringBuilder();
         sb.AppendLine($"# Memory {memory.Id} (from {memory.Namespace})");
         sb.AppendLine(memory.Content);
-        sb.AppendLine("---");
-
         return sb.ToString();
+    }
+
+    [McpServerTool, Description(
+         "Invokes an agent that searches for relevant memories and returns all matching results. " +
+         "Use this to get all the procedures, APIs, etc. that you need for your task. " +
+         "The agent will understand natural-language queries, so decribe everything you need in one call. ")]
+    public async Task<string> RecallMemories(
+        [Description("The project namespace to search in (e.g. 'KnowledgeSystem' or 'MyGame').")] string @namespace,
+        [Description("What you need to know — describe the features, procedures, APIs, and conventions you need to recall.")] string query,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(@namespace))
+        {
+            logger.LogWarning("Tried to recall for empty namespace");
+            return "Error: Cannot have empty namespace!";
+        }
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            logger.LogWarning("Tried to recall with empty query");
+            return "Error: Cannot have empty query!";
+        }
+
+        return await recallSystem.RecallAsync(@namespace, query, ct);
     }
 }
