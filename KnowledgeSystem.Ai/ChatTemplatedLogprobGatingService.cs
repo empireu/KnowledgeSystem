@@ -75,6 +75,12 @@ public sealed class ChatTemplatedLogprobGatingService : ILogprobGatingService
     /// </summary>
     public async Task<bool> ExecuteAsync(string systemMessage, string userMessage, double threshold, CancellationToken cancellationToken)
     {
+        var probability = await ScoreAsync(systemMessage, userMessage, cancellationToken);
+        return probability >= threshold;
+    }
+
+    public async Task<double> ScoreAsync(string systemMessage, string userMessage, CancellationToken cancellationToken)
+    {
         var prompt = _formatter(systemMessage, userMessage);
 
         var requestBody = new Request
@@ -127,12 +133,7 @@ public sealed class ChatTemplatedLogprobGatingService : ILogprobGatingService
             }
         }
 
-        if (!yesLogprob.HasValue)
-        {
-            return false;
-        }
-
-        return Math.Exp(yesLogprob.Value) >= threshold;
+        return yesLogprob.HasValue ? Math.Exp(yesLogprob.Value) : 0.0;
     }
 
     private sealed class Request

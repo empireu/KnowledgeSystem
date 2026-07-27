@@ -32,35 +32,36 @@ public static class ServiceCollectionExtensions
     
     extension(IHostBuilder hostBuilder)
     {
-        internal IHostBuilder WithIntegrationServices() => hostBuilder.ConfigureServices((context, services) =>
-        {
-            var config = context.GetCoreConfig();
+        internal IHostBuilder WithIntegrationServices() =>
+            hostBuilder
+                .ConfigureServices((context, services) =>
+                {
+                    var config = context.GetCoreConfig();
 
-            if (!config.ProvideDiscordIntegration)
-            {
-                return;
-            }
-            
-            // Conversation manager:
-            services.AddSingleton<ConversationManager>();
-            services.AddSingleton<IConversationManager>(sp => sp.GetRequiredService<ConversationManager>());
-            services.AddHostedService(sp => sp.GetRequiredService<ConversationManager>());
+                    if (!config.ProvideDiscordIntegration)
+                    {
+                        return;
+                    }
+                    
+                    // Conversation manager:
+                    services.AddSingleton<ConversationManager>();
+                    services.AddSingleton<IConversationManager>(sp => sp.GetRequiredService<ConversationManager>());
+                    services.AddHostedService(sp => sp.GetRequiredService<ConversationManager>());
 
-            // Run tracker:
-            services.AddSingleton<ResponseTracker>();
-            services.AddSingleton<IResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
-            services.AddHostedService<ResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
+                    // Run tracker:
+                    services.AddSingleton<ResponseTracker>();
+                    services.AddSingleton<IResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
+                    services.AddHostedService<ResponseTracker>(sp => sp.GetRequiredService<ResponseTracker>());
 
-            services.AddDiscordGateway(options =>
-            {
-                options.Intents = GatewayIntents.GuildMessages | GatewayIntents.MessageContent | GatewayIntents.Guilds;
-            });
+                    services.AddDiscordGateway(options =>
+                    {
+                        options.Intents = GatewayIntents.GuildMessages | GatewayIntents.MessageContent | GatewayIntents.Guilds;
+                    });
 
-            // Message handler:
-            services.AddGatewayHandler<ExternalMessageHandler>();
-
-            hostBuilder.UseApplicationCommands();
-        });
+                    // Message handler:
+                    services.AddGatewayHandler<ExternalMessageHandler>();
+                })
+                .UseApplicationCommands();
 
         internal IHostBuilder WithCoreServices() => hostBuilder.ConfigureServices((context, services) =>
         {
