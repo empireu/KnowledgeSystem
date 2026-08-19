@@ -40,6 +40,9 @@ public class OreDbDbContext(DbContextOptions<OreDbDbContext> options) : DbContex
                 .IsRequired()
                 .HasMaxLength(128);
 
+            entity.Property(a => a.IsMined)
+                .IsRequired();
+
             entity.HasIndex(a => new { a.GameInstanceId, a.Name })
                 .IsUnique();
 
@@ -61,7 +64,14 @@ public class OreDbDbContext(DbContextOptions<OreDbDbContext> options) : DbContex
                 .IsRequired()
                 .HasMaxLength(64);
 
+            entity.Property(d => d.GameInstanceId)
+                .IsRequired();
+
             entity.HasIndex(d => d.OreType);
+
+            entity.HasIndex(d => new { d.GameInstanceId, d.OreType, d.IsEstimated });
+
+            entity.HasIndex(d => new { d.AsteroidId, d.OreType, d.IsEstimated });
 
             entity.HasOne(d => d.Asteroid)
                 .WithMany(a => a.OreDeposits)

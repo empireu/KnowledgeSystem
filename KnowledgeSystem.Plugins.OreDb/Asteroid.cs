@@ -18,6 +18,8 @@ public class Asteroid
 
     public float Size { get; set; }
 
+    public bool IsMined { get; set; }
+
     public GameInstance GameInstance { get; set; } = null!;
 
     public List<OreDeposit> OreDeposits { get; set; } = [];

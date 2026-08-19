@@ -14,5 +14,8 @@ public class OreDbStartup : IPluginStartup
 
         services.AddSingleton<OreDbStores>();
         services.AddHostedService<OreDbStores>(sp => sp.GetRequiredService<OreDbStores>());
+
+        services.AddSingleton<OreDbImporter>();
+        services.AddHostedService<OreDbImporter>(sp => sp.GetRequiredService<OreDbImporter>());
     }
 }

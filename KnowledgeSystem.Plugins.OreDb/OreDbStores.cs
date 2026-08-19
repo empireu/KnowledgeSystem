@@ -1,3 +1,5 @@
+using System.Threading.Channels;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -37,64 +39,109 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
     }
 
     /// <summary>
-    ///     Replaces all asteroid data for the named instance with the given snapshot.
+    ///     Replaces all asteroid data for the named instance with the given data.
     ///     The instance is created if it does not exist yet.
     /// </summary>
-    public async Task<int> ImportInstanceAsync(string instanceName, IReadOnlyList<ImportedAsteroid> asteroids, CancellationToken cancellationToken)
+    public async Task<int> ImportInstanceAsync(string instanceName, ChannelReader<ImportedAsteroid> reader, CancellationToken cancellationToken)
     {
-        var db = GetDb();
+        instanceName = instanceName.ToLowerInvariant();
 
         await _dbSemaphore.WaitAsync(cancellationToken);
 
         try
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            await using var connection = new SqliteConnection($"Data Source={options.Value.DatabasePath};Foreign Keys=True");
+            await connection.OpenAsync(cancellationToken);
 
-            var gameInstance = await db.GameInstances
-                .FirstOrDefaultAsync(i => i.Name == instanceName, cancellationToken);
-
-            if (gameInstance == null)
+            await using (var pragma = connection.CreateCommand())
             {
-                gameInstance = new GameInstance { Name = instanceName };
-                db.GameInstances.Add(gameInstance);
+                pragma.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
+                await pragma.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            db.Asteroids.RemoveRange(db.Asteroids.Where(a => a.GameInstanceId == gameInstance.Id));
+            var gameInstanceId = await GetOrCreateInstanceAsync(connection, instanceName, cancellationToken);
 
-            foreach (var imported in asteroids)
+            await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+
+            await using (var delete = connection.CreateCommand())
             {
-                var asteroid = new Asteroid
-                {
-                    GameInstance = gameInstance,
-                    Name = imported.Name,
-                    X = imported.X,
-                    Y = imported.Y,
-                    Z = imported.Z,
-                    Size = imported.Size
-                };
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM Asteroids WHERE GameInstanceId = @gi;";
+                delete.Parameters.Add(new SqliteParameter("@gi", gameInstanceId));
+                await delete.ExecuteNonQueryAsync(cancellationToken);
+            }
 
-                foreach (var ore in imported.OreDeposits)
+            await using (var drop = connection.CreateCommand())
+            {
+                drop.Transaction = transaction;
+                drop.CommandText = DropIndexesSql;
+                await drop.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            var count = 0;
+
+            await using (var insertAsteroid = connection.CreateCommand())
+            await using (var insertDeposit = connection.CreateCommand())
+            {
+                insertAsteroid.Transaction = transaction;
+                insertAsteroid.CommandText = "INSERT INTO Asteroids (GameInstanceId, Name, X, Y, Z, Size, IsMined) VALUES (@gi, @name, @x, @y, @z, @size, 0) RETURNING Id;";
+                var asteroidInstance = insertAsteroid.Parameters.Add(new SqliteParameter("@gi", gameInstanceId));
+                var name = insertAsteroid.Parameters.Add(new SqliteParameter("@name", ""));
+                var x = insertAsteroid.Parameters.Add(new SqliteParameter("@x", 0.0));
+                var y = insertAsteroid.Parameters.Add(new SqliteParameter("@y", 0.0));
+                var z = insertAsteroid.Parameters.Add(new SqliteParameter("@z", 0.0));
+                var size = insertAsteroid.Parameters.Add(new SqliteParameter("@size", 0f));
+
+                insertDeposit.Transaction = transaction;
+                insertDeposit.CommandText = "INSERT INTO OreDeposits (AsteroidId, GameInstanceId, OreType, Volume, X, Y, Z, IsEstimated) VALUES (@aid, @gi, @ore, @vol, @dx, @dy, @dz, @est);";
+                var asteroidId = insertDeposit.Parameters.Add(new SqliteParameter("@aid", 0L));
+                var depositInstance = insertDeposit.Parameters.Add(new SqliteParameter("@gi", gameInstanceId));
+                var ore = insertDeposit.Parameters.Add(new SqliteParameter("@ore", ""));
+                var volume = insertDeposit.Parameters.Add(new SqliteParameter("@vol", 0.0));
+                var dx = insertDeposit.Parameters.Add(new SqliteParameter("@dx", 0.0));
+                var dy = insertDeposit.Parameters.Add(new SqliteParameter("@dy", 0.0));
+                var dz = insertDeposit.Parameters.Add(new SqliteParameter("@dz", 0.0));
+                var estimated = insertDeposit.Parameters.Add(new SqliteParameter("@est", 0L));
+
+                await foreach (var imported in reader.ReadAllAsync(cancellationToken))
                 {
-                    asteroid.OreDeposits.Add(new OreDeposit
+                    name.Value = imported.Name;
+                    x.Value = imported.X;
+                    y.Value = imported.Y;
+                    z.Value = imported.Z;
+                    size.Value = imported.Size;
+
+                    var id = Convert.ToInt64(await insertAsteroid.ExecuteScalarAsync(cancellationToken));
+
+                    for (var index = 0; index < imported.OreDeposits.Count; index++)
                     {
-                        OreType = ore.OreType,
-                        Volume = ore.Volume,
-                        X = ore.X,
-                        Y = ore.Y,
-                        Z = ore.Z,
-                        IsEstimated = ore.IsEstimated
-                    });
-                }
+                        var deposit = imported.OreDeposits[index];
+                        asteroidId.Value = id;
+                        ore.Value = deposit.OreType.ToLowerInvariant();
+                        volume.Value = deposit.Volume;
+                        dx.Value = deposit.X;
+                        dy.Value = deposit.Y;
+                        dz.Value = deposit.Z;
+                        estimated.Value = deposit.IsEstimated ? 1L : 0L;
+                        await insertDeposit.ExecuteNonQueryAsync(cancellationToken);
+                    }
 
-                db.Asteroids.Add(asteroid);
+                    count++;
+                }
             }
 
-            await db.SaveChangesAsync(cancellationToken);
+            await using (var create = connection.CreateCommand())
+            {
+                create.Transaction = transaction;
+                create.CommandText = CreateIndexesSql;
+                await create.ExecuteNonQueryAsync(cancellationToken);
+            }
+
             await transaction.CommitAsync(cancellationToken);
 
-            logger.LogInformation("Imported {count} asteroids for instance {instance}", asteroids.Count, instanceName);
+            logger.LogInformation("Imported {count} asteroids for instance {instance}", count, instanceName);
 
-            return asteroids.Count;
+            return count;
         }
         finally
         {
@@ -102,9 +149,45 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
         }
     }
 
+    private static async Task<int> GetOrCreateInstanceAsync(SqliteConnection connection, string instanceName, CancellationToken cancellationToken)
+    {
+        await using (var find = connection.CreateCommand())
+        {
+            find.CommandText = "SELECT Id FROM GameInstances WHERE Name = @name;";
+            find.Parameters.Add(new SqliteParameter("@name", instanceName));
+            var existing = await find.ExecuteScalarAsync(cancellationToken);
+            if (existing != null)
+            {
+                return Convert.ToInt32(existing);
+            }
+        }
+
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.CommandText = "INSERT INTO GameInstances (Name) VALUES (@name) RETURNING Id;";
+            insert.Parameters.Add(new SqliteParameter("@name", instanceName));
+            return Convert.ToInt32(await insert.ExecuteScalarAsync(cancellationToken));
+        }
+    }
+
+    private const string DropIndexesSql =
+        "DROP INDEX IF EXISTS IX_Asteroids_GameInstanceId_Name; " +
+        "DROP INDEX IF EXISTS IX_Asteroids_GameInstanceId; " +
+        "DROP INDEX IF EXISTS IX_OreDeposits_AsteroidId; " +
+        "DROP INDEX IF EXISTS IX_OreDeposits_OreType; " +
+        "DROP INDEX IF EXISTS IX_OreDeposits_GameInstanceId_OreType_IsEstimated; " +
+        "DROP INDEX IF EXISTS IX_OreDeposits_AsteroidId_OreType_IsEstimated;";
+
+    private const string CreateIndexesSql =
+        "CREATE UNIQUE INDEX IF NOT EXISTS IX_Asteroids_GameInstanceId_Name ON Asteroids(GameInstanceId, Name); " +
+        "CREATE INDEX IF NOT EXISTS IX_Asteroids_GameInstanceId ON Asteroids(GameInstanceId); " +
+        "CREATE INDEX IF NOT EXISTS IX_OreDeposits_AsteroidId ON OreDeposits(AsteroidId); " +
+        "CREATE INDEX IF NOT EXISTS IX_OreDeposits_OreType ON OreDeposits(OreType); " +
+        "CREATE INDEX IF NOT EXISTS IX_OreDeposits_GameInstanceId_OreType_IsEstimated ON OreDeposits(GameInstanceId, OreType, IsEstimated); " +
+        "CREATE INDEX IF NOT EXISTS IX_OreDeposits_AsteroidId_OreType_IsEstimated ON OreDeposits(AsteroidId, OreType, IsEstimated);";
+
     /// <summary>
-    ///     Counts non-estimated deposits of the ore in the instance and returns the largest
-    ///     deposit volume. Returns null if the instance does not exist.
+    ///     Counts non-estimated deposits of the ore in the instance and returns the largest deposit volume. Returns null if the instance does not exist.
     /// </summary>
     public async Task<OreQueryResult?> QueryAsync(string instanceName, string ore, CancellationToken cancellationToken)
     {
@@ -114,19 +197,15 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
 
         try
         {
-            var gameInstance = await db.GameInstances
-                .FirstOrDefaultAsync(i => i.Name == instanceName, cancellationToken);
+            var gameInstance = await db.GameInstances.FirstOrDefaultAsync(i => i.Name == instanceName, cancellationToken);
 
             if (gameInstance == null)
             {
                 return null;
             }
-
-            var deposits = db.OreDeposits.Where(d =>
-                d.Asteroid.GameInstanceId == gameInstance.Id
-                && d.OreType == ore
-                && !d.IsEstimated
-            );
+            
+            var deposits = db.OreDeposits
+                .Where(d => d.GameInstanceId == gameInstance.Id && d.OreType == ore && !d.IsEstimated);
 
             var count = await deposits.CountAsync(cancellationToken);
             var maxVolume = await deposits.MaxAsync(d => (double?)d.Volume, cancellationToken) ?? 0.0;
@@ -140,7 +219,7 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
     }
 
     /// <summary>
-    ///     Returns the asteroid in the instance nearest to the given coordinates whose total non-estimated volume of the ore exceeds the minimum.
+    ///     Returns the asteroid in the instance nearest to the given coordinates whose total non-estimated volume of the ore exceeds the minimum, and marks it as mined so later pops skip it.
     ///     Returns null if the instance does not exist or no asteroid qualifies.
     /// </summary>
     public async Task<OrePopResult?> PopAsync(string instanceName, double x, double y, double z, string ore, double minVolume, CancellationToken cancellationToken)
@@ -160,23 +239,20 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
             }
 
             var candidates = await db.Asteroids
-                .Where(a =>
-                    a.GameInstanceId == gameInstance.Id
-                    && a.OreDeposits.Any(d => d.OreType == ore && !d.IsEstimated))
-                .Select(a => new
-                {
-                    a.Name,
-                    a.X,
-                    a.Y,
-                    a.Z,
-                    a.Size,
-                    TotalVolume = a.OreDeposits
-                        .Where(d => d.OreType == ore && !d.IsEstimated)
-                        .Sum(d => d.Volume)
-                })
+                .Where(a => a.GameInstanceId == gameInstance.Id && !a.IsMined && a.OreDeposits.Any(d => d.OreType == ore && !d.IsEstimated))
+                .Select(a => 
+                    new
+                    {
+                        a.Id, a.Name, a.X, a.Y, a.Z, a.Size,
+                        TotalVolume = a.OreDeposits
+                            .Where(d => d.OreType == ore && !d.IsEstimated)
+                            .Sum(d => d.Volume)
+                    }
+                )
                 .ToListAsync(cancellationToken);
 
             OrePopResult? best = null;
+            var bestId = 0;
             var bestSquaredDistance = double.MaxValue;
 
             for (var index = 0; index < candidates.Count; index++)
@@ -199,6 +275,7 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
                 }
 
                 bestSquaredDistance = squaredDistance;
+                bestId = candidate.Id;
                 best = new OrePopResult(
                     candidate.Name,
                     candidate.X,
@@ -206,32 +283,22 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
                     candidate.Z,
                     candidate.Size,
                     candidate.TotalVolume,
-                    Math.Sqrt(squaredDistance));
+                    Math.Sqrt(squaredDistance)
+                );
+            }
+
+            if (best != null)
+            {
+                var mined = await db.Asteroids.FindAsync([bestId], cancellationToken);
+                
+                if (mined != null)
+                {
+                    mined.IsMined = true;
+                    await db.SaveChangesAsync(cancellationToken);
+                }
             }
 
             return best;
-        }
-        finally
-        {
-            _dbSemaphore.Release();
-        }
-    }
-
-    /// <summary>
-    ///     Names of all imported instances.
-    /// </summary>
-    public async Task<IReadOnlyList<string>> ListInstancesAsync(CancellationToken cancellationToken)
-    {
-        var db = GetDb();
-
-        await _dbSemaphore.WaitAsync(cancellationToken);
-
-        try
-        {
-            return await db.GameInstances
-                .OrderBy(i => i.Name)
-                .Select(i => i.Name)
-                .ToListAsync(cancellationToken);
         }
         finally
         {

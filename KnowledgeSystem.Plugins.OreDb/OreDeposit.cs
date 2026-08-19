@@ -8,6 +8,8 @@ public class OreDeposit
 
     public int AsteroidId { get; set; }
 
+    public int GameInstanceId { get; set; }
+
     public required string OreType { get; set; }
 
     public double Volume { get; set; }
