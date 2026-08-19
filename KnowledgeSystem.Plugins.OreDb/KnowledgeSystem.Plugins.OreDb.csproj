@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net11.0</TargetFramework>
@@ -7,15 +7,15 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\KnowledgeSystem.PluginLoader\KnowledgeSystem.PluginLoader.csproj" />
-      <ProjectReference Include="..\..\KnowledgeSystem.Plugins.Library\KnowledgeSystem.Plugins.Library.csproj" />
-      <ProjectReference Include="..\KnowledgeSystem.Api\KnowledgeSystem.Api.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.PluginLoader\KnowledgeSystem.PluginLoader.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Plugins.Library\KnowledgeSystem.Plugins.Library.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Api\KnowledgeSystem.Api.csproj" />
     </ItemGroup>
 
-
     <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="11.0.0-preview.4.26230.115" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.0-preview.4.26230.115" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="11.0.0-preview.3.26207.106" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0-preview.4.26230.115" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0-preview.7.26381.103" />
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="11.0.0-preview.3.26207.106" />
@@ -24,5 +24,9 @@
         <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
         <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     </ItemGroup>
+
+    <Target Name="CopyToPluginsFolder" AfterTargets="Build">
+        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="..\KnowledgeSystem\bin\$(Configuration)\$(TargetFramework)\plugins\" SkipUnchangedFiles="true" />
+    </Target>
 
 </Project>

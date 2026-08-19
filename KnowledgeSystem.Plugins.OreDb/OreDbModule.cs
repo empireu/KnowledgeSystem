@@ -1,6 +1,9 @@
-﻿namespace KnowledgeSystem.Plugins.OreDb;
+using NetCord.Services.ApplicationCommands;
 
-public class OreDbModule
+// ReSharper disable UnusedMember.Global
+
+namespace KnowledgeSystem.Plugins.OreDb;
+
+public class OreDbModule : ApplicationCommandModule<ApplicationCommandContext>
 {
-    
 }
