@@ -46,6 +46,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness", "Harness\Harness.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Plugins.CodeMemory", "KnowledgeSystem.Plugins.CodeMemory\KnowledgeSystem.Plugins.CodeMemory.csproj", "{DCB471AD-706E-42F8-A669-505EDFD81542}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Plugins.OreDb", "KnowledgeSystem.Plugins.OreDb\KnowledgeSystem.Plugins.OreDb.csproj", "{45C8A9A9-5158-41BF-AC63-88AD1E7C4F20}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -128,6 +130,10 @@ Global
 		{DCB471AD-706E-42F8-A669-505EDFD81542}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DCB471AD-706E-42F8-A669-505EDFD81542}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DCB471AD-706E-42F8-A669-505EDFD81542}.Release|Any CPU.Build.0 = Release|Any CPU
+		{45C8A9A9-5158-41BF-AC63-88AD1E7C4F20}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{45C8A9A9-5158-41BF-AC63-88AD1E7C4F20}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{45C8A9A9-5158-41BF-AC63-88AD1E7C4F20}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{45C8A9A9-5158-41BF-AC63-88AD1E7C4F20}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
@@ -144,5 +150,6 @@ Global
 		{F488C43B-F07B-45C4-AC06-7BA22698B3BA} = {FBA93E4B-4022-41B4-98DB-65E3A1C1FA7F}
 		{FEF386A4-C5ED-420A-86C0-F7381690D9A5} = {FBA93E4B-4022-41B4-98DB-65E3A1C1FA7F}
 		{DCB471AD-706E-42F8-A669-505EDFD81542} = {C56E4E3E-D14E-4182-85DA-63FD5BD73CD9}
+		{45C8A9A9-5158-41BF-AC63-88AD1E7C4F20} = {C56E4E3E-D14E-4182-85DA-63FD5BD73CD9}
 	EndGlobalSection
 EndGlobal
