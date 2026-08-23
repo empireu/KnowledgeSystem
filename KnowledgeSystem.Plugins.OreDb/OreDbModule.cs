@@ -29,7 +29,7 @@ public class OreDbModule(OreDbStores stores) : ApplicationCommandModule<Applicat
 
         var content = result.DepositCount == 0
             ? $"No `{ore}` deposits found in instance **\"{instance}\"**."
-            : $"`{ore}` in **\"{instance}\"**: __{result.DepositCount}__ deposits, largest __{FormatVolume(result.MaxVolume)} m³__.";
+            : $"`{ore}` in **\"{instance}\"**: __{result.DepositCount}__ deposits, largest deposit __{FormatVolume(result.LargestDeposit)} m³__, richest asteroid __{FormatVolume(result.LargestSum)} m³__.";
 
         await Context.Interaction.ModifyResponseAsync(m => m.Content = content);
     }
@@ -38,8 +38,9 @@ public class OreDbModule(OreDbStores stores) : ApplicationCommandModule<Applicat
     public async Task PopAsync(
         [SlashCommandParameter(Name = "instance", Description = "The server instance, e.g. Greeks")] string instance,
         [SlashCommandParameter(Name = "gps", Description = "GPS string")] string gps,
-        [SlashCommandParameter(Name = "ore", Description = "The ore type, e.g. uraninite_01")] string ore,
-        [SlashCommandParameter(Name = "minimum_volume", Description = "Minimum total ore volume in cubic meters")] double minimumVolume)
+        [SlashCommandParameter(Name = "ore", Description = "The ore type, e.g. Uranium")] string ore,
+        [SlashCommandParameter(Name = "minimum_volume", Description = "Minimum ore volume in cubic meters")] double minimumVolume,
+        [SlashCommandParameter(Name = "mode", Description = "Measure: sum of all deposits on the asteroid (default) or largest single deposit")] PopMode mode = PopMode.Sum)
     {
         instance = instance.ToLowerInvariant();
         ore = ore.ToLowerInvariant();
@@ -52,7 +53,7 @@ public class OreDbModule(OreDbStores stores) : ApplicationCommandModule<Applicat
             return;
         }
 
-        var result = await stores.PopAsync(instance, x, y, z, ore, minimumVolume, CancellationToken.None);
+        var result = await stores.PopAsync(instance, x, y, z, ore, minimumVolume, mode, CancellationToken.None);
 
         if (result == null)
         {
@@ -60,14 +61,15 @@ public class OreDbModule(OreDbStores stores) : ApplicationCommandModule<Applicat
             return;
         }
 
-        var content = $"Closest: \"{result.AsteroidName}\" - {FormatVolume(result.TotalVolume)} m³ of `{ore}`, {FormatVolume(result.Distance)} m away. Marked as mined.\n```\n{CreateGps(instance, ore, result)}\n```";
+        var measureLabel = mode == PopMode.Sum ? "total" : "largest deposit";
+        var content = $"Closest: \"{result.AsteroidName}\" - {FormatVolume(result.Volume)} m³ {measureLabel} of `{ore}`, {FormatVolume(result.Distance)} m away. Marked as mined.\n```\n{CreateGps(instance, ore, result)}\n```";
 
         await Context.Interaction.ModifyResponseAsync(m => m.Content = content);
     }
 
     private static string CreateGps(string instance, string ore, OrePopResult result)
     {
-        var name = $"{instance} {ore} {result.TotalVolume:0}";
+        var name = $"{instance} {ore} {result.Volume:0}";
         return $"GPS:{name}:{FormatCoordinate(result.X)}:{FormatCoordinate(result.Y)}:{FormatCoordinate(result.Z)}:#00FF00:";
     }
 

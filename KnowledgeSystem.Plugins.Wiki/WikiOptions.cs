@@ -26,6 +26,8 @@ public class WikiOptions
     [Required]
     public string RepoPath { get; set; } = null!;
 
+    public string? CodeReposPath { get; set; }
+
     [Required]
     public string SystemPromptFile { get; set; } = null!;
 

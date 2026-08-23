@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -12,6 +12,7 @@
       <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Plugins.Library\KnowledgeSystem.Plugins.Library.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Plugins.Wiki\KnowledgeSystem.Plugins.Wiki.csproj" />
     </ItemGroup>
 
 </Project>

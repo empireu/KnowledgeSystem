@@ -4,13 +4,23 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NetCord.Services.ApplicationCommands;
 // ReSharper disable ForCanBeConvertedToForeach
 
 namespace KnowledgeSystem.Plugins.OreDb;
 
-public sealed record OreQueryResult(string InstanceName, string Ore, int DepositCount, double MaxVolume);
+public enum PopMode
+{
+    [SlashCommandChoice(Name = "Sum")]
+    Sum = 0,
 
-public sealed record OrePopResult(string AsteroidName, double X, double Y, double Z, float Size, double TotalVolume, double Distance);
+    [SlashCommandChoice(Name = "Deposit")]
+    Deposit = 1
+}
+
+public sealed record OreQueryResult(string InstanceName, string Ore, int DepositCount, double LargestDeposit, double LargestSum);
+
+public sealed record OrePopResult(string AsteroidName, double X, double Y, double Z, float Size, double Volume, double Distance);
 
 public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptions> options ) : IHostedService
 {
@@ -187,7 +197,9 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
         "CREATE INDEX IF NOT EXISTS IX_OreDeposits_AsteroidId_OreType_IsEstimated ON OreDeposits(AsteroidId, OreType, IsEstimated);";
 
     /// <summary>
-    ///     Counts non-estimated deposits of the ore in the instance and returns the largest deposit volume. Returns null if the instance does not exist.
+    ///     Counts non-estimated deposits of the ore on unmined asteroids in the instance and
+    ///     returns the largest single deposit and the largest asteroid total. Returns null if
+    ///     the instance does not exist.
     /// </summary>
     public async Task<OreQueryResult?> QueryAsync(string instanceName, string ore, CancellationToken cancellationToken)
     {
@@ -203,14 +215,24 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
             {
                 return null;
             }
-            
+
             var deposits = db.OreDeposits
-                .Where(d => d.GameInstanceId == gameInstance.Id && d.OreType == ore && !d.IsEstimated);
+                .Where(d => d.GameInstanceId == gameInstance.Id && !d.Asteroid.IsMined && d.OreType == ore && !d.IsEstimated);
 
             var count = await deposits.CountAsync(cancellationToken);
-            var maxVolume = await deposits.MaxAsync(d => (double?)d.Volume, cancellationToken) ?? 0.0;
+            var largestDeposit = await deposits.MaxAsync(d => (double?)d.Volume, cancellationToken) ?? 0.0;
 
-            return new OreQueryResult(instanceName, ore, count, maxVolume);
+            var largestSum = await db.Asteroids
+                .Where(a =>
+                    a.GameInstanceId == gameInstance.Id
+                    && !a.IsMined
+                    && a.OreDeposits.Any(d => d.OreType == ore && !d.IsEstimated))
+                .Select(a => (double?)a.OreDeposits
+                    .Where(d => d.OreType == ore && !d.IsEstimated)
+                    .Sum(d => d.Volume))
+                .MaxAsync(cancellationToken) ?? 0.0;
+
+            return new OreQueryResult(instanceName, ore, count, largestDeposit, largestSum);
         }
         finally
         {
@@ -219,10 +241,12 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
     }
 
     /// <summary>
-    ///     Returns the asteroid in the instance nearest to the given coordinates whose total non-estimated volume of the ore exceeds the minimum, and marks it as mined so later pops skip it.
-    ///     Returns null if the instance does not exist or no asteroid qualifies.
+    ///     Returns the asteroid in the instance nearest to the given coordinates whose
+    ///     qualifying ore volume (total of all deposits, or largest single deposit in deposit
+    ///     mode) exceeds the minimum, and marks it as mined so later pops skip it. Returns
+    ///     null if the instance does not exist or no asteroid qualifies.
     /// </summary>
-    public async Task<OrePopResult?> PopAsync(string instanceName, double x, double y, double z, string ore, double minVolume, CancellationToken cancellationToken)
+    public async Task<OrePopResult?> PopAsync(string instanceName, double x, double y, double z, string ore, double minVolume, PopMode mode, CancellationToken cancellationToken)
     {
         var db = GetDb();
 
@@ -246,7 +270,10 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
                         a.Id, a.Name, a.X, a.Y, a.Z, a.Size,
                         TotalVolume = a.OreDeposits
                             .Where(d => d.OreType == ore && !d.IsEstimated)
-                            .Sum(d => d.Volume)
+                            .Sum(d => d.Volume),
+                        LargestDeposit = a.OreDeposits
+                            .Where(d => d.OreType == ore && !d.IsEstimated)
+                            .Max(d => (double?)d.Volume) ?? 0.0
                     }
                 )
                 .ToListAsync(cancellationToken);
@@ -258,7 +285,8 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
             for (var index = 0; index < candidates.Count; index++)
             {
                 var candidate = candidates[index];
-                if (candidate.TotalVolume <= minVolume)
+                var measure = mode == PopMode.Sum ? candidate.TotalVolume : candidate.LargestDeposit;
+                if (measure <= minVolume)
                 {
                     continue;
                 }
@@ -282,7 +310,7 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
                     candidate.Y,
                     candidate.Z,
                     candidate.Size,
-                    candidate.TotalVolume,
+                    measure,
                     Math.Sqrt(squaredDistance)
                 );
             }
@@ -295,6 +323,20 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
                 {
                     mined.IsMined = true;
                     await db.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            if (best != null && mode == PopMode.Deposit)
+            {
+                var deposit = await db.OreDeposits
+                    .Where(d => d.AsteroidId == bestId && d.OreType == ore && !d.IsEstimated)
+                    .OrderByDescending(d => d.Volume)
+                    .Select(d => new { d.X, d.Y, d.Z })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (deposit != null)
+                {
+                    best = best with { X = deposit.X, Y = deposit.Y, Z = deposit.Z };
                 }
             }
 

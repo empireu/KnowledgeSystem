@@ -7,6 +7,7 @@ using KnowledgeSystem.Plugins.Library.Tools.FindFiles;
 using KnowledgeSystem.Plugins.Library.Tools.GrepContent;
 using KnowledgeSystem.Plugins.Library.Tools.ListDir;
 using KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
+using KnowledgeSystem.Plugins.Wiki.CodeRag;
 using KnowledgeSystem.Plugins.Wiki.Memory;
 using KnowledgeSystem.Plugins.Wiki.PeerReview;
 using KnowledgeSystem.Retrieval.Api.Store;
@@ -74,6 +75,15 @@ public sealed class WikiAgent : Agent<BasicContext>
             serviceProvider,
             new FetchContextToolConfig()
         );
+        
+        var codeReposFileSystem = serviceProvider.GetService<CodeReposFileSystem>();
+
+        if (codeReposFileSystem != null)
+        {
+            CodeFindFilesToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeFindFilesToolConfig());
+            CodeReadFileToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeReadFileToolConfig());
+            CodeGrepToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeGrepToolConfig());
+        }
         
         if (options is { ReviewProvider: not null, ReviewSystemPromptFile: not null })
         {

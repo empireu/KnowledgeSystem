@@ -1,4 +1,5 @@
-﻿using KnowledgeSystem.PluginLoader;
+using KnowledgeSystem.PluginLoader;
+using KnowledgeSystem.Plugins.Wiki.CodeRag;
 using KnowledgeSystem.Plugins.Wiki.Memory;
 using KnowledgeSystem.Plugins.Wiki.Wiki;
 using Microsoft.Extensions.Configuration;
@@ -33,6 +34,11 @@ public class WikiPluginStartup : IPluginStartup
             services.AddSingleton<IMemoryExtractionService>(sp => sp.GetRequiredService<MemoryExtractionService>());
             services.AddSingleton<MemoryStoreService>();
             services.AddHostedService<MemoryStoreService>(sp => sp.GetRequiredService<MemoryStoreService>());
+        }
+        
+        if (config?.CodeReposPath != null)
+        {
+            services.AddSingleton(new CodeReposFileSystem(config.CodeReposPath));
         }
     }
 }
