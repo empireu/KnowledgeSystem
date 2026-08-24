@@ -82,7 +82,8 @@ public sealed class WikiAgent : Agent<BasicContext>
         {
             CodeFindFilesToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeFindFilesToolConfig());
             CodeReadFileToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeReadFileToolConfig());
-            CodeGrepToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeGrepToolConfig());
+            // CodeGrepToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeGrepToolConfig());
+            CodeRipgrepToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeRipgrepToolConfig());
         }
         
         if (options is { ReviewProvider: not null, ReviewSystemPromptFile: not null })
