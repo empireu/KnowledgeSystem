@@ -6,7 +6,7 @@ namespace KnowledgeSystem.Discord.Conversation;
 
 public sealed class ActiveConversation : IActiveConversation, IDisposable
 {
-    private static readonly TimeSpan TimeoutDuration = TimeSpan.FromMinutes(4);
+    private static readonly TimeSpan TimeoutDuration = TimeSpan.FromMinutes(30);
 
     private readonly ILogger<ActiveConversation> _logger;
     private readonly SemaphoreSlim _runLock = new(1, 1);
