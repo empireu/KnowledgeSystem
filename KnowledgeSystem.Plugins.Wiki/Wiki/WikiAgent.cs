@@ -85,6 +85,11 @@ public sealed class WikiAgent : Agent<BasicContext>
             // CodeGrepToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeGrepToolConfig());
             CodeRipgrepToolHandler.Register(ToolRegistry, codeReposFileSystem, serviceProvider, new CodeRipgrepToolConfig());
         }
+
+        if (options.CodeDllsDir != null)
+        {
+            CodeDotnetripToolHandler.Register(ToolRegistry, serviceProvider, new CodeDotnetripToolConfig { DllsDir = options.CodeDllsDir });
+        }
         
         if (options is { ReviewProvider: not null, ReviewSystemPromptFile: not null })
         {
