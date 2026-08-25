@@ -7,6 +7,7 @@ using KnowledgeSystem.Plugins.Library.Tools.FindFiles;
 using KnowledgeSystem.Plugins.Library.Tools.GrepContent;
 using KnowledgeSystem.Plugins.Library.Tools.ListDir;
 using KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
+using KnowledgeSystem.Plugins.Library.Tools.WriteAttachment;
 using KnowledgeSystem.Plugins.Wiki.CodeRag;
 using KnowledgeSystem.Plugins.Wiki.Memory;
 using KnowledgeSystem.Plugins.Wiki.PeerReview;
@@ -90,6 +91,7 @@ public sealed class WikiAgent : Agent<BasicContext>
         {
             CodeDotnetripToolHandler.Register(ToolRegistry, serviceProvider, new CodeDotnetripToolConfig { DllsDir = options.CodeDllsDir });
         }
+        WriteAttachmentToolHandler.Register(ToolRegistry, serviceProvider);
         
         if (options is { ReviewProvider: not null, ReviewSystemPromptFile: not null })
         {

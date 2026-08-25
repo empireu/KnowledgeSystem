@@ -18,12 +18,13 @@ public sealed class ChannelMessageTarget(RestClient restClient, ulong channelId,
         await restClient.ModifyMessageAsync(channelId, messageId, m => m.Content = content, cancellationToken: cancellationToken);
     }
 
-    public async Task SetEmbedAsync(EmbedProperties embed, CancellationToken cancellationToken = default)
+    public async Task SetEmbedAsync(EmbedProperties embed, IReadOnlyList<MessageAttachment>? attachments, CancellationToken cancellationToken = default)
     {
         await restClient.ModifyMessageAsync(channelId, messageId, m =>
         {
             m.Content = "";
             m.Embeds = [embed];
+            m.Attachments = attachments?.Select(a => new AttachmentProperties(a.FileName, new MemoryStream(a.Content))).ToList();
         }, cancellationToken: cancellationToken);
     }
     

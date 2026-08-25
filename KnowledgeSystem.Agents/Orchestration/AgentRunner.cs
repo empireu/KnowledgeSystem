@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
@@ -184,6 +184,8 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
     }
 
     public override IEventReceiverRegistry EventReceiverRegistry => _eventManager;
+    
+    public IEventManager EventManager => _eventManager;
 
     public override Agent<TContext> Agent { get; }
 

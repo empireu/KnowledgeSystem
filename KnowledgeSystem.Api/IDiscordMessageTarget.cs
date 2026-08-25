@@ -9,5 +9,5 @@ public interface IDiscordMessageTarget
 {
     Task UpdateContentAsync(string content, CancellationToken cancellationToken = default);
    
-    Task SetEmbedAsync(EmbedProperties embed, CancellationToken cancellationToken = default);
+    Task SetEmbedAsync(EmbedProperties embed, IReadOnlyList<MessageAttachment>? attachments = null, CancellationToken cancellationToken = default);
 }

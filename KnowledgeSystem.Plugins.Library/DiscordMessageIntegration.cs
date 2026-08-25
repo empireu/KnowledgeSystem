@@ -103,7 +103,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     
     private readonly ILogger<DiscordMessageIntegration> _logger;
     private readonly AgentRunner<BasicContext> _runner;
-    private readonly ITokenEstimator? _tokenEstimatorr;
+    private readonly ITokenEstimator? _tokenEstimator;
     private readonly IDiscordMessageTarget _target;
     
     private readonly List<RoundNode> _rounds = [];
@@ -113,6 +113,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     private int? _finalTokens;
     private bool _hasError;
     private bool _finalSent;
+    private readonly List<MessageAttachment> _attachments = [];
 
     private Task? _pendingUpdate;
     private CancellationTokenSource? _debounceCts;
@@ -133,7 +134,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     {
         _logger = logger;
         _runner = runner;
-        _tokenEstimatorr = tokenEstimator;
+        _tokenEstimator = tokenEstimator;
         _target = target;
     }
     
@@ -141,7 +142,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     {
         _logger = logger;
         _runner = runner;
-        _tokenEstimatorr = null;
+        _tokenEstimator = null;
         _target = target;
     }
     
@@ -256,6 +257,17 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     {
         await PresentMessage(@event.Response.Text, null, cancellationToken);
     }
+    
+    [SubscribeEvent]
+    public ValueTask OnAddAttachmentAsync(AddAttachmentEvent @event, CancellationToken cancellationToken)
+    {
+        lock (_stateLock)
+        {
+            _attachments.Add(new MessageAttachment(@event.Name, Encoding.UTF8.GetBytes(@event.Content)));
+        }
+
+        return ValueTask.CompletedTask;
+    }
 
     /// <summary>
     ///     Call this to finalize the interaction and present the final message.
@@ -273,7 +285,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
         var messages = _runner.ExecutionContext.ChatMessages;
 
         _additionalEmbeds = additionalEmbeds;
-        _finalTokens = _tokenEstimatorr?.CountTokens(messages);
+        _finalTokens = _tokenEstimator?.CountTokens(messages);
         
         await GetUpdateMessageTask(cancellationToken);
     }
@@ -299,7 +311,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
 
             try
             {
-                await _target.SetEmbedAsync(embed, cancellationToken);
+                await _target.SetEmbedAsync(embed, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
@@ -700,7 +712,15 @@ public sealed class DiscordMessageIntegration : IEventReceiver
                 }
 
                 var embed = BuildFinalEmbed();
-                await _target.SetEmbedAsync(embed, cancellationToken);
+            
+                IReadOnlyList<MessageAttachment>? attachments;
+                lock (_stateLock)
+                {
+                    attachments = _attachments.ToArray();
+                    _attachments.Clear();
+                }
+            
+                await _target.SetEmbedAsync(embed, attachments, cancellationToken);
             }
             else
             {
