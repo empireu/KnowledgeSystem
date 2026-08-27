@@ -8,6 +8,7 @@ using KnowledgeSystem.Plugins.Library.Tools.FindFiles;
 using KnowledgeSystem.Plugins.Library.Tools.GrepContent;
 using KnowledgeSystem.Plugins.Library.Tools.ListDir;
 using KnowledgeSystem.Plugins.Library.Tools.RepoFetch;
+using KnowledgeSystem.Plugins.Library.Tools.Workspace;
 using KnowledgeSystem.Plugins.Library.Tools.WriteAttachment;
 using KnowledgeSystem.Plugins.Wiki.CodeRag;
 using KnowledgeSystem.Plugins.Wiki.Memory;
@@ -23,7 +24,7 @@ public sealed class WikiAgent : Agent<BasicContext>
 {
     private readonly IEventManager _eventManager;
     
-    public WikiAgent(IReadOnlyMarkdownDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options) : base(agentId)
+    public WikiAgent(IReadOnlyMarkdownDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options, ArtifactWorkspace workspace) : base(agentId)
     {
         _eventManager = eventManager;
 
@@ -101,6 +102,11 @@ public sealed class WikiAgent : Agent<BasicContext>
         
         WriteAttachmentToolHandler.Register(ToolRegistry, serviceProvider);
         
+        if (options.UseAgentWorkspaces)
+        {
+            ArtifactTools.RegisterAll(ToolRegistry, workspace, serviceProvider);
+        }
+
         if (options.UseAgentMath)
         {
             RegisterAgentMathTools(serviceProvider);

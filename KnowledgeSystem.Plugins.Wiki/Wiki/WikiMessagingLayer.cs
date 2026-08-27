@@ -1,10 +1,11 @@
-﻿using System.Text;
+using System.Text;
 using KnowledgeSystem.Agents.Context.TokenEstimation;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Ai;
 using KnowledgeSystem.Api;
 using KnowledgeSystem.Events.Api;
 using KnowledgeSystem.Plugins.Library;
+using KnowledgeSystem.Plugins.Library.Tools.Workspace;
 using KnowledgeSystem.Plugins.Wiki.Memory;
 using KnowledgeSystem.Plugins.Wiki.PeerReview;
 using KnowledgeSystem.Retrieval.Api.Store;
@@ -32,7 +33,9 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 
     private readonly IMemoryExtractionService? _memoryExtractionService;
     private readonly MemoryStoreService? _memoryStore;
-    
+
+    private readonly ArtifactWorkspace _workspace = new(new ArtifactWorkspaceConfig());
+
     private DateTime _utcStart;
     
     public WikiMessagingLayer(
@@ -94,7 +97,8 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
             eventManager,
             _name,
             _serviceProvider,
-            _config
+            _config,
+            _workspace
         );
         
         var runner = new AgentRunner<BasicContext>(

@@ -64,4 +64,9 @@ public class WikiOptions
     ///     When true, registers the agent math calculation tool from the AgentMath plugin, if it is installed.
     /// </summary>
     public bool UseAgentMath { get; set; }
+
+    /// <summary>
+    ///     When true, the agent gets an in-memory artifact workspace with write, edit, grep, read, list, attach and delete tools.
+    /// </summary>
+    public bool UseAgentWorkspaces { get; set; }
 }

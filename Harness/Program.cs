@@ -3,11 +3,15 @@ using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
 using KnowledgeSystem.Events.Api;
+using KnowledgeSystem.Plugins.AgentMath;
 using KnowledgeSystem.Plugins.Library;
+using KnowledgeSystem.Plugins.Library.Tools.Workspace;
 using KnowledgeSystem.Plugins.Library.Tools.WriteAttachment;
 using KnowledgeSystem.Plugins.Wiki.CodeRag;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 var root = Path.Combine(Path.GetTempPath(), "ks_coderag_" + Guid.NewGuid().ToString("N"));
 var repoA = Path.Combine(root, "repoA");
@@ -294,6 +298,126 @@ Check("write_attachment rejects bad name", !waBadName.IsSuccessful && received.C
 
 var waOversized = await RunHandler(waHandler, new Dictionary<ToolArgument, object?> { [waNameArg] = "big.txt", [waContentArg] = new string('x', 70000) }, runner);
 Check("write_attachment rejects oversized", !waOversized.IsSuccessful && received.Count == 1, waOversized.ErrorMessage);
+
+var mathTool = new ToolBuilder("math_calculate")
+    .WithDescription("d")
+    .WithRequiredStringArgument("expression", "e", out var mathExprArg)
+    .Build();
+var mathOptions = Options.Create(new AgentMathOptions());
+var mathHandler = new AgentMathToolHandler(mathTool, mathExprArg, new AgentMathEvaluator(mathOptions, NullLogger<AgentMathEvaluator>.Instance), mathOptions);
+
+var mathExact = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = "0.1 + 0.2" });
+Check("math exact decimals", mathExact.IsSuccessful && mathExact.Output.Contains("0.3"), Detail(mathExact));
+
+var mathPow = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = "2^10" });
+Check("math power", mathPow.IsSuccessful && mathPow.Output.Contains("1024"), Detail(mathPow));
+
+var mathUnits = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = "1000 kg to t" });
+Check("math units", mathUnits.IsSuccessful && mathUnits.Output.Contains("1 t"), Detail(mathUnits));
+
+var mathDerivative = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = "derivative(\"x^2\", \"x\")" });
+Check("math derivative", mathDerivative.IsSuccessful && mathDerivative.Output.Contains("2 * x"), Detail(mathDerivative));
+
+var mathSimplify = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = "simplify(\"x*x + 2*x\")" });
+Check("math simplify", mathSimplify.IsSuccessful && mathSimplify.Output.Contains("x ^ 2"), Detail(mathSimplify));
+
+var mathMatrix = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = "matrix([[1,2],[3,4]]) * matrix([[5],[6]])" });
+Check("math matrix", mathMatrix.IsSuccessful && mathMatrix.Output.Contains("17") && mathMatrix.Output.Contains("39"), Detail(mathMatrix));
+
+var mathParseError = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = "1 +" });
+Check("math parse error", !mathParseError.IsSuccessful && mathParseError.ErrorMessage!.Contains("math_calculate"), Detail(mathParseError));
+
+var mathUndefined = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = "nope(3)" });
+Check("math undefined function", !mathUndefined.IsSuccessful, Detail(mathUndefined));
+
+var mathTooLong = await RunHandler(mathHandler, new Dictionary<ToolArgument, object?> { [mathExprArg] = new string('1', 3000) });
+Check("math length cap", !mathTooLong.IsSuccessful && mathTooLong.ErrorMessage!.Contains("too long"), Detail(mathTooLong));
+
+var artifactWorkspace = new ArtifactWorkspace(new ArtifactWorkspaceConfig());
+
+var awWriteTool = new ToolBuilder("artifact_write")
+    .WithDescription("d")
+    .WithRequiredStringArgument("name", "n", out var awNameArg)
+    .WithRequiredStringArgument("content", "c", out var awContentArg)
+    .Build();
+var awWrite = new ArtifactWriteToolHandler(awWriteTool, awNameArg, awContentArg, artifactWorkspace);
+
+var awEditTool = new ToolBuilder("artifact_edit")
+    .WithDescription("d")
+    .WithRequiredStringArgument("name", "n", out var awEditNameArg)
+    .WithRequiredStringArgument("find", "f", out var awFindArg)
+    .WithRequiredStringArgument("replace", "r", out var awReplaceArg)
+    .Build();
+var awEdit = new ArtifactEditToolHandler(awEditTool, awEditNameArg, awFindArg, awReplaceArg, artifactWorkspace);
+
+var awReadTool = new ToolBuilder("artifact_read")
+    .WithDescription("d")
+    .WithRequiredStringArgument("name", "n", out var awReadNameArg)
+    .WithIntegerArgument("startLine", "s", out var awStartArg)
+    .WithIntegerArgument("endLine", "e", out var awEndArg)
+    .Build();
+var awRead = new ArtifactReadToolHandler(awReadTool, awReadNameArg, awStartArg, awEndArg, artifactWorkspace, new ArtifactWorkspaceConfig());
+
+var awGrepTool = new ToolBuilder("artifact_grep")
+    .WithDescription("d")
+    .WithRequiredStringArgument("pattern", "p", out var awPatternArg)
+    .WithStringArgument("name", "n", out var awGrepNameArg)
+    .Build();
+var awGrep = new ArtifactGrepToolHandler(awGrepTool, awPatternArg, awGrepNameArg, artifactWorkspace);
+
+var awListTool = new ToolBuilder("artifact_list").WithDescription("d").Build();
+var awList = new ArtifactListToolHandler(awListTool, artifactWorkspace);
+
+var awAttachTool = new ToolBuilder("artifact_attach")
+    .WithDescription("d")
+    .WithRequiredStringArgument("name", "n", out var awAttachNameArg)
+    .Build();
+var awAttach = new ArtifactAttachToolHandler(awAttachTool, awAttachNameArg, artifactWorkspace);
+
+var awDeleteTool = new ToolBuilder("artifact_delete")
+    .WithDescription("d")
+    .WithRequiredStringArgument("name", "n", out var awDeleteNameArg)
+    .Build();
+var awDelete = new ArtifactDeleteToolHandler(awDeleteTool, awDeleteNameArg, artifactWorkspace);
+
+var awWriteResult = await RunHandler(awWrite, new Dictionary<ToolArgument, object?> { [awNameArg] = "script.cs", [awContentArg] = "public class Foo\n{\n    void Bar() { }\n}\n" });
+Check("artifact write", awWriteResult.IsSuccessful, Detail(awWriteResult));
+
+var awListResult = await RunHandler(awList, new Dictionary<ToolArgument, object?>());
+Check("artifact list shows file", awListResult.IsSuccessful && awListResult.Output.Contains("script.cs") && awListResult.Output.Contains("4 lines"), Detail(awListResult));
+
+var awReadResult = await RunHandler(awRead, new Dictionary<ToolArgument, object?> { [awReadNameArg] = "script.cs", [awStartArg] = 2, [awEndArg] = 3 });
+Check("artifact read range", awReadResult.IsSuccessful && awReadResult.Output.Contains("  2: {") && awReadResult.Output.Contains("void Bar"), Detail(awReadResult));
+
+var awGrepResult = await RunHandler(awGrep, new Dictionary<ToolArgument, object?> { [awPatternArg] = "void Bar" });
+Check("artifact grep", awGrepResult.IsSuccessful && awGrepResult.Output.Contains("script.cs:3"), Detail(awGrepResult));
+
+var awEditResult = await RunHandler(awEdit, new Dictionary<ToolArgument, object?> { [awEditNameArg] = "script.cs", [awFindArg] = "void Bar", [awReplaceArg] = "void Baz" });
+Check("artifact edit", awEditResult.IsSuccessful, Detail(awEditResult));
+
+var awEditVerify = await RunHandler(awGrep, new Dictionary<ToolArgument, object?> { [awPatternArg] = "void Baz" });
+Check("artifact edit applied", awEditVerify.IsSuccessful && awEditVerify.Output.Contains("script.cs:3"), Detail(awEditVerify));
+
+var awEditMissing = await RunHandler(awEdit, new Dictionary<ToolArgument, object?> { [awEditNameArg] = "script.cs", [awFindArg] = "void Nope", [awReplaceArg] = "x" });
+Check("artifact edit not found errors", !awEditMissing.IsSuccessful && awEditMissing.ErrorMessage!.Contains("not found"), Detail(awEditMissing));
+
+var awEditMulti = await RunHandler(awEdit, new Dictionary<ToolArgument, object?> { [awEditNameArg] = "script.cs", [awFindArg] = "{", [awReplaceArg] = "[" });
+Check("artifact edit ambiguous errors", !awEditMulti.IsSuccessful && awEditMulti.ErrorMessage!.Contains("matches 2 times"), Detail(awEditMulti));
+
+var awAttachResult = await RunHandler(awAttach, new Dictionary<ToolArgument, object?> { [awAttachNameArg] = "script.cs" }, runner);
+Check("artifact attach dispatches event", awAttachResult.IsSuccessful && received.Any(a => a.Name == "script.cs" && a.Content.Contains("void Baz")), Detail(awAttachResult));
+
+var awDeleteResult = await RunHandler(awDelete, new Dictionary<ToolArgument, object?> { [awDeleteNameArg] = "script.cs" });
+Check("artifact delete", awDeleteResult.IsSuccessful, Detail(awDeleteResult));
+
+var awListEmpty = await RunHandler(awList, new Dictionary<ToolArgument, object?>());
+Check("artifact list empty after delete", awListEmpty.IsSuccessful && awListEmpty.Output.Contains("empty"), Detail(awListEmpty));
+
+var awBadName = await RunHandler(awWrite, new Dictionary<ToolArgument, object?> { [awNameArg] = "../evil.cs", [awContentArg] = "x" });
+Check("artifact rejects bad name", !awBadName.IsSuccessful && awBadName.ErrorMessage!.Contains("Invalid"), Detail(awBadName));
+
+var awOversize = await RunHandler(awWrite, new Dictionary<ToolArgument, object?> { [awNameArg] = "big.txt", [awContentArg] = new string('x', 70000) });
+Check("artifact rejects oversized", !awOversize.IsSuccessful && awOversize.ErrorMessage!.Contains("too long"), Detail(awOversize));
 
 try
 {
