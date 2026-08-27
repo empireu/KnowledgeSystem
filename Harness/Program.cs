@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
@@ -157,6 +158,83 @@ Check("rg end-to-end context", rgContext.IsSuccessful && rgContext.Output.Contai
 
 var rgTruncatedHandler = new CodeRipgrepToolHandler(rgTool, argsArg, fileSystem, new CodeRipgrepToolConfig { MaxOutputChars = 100 });
 var rgTruncated = await RunHandler(rgTruncatedHandler, new Dictionary<ToolArgument, object?> { [argsArg] = new[] { "-e", "." } });
+
+var gitRoot = Path.Combine(root, "gitrepo");
+Directory.CreateDirectory(gitRoot);
+File.WriteAllText(Path.Combine(gitRoot, "readme.md"), "hello\n");
+
+var gitAvailable = true;
+try
+{
+    RunGit(gitRoot, "init");
+    RunGit(gitRoot, "config", "user.name", "Harness");
+    RunGit(gitRoot, "config", "user.email", "harness@local");
+    RunGit(gitRoot, "add", "-A");
+    RunGit(gitRoot, "commit", "-m", "initial");
+    File.AppendAllText(Path.Combine(gitRoot, "readme.md"), "world\n");
+    RunGit(gitRoot, "add", "-A");
+    RunGit(gitRoot, "commit", "-m", "second");
+}
+catch (Exception)
+{
+    gitAvailable = false;
+    Console.WriteLine("SKIP git end-to-end: git not found on PATH");
+}
+
+var gitTool = new ToolBuilder("code_git")
+    .WithDescription("d")
+    .WithRequiredArrayArgument("args", "a", out var gitArgsArg)
+    .Build();
+var gitHandler = new CodeGitToolHandler(gitTool, gitArgsArg, new CodeGitToolConfig { RepoPath = gitRoot });
+
+Check("git builder requires subcommand", !CodeGitToolHandler.TryBuildArguments([], out _, out _));
+Check("git builder rejects unknown subcommand", !CodeGitToolHandler.TryBuildArguments(new[] { "frobnicate" }, out _, out _));
+Check("git builder rejects write command", !CodeGitToolHandler.TryBuildArguments(new[] { "commit", "-m", "x" }, out _, out _));
+Check("git builder rejects unknown flag", !CodeGitToolHandler.TryBuildArguments(new[] { "log", "--frobnicate" }, out _, out _));
+Check("git builder rejects repo flag", !CodeGitToolHandler.TryBuildArguments(new[] { "log", "-C", "C:\\x" }, out _, out _));
+Check("git builder rejects stdin", !CodeGitToolHandler.TryBuildArguments(new[] { "diff", "-" }, out _, out _));
+Check("git builder rejects missing value", !CodeGitToolHandler.TryBuildArguments(new[] { "log", "--since" }, out _, out _));
+Check("git builder rejects bad int value", !CodeGitToolHandler.TryBuildArguments(new[] { "log", "--max-count", "abc" }, out _, out _));
+Check("git builder rejects escape path", !CodeGitToolHandler.TryBuildArguments(new[] { "log", "--", ".." }, out _, out _));
+Check("git builder numeric short", CodeGitToolHandler.TryBuildArguments(new[] { "log", "-5" }, out var gitBuilt, out _)
+    && gitBuilt.SequenceEqual(new[] { "log", "--max-count", "5" }), string.Join(",", gitBuilt));
+Check("git builder inline value", CodeGitToolHandler.TryBuildArguments(new[] { "log", "--since=2 days ago", "--stat" }, out var gitBuilt2, out _)
+    && gitBuilt2.Contains("--since") && gitBuilt2.Contains("2 days ago") && gitBuilt2.Contains("--stat"), string.Join(",", gitBuilt2));
+
+if (gitAvailable)
+{
+    var gitLog = await RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "log", "--oneline" } });
+    Check("git end-to-end log", gitLog.IsSuccessful && gitLog.Output.Contains("second") && gitLog.Output.Contains("initial"), Detail(gitLog));
+
+    var gitDiff = await RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "diff", "--stat", "HEAD~1", "HEAD" } });
+    Check("git end-to-end diff", gitDiff.IsSuccessful && gitDiff.Output.Contains("readme.md"), Detail(gitDiff));
+
+    var gitStatus = await RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "status", "--short" } });
+    Check("git end-to-end status", gitStatus.IsSuccessful, Detail(gitStatus));
+
+    var gitShow = await RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "show", "--name-status", "HEAD" } });
+    Check("git end-to-end show", gitShow.IsSuccessful && gitShow.Output.Contains("readme.md"), Detail(gitShow));
+
+    var gitRevParse = await RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "rev-parse", "--short", "HEAD" } });
+    Check("git end-to-end rev-parse", gitRevParse.IsSuccessful && gitRevParse.Output.Trim().Length > 0, Detail(gitRevParse));
+
+    var gitBadRev = await RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "log", "bogus-rev" } });
+    Check("git process error surfaces stderr", !gitBadRev.IsSuccessful && gitBadRev.ErrorMessage!.Contains("bogus-rev"), gitBadRev.ErrorMessage);
+
+    var gitTiny = new CodeGitToolHandler(gitTool, gitArgsArg, new CodeGitToolConfig { RepoPath = gitRoot, MaxOutputChars = 40 });
+    var gitTrunc = await RunHandler(gitTiny, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "log", "--stat", "--max-count", "1" } });
+    Check("git truncation marks output", gitTrunc.IsSuccessful && gitTrunc.Output.Contains("truncated at 40"), gitTrunc.Output);
+
+    var parallelCalls = new[]
+    {
+        RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "log", "--oneline" } }),
+        RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "status", "--short" } }),
+        RunHandler(gitHandler, new Dictionary<ToolArgument, object?> { [gitArgsArg] = new[] { "rev-parse", "--short", "HEAD" } })
+    };
+    var parallelResults = await Task.WhenAll(parallelCalls);
+    Check("git parallel calls serialize cleanly", parallelResults.All(r => r.IsSuccessful), string.Join(" | ", parallelResults.Select(r => r.IsSuccessful ? "ok" : (r.ErrorMessage ?? "?"))));
+}
+
 var dnrTool = new ToolBuilder("code_dotnetrip")
     .WithDescription("d")
     .WithRequiredArrayArgument("args", "a", out var dnrArgsArg)
@@ -251,6 +329,27 @@ catch
 
 Console.WriteLine(failures == 0 ? "ALL PASS" : $"{failures} FAILURES");
 return;
+
+static void RunGit(string workingDirectory, params string[] arguments)
+{
+    var startInfo = new ProcessStartInfo
+    {
+        FileName = "git",
+        WorkingDirectory = workingDirectory,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true
+    };
+
+    foreach (var argument in arguments)
+    {
+        startInfo.ArgumentList.Add(argument);
+    }
+
+    using var process = Process.Start(startInfo)!;
+    process.WaitForExit();
+}
 
 static async Task<ToolExecutionResult> RunHandler(ToolHandler<BasicContext>.Plain handler, Dictionary<ToolArgument, object?> arguments, AgentRunner<BasicContext>? runner = null)
 {

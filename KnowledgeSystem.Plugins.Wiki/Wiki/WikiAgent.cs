@@ -91,6 +91,12 @@ public sealed class WikiAgent : Agent<BasicContext>
         {
             CodeDotnetripToolHandler.Register(ToolRegistry, serviceProvider, new CodeDotnetripToolConfig { DllsDir = options.CodeDllsDir });
         }
+
+        if (options.CodeGitRepoPath != null)
+        {
+            CodeGitToolHandler.Register(ToolRegistry, serviceProvider, new CodeGitToolConfig { RepoPath = options.CodeGitRepoPath });
+        }
+        
         WriteAttachmentToolHandler.Register(ToolRegistry, serviceProvider);
         
         if (options is { ReviewProvider: not null, ReviewSystemPromptFile: not null })

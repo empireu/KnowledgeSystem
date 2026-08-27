@@ -30,6 +30,8 @@ public class WikiOptions
     
     public string? CodeDllsDir { get; set; }
 
+     public string? CodeGitRepoPath { get; set; }
+
     [Required]
     public string SystemPromptFile { get; set; } = null!;
 

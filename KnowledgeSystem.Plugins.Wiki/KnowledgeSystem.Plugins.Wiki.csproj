@@ -20,6 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="LibGit2Sharp" Version="0.32.0" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0-preview.4.26230.115" />
       <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="11.0.0-preview.3.26207.106" />
       <PackageReference Include="NetCord.Hosting.Services" Version="1.0.0-alpha.489" />
