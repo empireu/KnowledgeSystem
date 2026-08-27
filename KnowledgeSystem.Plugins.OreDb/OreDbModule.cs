@@ -62,14 +62,15 @@ public class OreDbModule(OreDbStores stores) : ApplicationCommandModule<Applicat
         }
 
         var measureLabel = mode == PopMode.Sum ? "total" : "largest deposit";
-        var content = $"Closest: \"{result.AsteroidName}\" - {FormatVolume(result.Volume)} m³ {measureLabel} of `{ore}`, {FormatVolume(result.Distance)} m away. Marked as mined.\n```\n{CreateGps(instance, ore, result)}\n```";
+        var content = $"Closest: \"{result.AsteroidName}\" - {FormatVolume(result.Volume)} m³ {measureLabel} of `{ore}`, {FormatVolume(result.Distance)} m away. Marked as mined.\n```\n{CreateGps(instance, result)}\n```";
 
         await Context.Interaction.ModifyResponseAsync(m => m.Content = content);
     }
 
-    private static string CreateGps(string instance, string ore, OrePopResult result)
+    private static string CreateGps(string instance, OrePopResult result)
     {
-        var name = $"{instance} {ore} {result.Volume:0}";
+        var ores = string.Join(" ", result.Ores.Select(o => $"{o.OreType} {o.Volume:0}"));
+        var name = $"{instance} {ores}";
         return $"GPS:{name}:{FormatCoordinate(result.X)}:{FormatCoordinate(result.Y)}:{FormatCoordinate(result.Z)}:#00FF00:";
     }
 

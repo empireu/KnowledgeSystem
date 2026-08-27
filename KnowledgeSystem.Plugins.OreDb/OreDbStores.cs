@@ -20,7 +20,9 @@ public enum PopMode
 
 public sealed record OreQueryResult(string InstanceName, string Ore, int DepositCount, double LargestDeposit, double LargestSum);
 
-public sealed record OrePopResult(string AsteroidName, double X, double Y, double Z, float Size, double Volume, double Distance);
+public sealed record OreVolume(string OreType, double Volume);
+
+public sealed record OrePopResult(string AsteroidName, double X, double Y, double Z, float Size, double Volume, double Distance, IReadOnlyList<OreVolume> Ores);
 
 public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptions> options ) : IHostedService
 {
@@ -311,7 +313,8 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
                     candidate.Z,
                     candidate.Size,
                     measure,
-                    Math.Sqrt(squaredDistance)
+                    Math.Sqrt(squaredDistance),
+                    []
                 );
             }
 
@@ -338,6 +341,23 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
                 {
                     best = best with { X = deposit.X, Y = deposit.Y, Z = deposit.Z };
                 }
+            }
+
+            if (best != null)
+            {
+                var ores = await db.OreDeposits
+                    .Where(d => d.AsteroidId == bestId && !d.IsEstimated)
+                    .GroupBy(d => d.OreType)
+                    .Select(g => new { OreType = g.Key, Volume = g.Sum(d => d.Volume) })
+                    .ToListAsync(cancellationToken);
+
+                best = best with
+                {
+                    Ores = ores
+                        .OrderByDescending(o => o.Volume)
+                        .Select(o => new OreVolume(o.OreType, o.Volume))
+                        .ToList()
+                };
             }
 
             return best;
