@@ -1,5 +1,6 @@
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Events.Api;
+using KnowledgeSystem.Plugins.AgentMath;
 using KnowledgeSystem.Plugins.Library;
 using KnowledgeSystem.Plugins.Library.Tools.FastContext;
 using KnowledgeSystem.Plugins.Library.Tools.FetchContext;
@@ -14,6 +15,7 @@ using KnowledgeSystem.Plugins.Wiki.PeerReview;
 using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace KnowledgeSystem.Plugins.Wiki.Wiki;
 
@@ -99,6 +101,11 @@ public sealed class WikiAgent : Agent<BasicContext>
         
         WriteAttachmentToolHandler.Register(ToolRegistry, serviceProvider);
         
+        if (options.UseAgentMath)
+        {
+            RegisterAgentMathTools(serviceProvider);
+        }
+
         if (options is { ReviewProvider: not null, ReviewSystemPromptFile: not null })
         {
             PeerReviewSubAgentHandler.Register(
@@ -107,6 +114,19 @@ public sealed class WikiAgent : Agent<BasicContext>
                 options.Review,
                 options.ReviewSystemPromptFile!
             );
+        }
+    }
+
+    private void RegisterAgentMathTools(IServiceProvider serviceProvider)
+    {
+        try
+        {
+            AgentMathToolHandler.Register(ToolRegistry, serviceProvider);
+        }
+        catch (Exception e)
+        {
+            var logger = serviceProvider.GetService<ILogger<WikiAgent>>();
+            logger?.LogError(e, "UseAgentMath is enabled but the AgentMath plugin is not available. The math tool was not registered.");
         }
     }
 

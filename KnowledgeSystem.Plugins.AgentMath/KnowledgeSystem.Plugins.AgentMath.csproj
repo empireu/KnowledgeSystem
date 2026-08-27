@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
+        <ProjectReference Include="..\KnowledgeSystem.PluginLoader\KnowledgeSystem.PluginLoader.csproj" />
+        <ProjectReference Include="..\KnowledgeSystem.Plugins.Library\KnowledgeSystem.Plugins.Library.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Jint" Version="4.16.1" />
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="11.0.0-preview.3.26207.106" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="math.min.js" />
+    </ItemGroup>
+
+    <Target Name="CopyToPluginsFolder" AfterTargets="Build">
+        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="..\KnowledgeSystem\bin\$(Configuration)\$(TargetFramework)\plugins\" SkipUnchangedFiles="true" />
+    </Target>
+
+</Project>

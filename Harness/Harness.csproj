@@ -11,6 +11,7 @@
       <ProjectReference Include="..\KnowledgeSystem.Agents\KnowledgeSystem.Agents.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Ai\KnowledgeSystem.Ai.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Events\KnowledgeSystem.Events.csproj" />
+      <ProjectReference Include="..\KnowledgeSystem.Plugins.AgentMath\KnowledgeSystem.Plugins.AgentMath.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Plugins.Library\KnowledgeSystem.Plugins.Library.csproj" />
       <ProjectReference Include="..\KnowledgeSystem.Plugins.Wiki\KnowledgeSystem.Plugins.Wiki.csproj" />
     </ItemGroup>

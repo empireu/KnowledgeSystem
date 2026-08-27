@@ -59,4 +59,9 @@ public class WikiOptions
     public string? ReviewSystemPromptFile { get; set; }
     
     public MemorySystemConfig? Memory { get; set; }
+
+    /// <summary>
+    ///     When true, registers the agent math calculation tool from the AgentMath plugin, if it is installed.
+    /// </summary>
+    public bool UseAgentMath { get; set; }
 }
