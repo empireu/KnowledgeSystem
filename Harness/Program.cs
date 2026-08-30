@@ -2,12 +2,14 @@ using System.Diagnostics;
 using KnowledgeSystem.Agents.Orchestration;
 using KnowledgeSystem.Agents.Orchestration.Tools;
 using KnowledgeSystem.Agents.Tools;
+using KnowledgeSystem.Api;
 using KnowledgeSystem.Events.Api;
 using KnowledgeSystem.Plugins.AgentMath;
 using KnowledgeSystem.Plugins.Library;
 using KnowledgeSystem.Plugins.Library.Tools.Workspace;
 using KnowledgeSystem.Plugins.Library.Tools.WriteAttachment;
 using KnowledgeSystem.Plugins.Wiki.CodeRag;
+using KnowledgeSystem.Plugins.Wiki.Wiki;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -416,8 +418,54 @@ Check("artifact list empty after delete", awListEmpty.IsSuccessful && awListEmpt
 var awBadName = await RunHandler(awWrite, new Dictionary<ToolArgument, object?> { [awNameArg] = "../evil.cs", [awContentArg] = "x" });
 Check("artifact rejects bad name", !awBadName.IsSuccessful && awBadName.ErrorMessage!.Contains("Invalid"), Detail(awBadName));
 
-var awOversize = await RunHandler(awWrite, new Dictionary<ToolArgument, object?> { [awNameArg] = "big.txt", [awContentArg] = new string('x', 70000) });
+var awOversizeHandler = new ArtifactWriteToolHandler(awWriteTool, awNameArg, awContentArg, new ArtifactWorkspace(new ArtifactWorkspaceConfig { MaxFileChars = 10 }));
+var awOversize = await RunHandler(awOversizeHandler, new Dictionary<ToolArgument, object?> { [awNameArg] = "big.txt", [awContentArg] = new string('x', 70000) });
 Check("artifact rejects oversized", !awOversize.IsSuccessful && awOversize.ErrorMessage!.Contains("too long"), Detail(awOversize));
+
+var attachWorkspace = new ArtifactWorkspace(new ArtifactWorkspaceConfig());
+var attachNotice = await UserAttachmentHelper.InjectAsync(
+    attachWorkspace,
+    new[]
+    {
+        new UserAttachment("report.md", "https://cdn.discordapp.com/attachments/1/report.md", 12, "text/markdown"),
+        new UserAttachment("notes.txt", "https://cdn.discordapp.com/attachments/1/notes.txt", 3, "text/plain")
+    },
+    (attachment, ct) => Task.FromResult(attachment.FileName == "report.md" ? "hello world"u8.ToArray() : "abc"u8.ToArray()),
+    CancellationToken.None);
+Check("attachment inject writes files", attachWorkspace.List().Count == 2 && attachNotice.Contains("report.md") && attachNotice.Contains("notes.txt"), attachNotice);
+
+var attachBinaryNotice = await UserAttachmentHelper.InjectAsync(
+    attachWorkspace,
+    new[] { new UserAttachment("img.png", "https://cdn.discordapp.com/attachments/1/img.png", 4, "image/png") },
+    (attachment, ct) => Task.FromResult(new byte[] { 0x89, 0x50, 0x4E, 0x47 }),
+    CancellationToken.None);
+Check("attachment binary skipped", attachBinaryNotice.Contains("binary") && attachWorkspace.List().Count == 2, attachBinaryNotice);
+
+var attachTooLargeNotice = await UserAttachmentHelper.InjectAsync(
+    new ArtifactWorkspace(new ArtifactWorkspaceConfig { MaxFileChars = 10 }),
+    new[] { new UserAttachment("big.txt", "url", 999999, "text/plain") },
+    (attachment, ct) => Task.FromResult(new byte[] { 0x61 }),
+    CancellationToken.None);
+Check("attachment too large skipped", attachTooLargeNotice.Contains("too large"), attachTooLargeNotice);
+
+var attachDownloadStopped = false;
+try
+{
+    await UserAttachmentHelper.InjectAsync(
+        attachWorkspace,
+        new[] { new UserAttachment("x.txt", "url", 1, "text/plain") },
+        (attachment, ct) => throw new HttpRequestException("connection refused"),
+        CancellationToken.None);
+}
+catch (InvalidOperationException)
+{
+    attachDownloadStopped = true;
+}
+Check("attachment download failure stops", attachDownloadStopped, "download failure did not stop injection");
+
+Check("attachment name sanitized", UserAttachmentHelper.SanitizeName("report (1).md") == "report__1_.md" && UserAttachmentHelper.SanitizeName("my file.txt") == "my_file.txt", UserAttachmentHelper.SanitizeName("report (1).md"));
+
+Check("attachment strict utf8", UserAttachmentHelper.TryDecodeUtf8("hello"u8.ToArray(), out var decoded) && decoded == "hello" && !UserAttachmentHelper.TryDecodeUtf8(new byte[] { 0xFF, 0xFE, 0x00 }, out _), "decode");
 
 try
 {

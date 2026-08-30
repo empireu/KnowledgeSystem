@@ -5,11 +5,11 @@ namespace KnowledgeSystem.Plugins.Library.Tools.Workspace;
 
 public sealed class ArtifactWorkspaceConfig
 {
-    public int MaxFileChars { get; set; } = 65536;
+    public int MaxFileChars { get; set; } = 1_000_000;
 
     public int MaxFiles { get; set; } = 100;
 
-    public int MaxTotalChars { get; set; } = 1_000_000;
+    public int MaxTotalChars { get; set; } = 5_000_000;
 
     public int MaxGrepResults { get; set; } = 200;
 

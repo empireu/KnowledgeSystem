@@ -69,9 +69,35 @@ public class OreDbModule(OreDbStores stores) : ApplicationCommandModule<Applicat
 
     private static string CreateGps(string instance, OrePopResult result)
     {
-        var ores = string.Join(" ", result.Ores.Select(o => $"{o.OreType} {o.Volume:0}"));
+        var ores = string.Join(" ", result.Ores.Select(o => $"{FormatOreName(o.OreType)} {o.Volume / 1000.0:0}K"));
         var name = $"{instance} {ores}";
         return $"GPS:{name}:{FormatCoordinate(result.X)}:{FormatCoordinate(result.Y)}:{FormatCoordinate(result.Z)}:#00FF00:";
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> OreSymbols = new Dictionary<string, string>
+    {
+        ["silicon"] = "Si",
+        ["nickel"] = "Ni",
+        ["cobalt"] = "Co",
+        ["lead"] = "Pb",
+        ["copper"] = "Cu",
+        ["iron"] = "Fe",
+        ["tungsten"] = "W",
+        ["magnesium"] = "Mg",
+        ["gold"] = "Au",
+        ["silver"] = "Ag",
+        ["uraninite"] = "U",
+        ["titanium"] = "Ti",
+        ["platinum"] = "Pt"
+    };
+
+    private static string FormatOreName(string oreType)
+    {
+        var separator = oreType.IndexOf('_');
+        var baseName = separator < 0 ? oreType : oreType[..separator];
+        var suffix = separator < 0 ? string.Empty : oreType[(separator + 1)..];
+        var symbol = OreSymbols.TryGetValue(baseName.ToLowerInvariant(), out var element) ? element : baseName;
+        return suffix.Length == 0 ? symbol : symbol + suffix.TrimStart('0');
     }
 
     private static string FormatVolume(double value)

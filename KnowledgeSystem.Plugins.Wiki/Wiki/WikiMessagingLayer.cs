@@ -36,6 +36,11 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 
     private readonly ArtifactWorkspace _workspace = new(new ArtifactWorkspaceConfig());
 
+    private static readonly HttpClient AttachmentClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(30)
+    };
+
     private DateTime _utcStart;
     
     public WikiMessagingLayer(
@@ -66,6 +71,38 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         _memoryStore = serviceProvider.GetService<MemoryStoreService>();
     }
 
+    private async Task InjectUserAttachmentsAsync(IDiscordMessageTarget messageTarget, IReadOnlyList<UserAttachment> attachments, CancellationToken cancellationToken)
+    {
+        var notice = await UserAttachmentHelper.InjectAsync(
+            _workspace,
+            attachments,
+            DownloadAttachmentAsync,
+            cancellationToken
+        );
+
+        if (notice.Length > 0)
+        {
+            _context.Timeline.InsertSystem(notice);
+        }
+    }
+
+    private async Task<byte[]> DownloadAttachmentAsync(UserAttachment attachment, CancellationToken cancellationToken)
+    {
+        var uri = new Uri(attachment.Url);
+
+        if (!IsDiscordCdnHost(uri.Host))
+        {
+            throw new InvalidOperationException($"unexpected download host '{uri.Host}'");
+        }
+
+        return await AttachmentClient.GetByteArrayAsync(uri, cancellationToken);
+    }
+
+    private static bool IsDiscordCdnHost(string host)
+    {
+        return host is "cdn.discordapp.com" or "media.discordapp.net";
+    }
+
     public async Task PrepareAsync(CancellationToken cancellationToken)
     {
         var systemPrompt = await File.ReadAllTextAsync(_config.SystemPromptFile, cancellationToken);
@@ -77,6 +114,11 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 
     public async Task<IResponsePipeline> CreateResponsePipeline(IDiscordMessageTarget messageTarget, UserMessageInfo userMessageInfo, CancellationToken cancellationToken)
     {
+        if (_config.UseAgentWorkspaces && userMessageInfo.Attachments.Count > 0)
+        {
+            await InjectUserAttachmentsAsync(messageTarget, userMessageInfo.Attachments, cancellationToken);
+        }
+
         _context.Timeline.InsertUser($"{userMessageInfo.Username}: {userMessageInfo.Message}");
         
         if (_memoryStore != null)

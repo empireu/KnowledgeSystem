@@ -327,7 +327,13 @@ public sealed class ConversationManager(
         });
         
         var task = conversation.RunToCompletionAsync(
-            new UserMessageInfo(message.Content, message.Author.Username),
+            new UserMessageInfo(
+                message.Content,
+                message.Author.Username,
+                message.Attachments
+                    .Select(a => new UserAttachment(a.FileName ?? string.Empty, a.Url, a.Size, a.ContentType))
+                    .ToList()
+            ),
             target,
             cts.Token
         );
