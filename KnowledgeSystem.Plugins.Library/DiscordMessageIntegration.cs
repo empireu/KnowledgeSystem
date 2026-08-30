@@ -117,6 +117,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
 
     private Task? _pendingUpdate;
     private CancellationTokenSource? _debounceCts;
+    private string? _thinkingTrace;
     private readonly SemaphoreSlim _updateLock = new(1, 1);
     private readonly Lock _stateLock = new();
     
@@ -182,15 +183,32 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     }
 
     [SubscribeEvent]
+    public async ValueTask OnThinkingAsync(AgentThinkingEvent @event, CancellationToken cancellationToken)
+    {
+        lock (_stateLock)
+        {
+            _thinkingTrace = string.IsNullOrWhiteSpace(@event.ThinkingText) ? null : @event.ThinkingText;
+        }
+
+        await GetUpdateMessageTask(cancellationToken);
+    }
+
+    [SubscribeEvent]
     public async ValueTask OnToolCallsAsync(AgentToolCallsEvent @event, CancellationToken cancellationToken)
     {            
         // Starts a new rounds:
 
         lock (_stateLock)
         {
+            var outputTrace = !string.IsNullOrWhiteSpace(_thinkingTrace)
+                ? _thinkingTrace
+                : string.IsNullOrWhiteSpace(@event.Response.Text) ? null : @event.Response.Text;
+
+            _thinkingTrace = null;
+
             var round = new RoundNode
             {
-                OutputTrace = string.IsNullOrWhiteSpace(@event.Response.Text) ? null : @event.Response.Text
+                OutputTrace = outputTrace
             };
 
             foreach (var info in @event.Calls)
@@ -279,6 +297,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     {
         lock (_stateLock)
         {
+            _thinkingTrace = null;
             _finalResponse = content;
         }
 
@@ -466,6 +485,19 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     {
         const int maxLines = 35;
         var lines = new List<string>();
+
+        string? thinking;
+        lock (_stateLock)
+        {
+            thinking = _thinkingTrace;
+        }
+
+        if (!string.IsNullOrWhiteSpace(thinking))
+        {
+            lines.Add("> ── Thinking ──");
+            lines.Add($"> {TruncateTail(EscapeNewlines(thinking), 400).Replace("`", "'")}");
+            lines.Add("> ");
+        }
 
         foreach (var round in _rounds)
         {
@@ -766,6 +798,16 @@ public sealed class DiscordMessageIntegration : IEventReceiver
         }
         
         return value[..(maxLength - 3)] + "...";
+    }
+
+    private static string TruncateTail(string value, int maxLength)
+    {
+        if (value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return "..." + value[^(maxLength - 3)..];
     }
 
     private static string EscapeNewlines(string str)

@@ -1,4 +1,4 @@
-﻿namespace KnowledgeSystem.Ai;
+namespace KnowledgeSystem.Ai;
 
 public enum ProviderType
 {
@@ -7,7 +7,7 @@ public enum ProviderType
     /// </summary>
     Usual,
     /// <summary>
-    ///     Deepseek requires piping the reasoning content or it fails; not implemented yet.
+    ///     Deepseek. Thinking mode requires the reasoning content to be passed back on every request that carries tools.
     /// </summary>
     Deepseek
 }

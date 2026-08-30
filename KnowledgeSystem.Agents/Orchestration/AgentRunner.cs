@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using KnowledgeSystem.Agents.Context;
 using KnowledgeSystem.Agents.Orchestration.RunnerEvents;
 using KnowledgeSystem.Agents.Orchestration.Tools;
@@ -154,6 +155,9 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
     private readonly IEventManager _eventManager;
     public readonly CancellationToken CancellationToken;
 
+    private static readonly TimeSpan ThinkingEmitInterval = TimeSpan.FromSeconds(2);
+    private const int MinThinkingEmitDeltaChars = 120;
+
     /// <summary>
     ///     Constructs an agent execution engine.
     ///     The engine is meant to execute a full turn, including all tool calls required for the turn.
@@ -250,11 +254,41 @@ public sealed class AgentRunner<TContext> : AgentRunner where TContext : AgentEx
             {
                 requestTelemetry?.SetTag("agent", Agent.AgentId);
 
-                response = await Client.GetResponseAsync(
-                    ExecutionContext.ChatMessages,
-                    chatOptions,
-                    CancellationToken
-                );
+                var reasoning = new StringBuilder();
+                var updates = new List<ChatResponseUpdate>();
+                var lastEmitTimestamp = Stopwatch.GetTimestamp();
+                var lastEmittedLength = 0;
+
+                await foreach (var update in Client.GetStreamingResponseAsync(ExecutionContext.ChatMessages, chatOptions, CancellationToken))
+                {
+                    updates.Add(update);
+
+                    for (var contentIndex = 0; contentIndex < update.Contents.Count; contentIndex++)
+                    {
+                        if (update.Contents[contentIndex] is TextReasoningContent reasoningContent)
+                        {
+                            reasoning.Append(reasoningContent.Text);
+                        }
+                    }
+
+                    var grewEnough = reasoning.Length - lastEmittedLength >= MinThinkingEmitDeltaChars;
+                    var timeElapsed = Stopwatch.GetElapsedTime(lastEmitTimestamp) >= ThinkingEmitInterval;
+
+                    if (reasoning.Length > 0 && (grewEnough || timeElapsed))
+                    {
+                        lastEmitTimestamp = Stopwatch.GetTimestamp();
+                        lastEmittedLength = reasoning.Length;
+
+                        await _eventManager.SendAsync(new AgentThinkingEvent(reasoning.ToString()), CancellationToken);
+                    }
+                }
+
+                if (reasoning.Length > lastEmittedLength)
+                {
+                    await _eventManager.SendAsync(new AgentThinkingEvent(reasoning.ToString()), CancellationToken);
+                }
+
+                response = updates.ToChatResponse();
 
                 var usage = response.Usage;
             

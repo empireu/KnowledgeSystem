@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace KnowledgeSystem.Ai;
 
@@ -17,4 +17,6 @@ public class ProviderConfig
     public string Key { get; set; } = null!;
 
     public ProviderType ProviderType { get; set; } = ProviderType.Usual;
+
+    public int? NetworkTimeoutSeconds { get; set; }
 }
