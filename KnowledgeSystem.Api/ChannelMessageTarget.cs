@@ -12,10 +12,25 @@ public sealed class ChannelMessageTarget(RestClient restClient, ulong channelId,
     {
         if (content.Length > 1997)
         {
-            content = content[..1997] + "...";
+            content = TruncateAtLineBoundary(content, 1997);
         }
 
         await restClient.ModifyMessageAsync(channelId, messageId, m => m.Content = content, cancellationToken: cancellationToken);
+    }
+    
+    /// <summary>
+    ///     Truncates at a line boundary so the message content never cuts through a markdown construct (bold spans, code spans).
+    /// </summary>
+    private static string TruncateAtLineBoundary(string content, int maxLength)
+    {
+        var newline = content.LastIndexOf('\n', maxLength - 1);
+
+        if (newline > 0)
+        {
+            return content[..newline] + "...";
+        }
+
+        return content[..maxLength] + "...";
     }
 
     public async Task SetEmbedAsync(EmbedProperties embed, IReadOnlyList<MessageAttachment>? attachments, CancellationToken cancellationToken = default)

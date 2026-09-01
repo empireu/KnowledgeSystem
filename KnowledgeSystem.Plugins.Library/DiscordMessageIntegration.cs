@@ -29,11 +29,6 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     private sealed class RoundNode
     {
         /// <summary>
-        ///     The LLM's output trace. Currently, I couldn't find a way to get it from the API.
-        /// </summary>
-        public string? OutputTrace { get; init; }
-
-        /// <summary>
         ///     Tool calls made in this round.
         /// </summary>
         public List<ToolCallNode> ToolCalls { get; } = [];
@@ -200,16 +195,9 @@ public sealed class DiscordMessageIntegration : IEventReceiver
 
         lock (_stateLock)
         {
-            var outputTrace = !string.IsNullOrWhiteSpace(_thinkingTrace)
-                ? _thinkingTrace
-                : string.IsNullOrWhiteSpace(@event.Response.Text) ? null : @event.Response.Text;
-
             _thinkingTrace = null;
 
-            var round = new RoundNode
-            {
-                OutputTrace = outputTrace
-            };
+            var round = new RoundNode();
 
             foreach (var info in @event.Calls)
             {
@@ -486,6 +474,18 @@ public sealed class DiscordMessageIntegration : IEventReceiver
         const int maxLines = 35;
         var lines = new List<string>();
 
+        foreach (var round in _rounds)
+        {
+            lines.Add($"> ── Round {_rounds.IndexOf(round) + 1} ──");
+
+            foreach (var call in round.ToolCalls)
+            {
+                AppendToolCallNode(lines, call, 0);
+            }
+
+            lines.Add("> ");
+        }
+
         string? thinking;
         lock (_stateLock)
         {
@@ -495,25 +495,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
         if (!string.IsNullOrWhiteSpace(thinking))
         {
             lines.Add("> ── Thinking ──");
-            lines.Add($"> {TruncateTail(EscapeNewlines(thinking), 400).Replace("`", "'")}");
-            lines.Add("> ");
-        }
-
-        foreach (var round in _rounds)
-        {
-            lines.Add($"> ── Round {_rounds.IndexOf(round) + 1} ──");
-
-            if (!string.IsNullOrWhiteSpace(round.OutputTrace))
-            {
-                var trace = Truncate(EscapeNewlines(round.OutputTrace), 200).Replace("`", "'");
-                lines.Add($"> “{trace}”");
-            }
-
-            foreach (var call in round.ToolCalls)
-            {
-                AppendToolCallNode(lines, call, 0);
-            }
-
+            AppendWrappedLines(lines, TruncateTail(thinking, 400));
             lines.Add("> ");
         }
 
@@ -552,7 +534,7 @@ public sealed class DiscordMessageIntegration : IEventReceiver
         };
 
         var args = string.IsNullOrEmpty(call.Arguments) ? "" : $" {call.Arguments}";
-        var error = call.Error != null ? $" — {call.Error}" : "";
+        var error = call.Error != null ? $" — {EscapeMarkdown(call.Error)}" : "";
 
         lines.Add($"> {indent}{prefix} **{call.ToolId}**{args}{error}");
         
@@ -813,5 +795,50 @@ public sealed class DiscordMessageIntegration : IEventReceiver
     private static string EscapeNewlines(string str)
     {
         return str.Replace("\r", "\\r").Replace("\n", "\\n");
+    }
+
+    /// <summary>
+    ///     Appends text as blockquote lines, preserving line breaks and escaping markdown on each line.
+    /// </summary>
+    private static void AppendWrappedLines(List<string> lines, string text)
+    {
+        var segments = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+        for (var index = 0; index < segments.Length; index++)
+        {
+            lines.Add($"> {EscapeMarkdown(segments[index])}");
+        }
+    }
+
+    private static string EscapeMarkdown(string value)
+    {
+        if (value.Length == 0)
+        {
+            return value;
+        }
+
+        var builder = new StringBuilder(value.Length + 8);
+
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            switch (character)
+            {
+                case '\\':
+                case '*':
+                case '_':
+                case '~':
+                case '|':
+                case '`':
+                    builder.Append('\\');
+                    builder.Append(character);
+                    break;
+                default:
+                    builder.Append(character);
+                    break;
+            }
+        }
+
+        return builder.ToString();
     }
 }
