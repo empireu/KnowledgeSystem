@@ -50,6 +50,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Plugins.Ore
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Plugins.AgentMath", "KnowledgeSystem.Plugins.AgentMath\KnowledgeSystem.Plugins.AgentMath.csproj", "{FC6B1102-68DC-467C-A318-3D4A84B840C2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KnowledgeSystem.Plugins.RestApi", "KnowledgeSystem.Plugins.RestApi\KnowledgeSystem.Plugins.RestApi.csproj", "{9CB11C01-9F6E-46C2-A2E0-F8230745004A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -140,6 +142,10 @@ Global
 		{FC6B1102-68DC-467C-A318-3D4A84B840C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FC6B1102-68DC-467C-A318-3D4A84B840C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FC6B1102-68DC-467C-A318-3D4A84B840C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9CB11C01-9F6E-46C2-A2E0-F8230745004A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9CB11C01-9F6E-46C2-A2E0-F8230745004A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9CB11C01-9F6E-46C2-A2E0-F8230745004A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9CB11C01-9F6E-46C2-A2E0-F8230745004A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{120B6FAF-D3C0-49A1-B3EA-A8E0D4B5F3D1} = {2C273406-3A89-4CB7-BDA1-DE04898CAE76}
@@ -158,5 +164,6 @@ Global
 		{DCB471AD-706E-42F8-A669-505EDFD81542} = {C56E4E3E-D14E-4182-85DA-63FD5BD73CD9}
 		{45C8A9A9-5158-41BF-AC63-88AD1E7C4F20} = {C56E4E3E-D14E-4182-85DA-63FD5BD73CD9}
 		{FC6B1102-68DC-467C-A318-3D4A84B840C2} = {C56E4E3E-D14E-4182-85DA-63FD5BD73CD9}
+		{9CB11C01-9F6E-46C2-A2E0-F8230745004A} = {C56E4E3E-D14E-4182-85DA-63FD5BD73CD9}
 	EndGlobalSection
 EndGlobal
