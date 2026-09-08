@@ -38,7 +38,7 @@ public class WikiModule(IConversationManager conversationManager, WikiLayerFacto
 
         // Text channels require threads to be created from a message.
         // This message becomes the thread's root/anchor.
-        var threadName = $"MQR: {Context.User.Username}";
+        var threadName = $"{Context.User.Username}/{topic}";
         var starterMessage = await textChannel.SendMessageAsync(new MessageProperties
         {
             Content = $"▸ {topic}"

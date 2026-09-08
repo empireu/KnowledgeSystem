@@ -28,6 +28,8 @@ public sealed record OrePopResult(string AsteroidName, double X, double Y, doubl
 
 public sealed record OreAsteroidResult(string AsteroidName, double X, double Y, double Z, float Size, double Volume, double? Distance, IReadOnlyList<OreVolume> Ores);
 
+public sealed record OreAsteroidTotalsResult(int AsteroidCount, double CombinedVolume, string? RichestAsteroidName, double RichestVolume);
+
 // ReSharper restore NotAccessedPositionalProperty.Global
 
 public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptions> options ) : IHostedService
@@ -515,6 +517,126 @@ public sealed class OreDbStores(ILogger<OreDbStores> logger, IOptions<OreDbOptio
             }
 
             return result;
+        }
+        finally
+        {
+            _dbSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    ///     Counts the unmined asteroids in the instance whose total volume of the ore exceeds the minimum, with their combined volume and the richest of them.
+    ///     Returns null if the instance does not exist.
+    /// </summary>
+    public async Task<OreAsteroidTotalsResult?> AsteroidTotalsAsync(string instanceName, string ore, double minimumTotalVolume, CancellationToken cancellationToken)
+    {
+        var db = GetDb();
+
+        await _dbSemaphore.WaitAsync(cancellationToken);
+
+        try
+        {
+            var gameInstance = await db.GameInstances.FirstOrDefaultAsync(i => i.Name == instanceName, cancellationToken);
+
+            if (gameInstance == null)
+            {
+                return null;
+            }
+
+            var candidates = await LoadCandidatesAsync(db, gameInstance.Id, ore, cancellationToken);
+
+            var asteroidCount = 0;
+            var combinedVolume = 0.0;
+            var richestVolume = 0.0;
+            string? richestName = null;
+
+            for (var index = 0; index < candidates.Count; index++)
+            {
+                var candidate = candidates[index];
+
+                if (candidate.Total <= minimumTotalVolume)
+                {
+                    continue;
+                }
+
+                asteroidCount++;
+                combinedVolume += candidate.Total;
+
+                if (candidate.Total <= richestVolume)
+                {
+                    continue;
+                }
+
+                richestVolume = candidate.Total;
+                richestName = candidate.Name;
+            }
+
+            return new OreAsteroidTotalsResult(asteroidCount, combinedVolume, richestName, richestVolume);
+        }
+        finally
+        {
+            _dbSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    ///     Returns up to <see cref="count"/> unmined asteroids in the instance with the largest total volume of the ore, ordered by volume.
+    ///     When an origin is given, only asteroids within the maximum distance qualify and the distance of each result is measured from that origin.
+    ///     Never marks anything. Returns null if the instance does not exist.
+    /// </summary>
+    public async Task<IReadOnlyList<OreAsteroidResult>?> LargestOresAsync(string instanceName, string ore, double? originX, double? originY, double? originZ, double? maxDistanceKm, int count, CancellationToken cancellationToken)
+    {
+        var db = GetDb();
+
+        await _dbSemaphore.WaitAsync(cancellationToken);
+
+        try
+        {
+            var gameInstance = await db.GameInstances.FirstOrDefaultAsync(i => i.Name == instanceName, cancellationToken);
+
+            if (gameInstance == null)
+            {
+                return null;
+            }
+
+            var candidates = await LoadCandidatesAsync(db, gameInstance.Id, ore, cancellationToken);
+
+            var hasOrigin = originX != null && originY != null && originZ != null;
+            double? maxDistanceMeters = maxDistanceKm == null ? null : maxDistanceKm.Value * 1000.0;
+
+            var ranked = new List<(CandidateAsteroid Candidate, double? SquaredDistance)>();
+
+            for (var index = 0; index < candidates.Count; index++)
+            {
+                var candidate = candidates[index];
+
+                double? squaredDistance = null;
+
+                if (hasOrigin)
+                {
+                    squaredDistance = SquaredDistance(candidate, originX!.Value, originY!.Value, originZ!.Value);
+
+                    if (maxDistanceMeters != null && squaredDistance.Value > maxDistanceMeters.Value * maxDistanceMeters.Value)
+                    {
+                        continue;
+                    }
+                }
+
+                ranked.Add((candidate, squaredDistance));
+            }
+
+            ranked.Sort(static (left, right) => right.Candidate.Total.CompareTo(left.Candidate.Total));
+
+            var results = new List<OreAsteroidResult>();
+
+            for (var index = 0; index < Math.Min(count, ranked.Count); index++)
+            {
+                var entry = ranked[index];
+                double? distance = entry.SquaredDistance == null ? null : Math.Sqrt(entry.SquaredDistance.Value);
+                results.Add(await BuildResultAsync(db, entry.Candidate, distance, cancellationToken));
+            }
+
+            return results;
         }
         finally
         {
