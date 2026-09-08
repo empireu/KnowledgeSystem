@@ -40,5 +40,7 @@ public class WikiPluginStartup : IPluginStartup
         {
             services.AddSingleton(new CodeReposFileSystem(config.CodeReposPath));
         }
+
+        services.AddSingleton<WikiApi>();
     }
 }

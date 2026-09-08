@@ -8,4 +8,6 @@ public class OreDbOptions
     ///     Path to the SQLite database file.
     /// </summary>
     public string DatabasePath { get; set; } = "oredb.db";
+    
+    public bool IntegrateWithAgent { get; set; }
 }

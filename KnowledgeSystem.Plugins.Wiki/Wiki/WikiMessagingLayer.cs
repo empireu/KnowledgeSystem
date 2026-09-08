@@ -25,6 +25,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
     private readonly ILogger<WikiMessagingLayer> _logger;
     private readonly IReadOnlyMarkdownDocumentStore _store;
     private readonly string _name;
+    private readonly WikiApi _api;
     private readonly WikiOptions _config;
     private readonly IServiceProvider _serviceProvider;
     
@@ -48,12 +49,14 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         WikiStores stores,
         string name,
         IOptions<WikiOptions> configOptions,
+        WikiApi api,
         IServiceProvider serviceProvider
         )
     {
         _logger = logger;
         _store = stores.Store;
         _name = name;
+        _api = api;
         _config = configOptions.Value;
         _serviceProvider = serviceProvider;
         
@@ -142,6 +145,9 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
             _config,
             _workspace
         );
+
+        // Registers tools from external plugins:
+        await _api.EventManagerInternal.SendAsync(new WikiAgentCreateEvent(agent), cancellationToken);
         
         var runner = new AgentRunner<BasicContext>(
             client: _chatClient,

@@ -1,4 +1,5 @@
 using KnowledgeSystem.PluginLoader;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -17,5 +18,14 @@ public class OreDbStartup : IPluginStartup
 
         services.AddSingleton<OreDbImporter>();
         services.AddHostedService<OreDbImporter>(sp => sp.GetRequiredService<OreDbImporter>());
+        
+        var config = context.Configuration
+            .GetRequiredSection(OreDbOptions.Section)
+            .Get<OreDbOptions>();
+        
+        if (config?.IntegrateWithAgent == true)
+        {
+            services.AddHostedService<WikiPluginIntegrationService>();
+        }
     }
 }

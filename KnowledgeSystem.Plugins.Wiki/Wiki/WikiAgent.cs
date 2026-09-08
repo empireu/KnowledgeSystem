@@ -24,7 +24,14 @@ public sealed class WikiAgent : Agent<BasicContext>
 {
     private readonly IEventManager _eventManager;
     
-    public WikiAgent(IReadOnlyMarkdownDocumentStore store, IEventManager eventManager, string agentId, IServiceProvider serviceProvider, WikiOptions options, ArtifactWorkspace workspace) : base(agentId)
+    public WikiAgent(
+        IReadOnlyMarkdownDocumentStore store,
+        IEventManager eventManager,
+        string agentId,
+        IServiceProvider serviceProvider,
+        WikiOptions options,
+        ArtifactWorkspace workspace
+    ) : base(agentId)
     {
         _eventManager = eventManager;
 

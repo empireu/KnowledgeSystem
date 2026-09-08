@@ -6,6 +6,7 @@ using NetCord.Hosting.Services.ApplicationCommands;
 namespace KnowledgeSystem.Plugins.OreDb;
 
 [Plugin("OreDb", "mqr.game.oredb", "0.0.0", "empireu")]
+[PluginDependency("mqr.standard.wiki", PluginDependencyAttribute.DependencyType.Optional)]
 public sealed class OreDbPlugin(ILogger<OreDbPlugin> logger, IHost host) : IPlugin
 {
     public Task Start(CancellationToken cancellationToken)
@@ -13,7 +14,7 @@ public sealed class OreDbPlugin(ILogger<OreDbPlugin> logger, IHost host) : IPlug
         host.AddApplicationCommandModule<OreDbModule>();
         
         logger.LogInformation("Registered OreDb commands");
-
+        
         return Task.CompletedTask;
     }
 }
