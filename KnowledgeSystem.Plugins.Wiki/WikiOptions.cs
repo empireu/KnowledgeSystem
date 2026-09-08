@@ -69,4 +69,9 @@ public class WikiOptions
     ///     When true, the agent gets an in-memory artifact workspace with write, edit, grep, read, list, attach and delete tools.
     /// </summary>
     public bool UseAgentWorkspaces { get; set; }
+
+    /// <summary>
+    ///     When true and workspaces are enabled, the agent gets a tool that writes workspace artifacts into files inside the wiki root.
+    /// </summary>
+    public bool UseArtifactBeam { get; set; }
 }

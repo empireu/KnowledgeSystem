@@ -1,5 +1,6 @@
 ﻿using KnowledgeSystem.Api;
 using KnowledgeSystem.Plugins.Wiki.Wiki;
+using Microsoft.Extensions.Logging;
 using NetCord;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
@@ -8,7 +9,7 @@ using NetCord.Services.ApplicationCommands;
 
 namespace KnowledgeSystem.Plugins.Wiki;
 
-public class WikiModule(IConversationManager conversationManager, WikiLayerFactory factory) : ApplicationCommandModule<ApplicationCommandContext>
+public class WikiModule(IConversationManager conversationManager, WikiLayerFactory factory, WikiStores stores, ILogger<WikiModule> logger) : ApplicationCommandModule<ApplicationCommandContext>
 {
     [SlashCommand("ask", "Ask a single wiki question")]
     public async Task AskAsync([SlashCommandParameter] string message)
@@ -51,5 +52,24 @@ public class WikiModule(IConversationManager conversationManager, WikiLayerFacto
         conversationManager.OpenConversation(thread.Id, messagingLayer);
 
         await Context.Interaction.DeleteResponseAsync();
+    }
+
+    [SlashCommand("reload_wiki", "Reload the wiki index from disk")]
+    public async Task ReloadAsync()
+    {
+        await Context.Interaction.SendResponseAsync(InteractionCallback.DeferredMessage());
+
+        try
+        {
+            await stores.ReloadAsync(CancellationToken.None);
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Wiki reload failed");
+            await Context.Interaction.ModifyResponseAsync(m => m.Content = "The wiki reload failed. Check the logs for details.");
+            return;
+        }
+
+        await Context.Interaction.ModifyResponseAsync(m => m.Content = "Wiki reloaded. New documents are now searchable.");
     }
 }

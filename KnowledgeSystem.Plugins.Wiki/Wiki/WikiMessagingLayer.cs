@@ -8,7 +8,6 @@ using KnowledgeSystem.Plugins.Library;
 using KnowledgeSystem.Plugins.Library.Tools.Workspace;
 using KnowledgeSystem.Plugins.Wiki.Memory;
 using KnowledgeSystem.Plugins.Wiki.PeerReview;
-using KnowledgeSystem.Retrieval.Api.Store;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -23,7 +22,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
 {
     private readonly BasicContext _context = new();
     private readonly ILogger<WikiMessagingLayer> _logger;
-    private readonly IReadOnlyMarkdownDocumentStore _store;
+    private readonly WikiStores _stores;
     private readonly string _name;
     private readonly WikiApi _api;
     private readonly WikiOptions _config;
@@ -54,7 +53,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         )
     {
         _logger = logger;
-        _store = stores.Store;
+        _stores = stores;
         _name = name;
         _api = api;
         _config = configOptions.Value;
@@ -138,7 +137,7 @@ public sealed class WikiMessagingLayer : IAgentMessagingLayer
         // Orchestrates all high-level events and sub-agents.
         // Uses the event manager to dispatch the final output event, after review rewrite:
         var agent = new WikiAgent(
-            _store,
+            _stores.Store,
             eventManager,
             _name,
             _serviceProvider,

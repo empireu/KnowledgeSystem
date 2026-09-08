@@ -112,6 +112,11 @@ public sealed class WikiAgent : Agent<BasicContext>
         if (options.UseAgentWorkspaces)
         {
             ArtifactTools.RegisterAll(ToolRegistry, workspace, serviceProvider);
+            
+            if (options.UseArtifactBeam)
+            {
+                BeamArtifactToolHandler.Register(ToolRegistry, workspace, options.RepoPath, serviceProvider);
+            }
         }
 
         if (options.UseAgentMath)
