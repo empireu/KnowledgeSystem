@@ -1,4 +1,3 @@
-using System.Globalization;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 
@@ -29,7 +28,7 @@ public class OreDbModule(OreDbStores stores) : ApplicationCommandModule<Applicat
 
         var content = result.DepositCount == 0
             ? $"No `{ore}` deposits found in instance **\"{instance}\"**."
-            : $"`{ore}` in **\"{instance}\"**: __{result.DepositCount}__ deposits, largest deposit __{FormatVolume(result.LargestDeposit)} m³__, richest asteroid __{FormatVolume(result.LargestSum)} m³__.";
+            : $"`{ore}` in **\"{instance}\"**: __{result.DepositCount}__ deposits, largest deposit __{OreFormatting.FormatVolume(result.LargestDeposit)} m³__, richest asteroid __{OreFormatting.FormatVolume(result.LargestSum)} m³__.";
 
         await Context.Interaction.ModifyResponseAsync(m => m.Content = content);
     }
@@ -57,56 +56,14 @@ public class OreDbModule(OreDbStores stores) : ApplicationCommandModule<Applicat
 
         if (result == null)
         {
-            await Context.Interaction.ModifyResponseAsync(m => m.Content = $"No asteroid in instance **\"{instance}\"** has more than __{FormatVolume(minimumVolume)} m³__ of `{ore}`.");
+            await Context.Interaction.ModifyResponseAsync(m => m.Content = $"No asteroid in instance **\"{instance}\"** has more than __{OreFormatting.FormatVolume(minimumVolume)} m³__ of `{ore}`.");
             return;
         }
 
         var measureLabel = mode == PopMode.Sum ? "total" : "largest deposit";
-        var content = $"Closest: \"{result.AsteroidName}\" - {FormatVolume(result.Volume)} m³ {measureLabel} of `{ore}`, {FormatVolume(result.Distance)} m away. Marked as mined.\n```\n{CreateGps(instance, result)}\n```";
+        var content = $"Closest: \"{result.AsteroidName}\" - {OreFormatting.FormatVolume(result.Volume)} m³ {measureLabel} of `{ore}`, {OreFormatting.FormatVolume(result.Distance)} m away. Marked as mined.\n```\n{OreFormatting.CreateGps(instance, result.Ores, result.X, result.Y, result.Z)}\n```";
 
         await Context.Interaction.ModifyResponseAsync(m => m.Content = content);
     }
 
-    private static string CreateGps(string instance, OrePopResult result)
-    {
-        var ores = string.Join(" ", result.Ores.Select(o => $"{FormatOreName(o.OreType)} {o.Volume / 1000.0:0}K"));
-        var name = $"{instance} {ores}";
-        return $"GPS:{name}:{FormatCoordinate(result.X)}:{FormatCoordinate(result.Y)}:{FormatCoordinate(result.Z)}:#00FF00:";
-    }
-
-    private static readonly IReadOnlyDictionary<string, string> OreSymbols = new Dictionary<string, string>
-    {
-        ["silicon"] = "Si",
-        ["nickel"] = "Ni",
-        ["cobalt"] = "Co",
-        ["lead"] = "Pb",
-        ["copper"] = "Cu",
-        ["iron"] = "Fe",
-        ["tungsten"] = "W",
-        ["magnesium"] = "Mg",
-        ["gold"] = "Au",
-        ["silver"] = "Ag",
-        ["uraninite"] = "U",
-        ["titanium"] = "Ti",
-        ["platinum"] = "Pt"
-    };
-
-    private static string FormatOreName(string oreType)
-    {
-        var separator = oreType.IndexOf('_');
-        var baseName = separator < 0 ? oreType : oreType[..separator];
-        var suffix = separator < 0 ? string.Empty : oreType[(separator + 1)..];
-        var symbol = OreSymbols.TryGetValue(baseName.ToLowerInvariant(), out var element) ? element : baseName;
-        return suffix.Length == 0 ? symbol : symbol + suffix.TrimStart('0');
-    }
-
-    private static string FormatVolume(double value)
-    {
-        return value.ToString("N0", CultureInfo.InvariantCulture);
-    }
-
-    private static string FormatCoordinate(double value)
-    {
-        return value.ToString("0.##", CultureInfo.InvariantCulture);
-    }
 }

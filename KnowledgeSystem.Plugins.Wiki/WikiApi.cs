@@ -6,7 +6,10 @@ using Microsoft.Extensions.Logging;
 
 namespace KnowledgeSystem.Plugins.Wiki;
 
-public sealed class WikiAgentCreateEvent(WikiAgent agent) : IEvent;
+public sealed class WikiAgentCreateEvent(WikiAgent agent) : IEvent
+{
+    public readonly WikiAgent Agent = agent;
+}
 
 public sealed class WikiApi(IServiceProvider serviceProvider)
 {
